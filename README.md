@@ -1,6 +1,7 @@
 # CTIP — Cyber Threat Intelligence Platform
 
-> **This repository currently contains a specification, not an implementation.**
+> **This repository contains a specification and an implementation in progress**
+> (currently through Phase 3 of 23: environment, Docker, Spring Boot bootstrap, database schema, seed data).
 >
 > CTIP is a multi-source cyber threat intelligence platform: it ingests indicators of compromise from
 > heterogeneous feeds through a plugin adapter architecture, normalizes them into a single domain model,
@@ -16,7 +17,8 @@
 
 ## 這是什麼
 
-這個 repository 目前**只有規格書，沒有實作**。
+這個 repository 包含**規格書與進行中的實作**（目前完成 Phase 1–3，共 23 個 phase；進度見
+[`docs/progress.md`](docs/progress.md)，啟動方式見下方[快速開始](#快速開始目前可跑的部分)）。
 
 規格書位於 [`docs/spec/`](docs/spec/)，它是**用 AI 輔助產生、給 AI 使用**的軟體規格：
 
@@ -135,7 +137,7 @@ CTIP 的核心能力與所屬里程碑：
 
 **如果你是 AI agent**：從 [`docs/spec/README.md`](docs/spec/README.md) 開始，它會告訴你讀取順序。不要一次讀完全部檔案。
 
-**如果你是人類**：先讀上面的系統摘要與模組表，再讀 [`docs/spec/00-master.md`](docs/spec/00-master.md) 的 §0.6 變更摘要（那裡列出 v1.1 的 4 項建置阻斷缺陷、3 項版本錯誤、10 項內部衝突及其解法）。
+**如果你是人類**：先讀上面的系統摘要與模組表，再讀 [`docs/spec/00-master.md`](docs/spec/00-master.md) 的 §0.6 變更摘要（那裡列出 v1.1 的 4 項建置阻斷缺陷、3 項版本錯誤、10 項內部衝突及其解法），以及 **§0.7 實作回饋修訂**（Phase 2–3 實測發現的規格衝突與修正索引；照字面實作會踩的坑集中在 [05 §5.8.1](docs/spec/05-environment.md#581-實作回饋修正2026-08-21phase-23-實測發現詳見-adr-0001) 與 [06 §6.3.6](docs/spec/06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)）。
 
 ---
 
@@ -143,13 +145,45 @@ CTIP 的核心能力與所屬里程碑：
 
 | 項目 | 狀態 |
 |---|---|
-| 規格書 | ✅ v2.0 完成 |
-| `backend/` | ⬜ 尚未實作（Phase 1 起） |
-| `frontend/` | ⬜ 尚未實作（Phase 11 起） |
-| `environment/` | ⬜ 尚未實作（Phase 2） |
+| 規格書 | ✅ v2.0 完成（含 2026-08-21 實作回饋修訂，見 [00 §0.7](docs/spec/00-master.md)） |
+| `environment/` | ✅ Phase 2 完成：唯一 compose 檔、雙 Dockerfile、四環境樣板、8 支腳本（含 90 項 DoD gate 的 `dod.sh`）、CI compose 驗證 |
+| `backend/` | 🔶 Phase 1–3 完成：Maven 四模組骨架、Spring Boot 4 啟動、`ctip.*` 設定契約與啟動守衛、Flyway V1–V7（M1 九張表）、1,020 筆冪等種子資料、6 個測試類（29 tests）。Domain 層自 Phase 4 起 |
+| `frontend/` | 🔶 Phase 1 骨架（Vite + lint/型別檢查）；頁面自 Phase 11 起 |
+| 進度與交接 | [`docs/progress.md`](docs/progress.md)（逐 phase 判準結果、偏離事項、給下一 session 的注意事項） |
+| 架構決策 | [`docs/architecture/decisions/`](docs/architecture/decisions/)（ADR 0001：Phase 3 的五項規格衝突處置） |
 
-實作開始後，本檔會由 Phase 23 **擴充**——新增啟動方式、API 概覽、Swagger 位置、測試方式等段落。
+實作進行中，本檔會隨里程碑**擴充**——Phase 23 再補 API 概覽、Swagger 位置等段落。
 **既有段落（這是什麼／系統摘要／模組功能摘要）不得被覆寫。**
+
+---
+
+## 快速開始（目前可跑的部分）
+
+需求：Docker ≥ 27（Compose ≥ 2.24）。首次啟動會自動預熱容器內的 Maven 與 npm 快取（需數分鐘）。
+
+```bash
+[ -f environment/.env.mvp ] || cp environment/.env.mvp.example environment/.env.mvp
+./environment/scripts/up.sh mvp
+curl -fsS http://localhost:8080/actuator/health
+```
+
+啟動後（mvp = frontend + backend + postgres 三個容器，全部只綁 `127.0.0.1`）：
+
+| 服務 | 位置 |
+|---|---|
+| Backend health | <http://127.0.0.1:8080/actuator/health> |
+| Frontend（Vite dev） | <http://127.0.0.1:5173> |
+| PostgreSQL | `127.0.0.1:5432`（帳密見 `environment/.env.mvp`；啟動時自動跑 Flyway V1–V7 並載入約 1,020 筆樣本 IOC） |
+
+後端測試（L1–L3，整合測試用 Testcontainers 自帶 PostgreSQL，不需先啟動環境）：
+
+```bash
+./backend/mvnw -f backend/pom.xml verify -Ptest-integration
+```
+
+停止環境用 `./environment/scripts/down.sh mvp`；後端改了 Java 檔用
+`./environment/scripts/reload.sh backend mvp` 熱替換；其餘腳本見
+[`environment/README.md`](environment/README.md)。
 
 ---
 
