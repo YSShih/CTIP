@@ -1,0 +1,41 @@
+# ---------- macOS ----------
+.DS_Store
+._.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# ---------- Secrets（規格 docs/spec/05-environment.md §5.1、§6.1）----------
+# 真實 .env 絕不進版控；只放行 .example 樣板
+environment/.env*
+!environment/.env*.example
+
+# ---------- Backend（Java / Maven）----------
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.properties.bak
+
+# ---------- Frontend（Node）----------
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+coverage/
+playwright-report/
+test-results/
+
+# ---------- IDE ----------
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# ---------- Logs / 執行期產物 ----------
+*.log
+logs/

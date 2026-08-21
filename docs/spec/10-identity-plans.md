@@ -1,0 +1,261 @@
+# 10 — 身分 · 租戶 · 方案 · 配額 · 限流
+
+> **規範等級：強制。** 租戶隔離規則、JWT 規格、配額數值、限流維度為規範性內容。
+>
+> 相關檔案：[02-ddd-model.md](02-ddd-model.md)（User/ApiKey/Subscription 不變量）、[04-data-dictionary.md](04-data-dictionary.md)
+
+---
+
+## 10.1 多租戶
+
+Tenant 模型從一開始就存在。一個 tenant 可代表個人使用者、組織或企業客戶。
+
+```text
+TenantType: SYSTEM | INDIVIDUAL | ORGANIZATION | ENTERPRISE
+```
+
+### Public System Tenant
+
+```text
+id:     00000000-0000-0000-0000-000000000000
+slug:   public
+name:   Public
+type:   SYSTEM
+status: ACTIVE
+```
+
+| # | 規則 |
+|---|---|
+| 1 | 所有匿名請求在 security filter 層綁定到此 tenant |
+| 2 | 公開情資的 `owner_tenant_id` = public tenant，`tlp ∈ {CLEAR, GREEN}` |
+| 3 | Public tenant **無使用者、無 API key、無 webhook、無訂閱、不可登入**（DB 層以 CHECK 約束強制，見 [04](04-data-dictionary.md)） |
+| 4 | 由 `V2__seed_system_tenant.sql` 種入，**不可刪除、不可更名、不可變更 type** |
+
+這樣 tenant 隔離只有一套邏輯，不需要為匿名開特例。
+
+### 隔離實作（強制）
+
+| 規則 |
+|---|
+| 每個 tenant-scoped 資料表都有 `tenant_id`（或 `owner_tenant_id`），且 `NOT NULL` |
+| 過濾條件恆為 **`owner_tenant_id IN (:current, PUBLIC)`**，以統一的 JPA `Specification` 自動附加 |
+| `TenantContext`（`@RequestScope`）由 security filter 設定 |
+| **禁止**在 controller 中手動傳遞 `tenantId` 做過濾 |
+| 跨租戶存取一律回 **`404`**（非 403），避免資源存在性洩漏 |
+
+> v1.1 §25.1 寫「自動附加 `tenant_id` 條件」（單數），如此登入者看不到公開情資——§24.2 聲稱消除的特例分支其實還在。`IN (current, public)` 是唯一自洽的寫法。
+
+---
+
+## 10.2 匿名存取
+
+基本公開情資存取**不得要求登入**。匿名存取仍必須受到：限流、濫用防護、端點限制、無管理權限、無私有情資。
+
+匿名可存取的端點見 [09-api.md](09-api.md#91-端點清單)（標「匿名」者）。
+
+---
+
+## 10.3 使用者與 RBAC `[Phase 13 · M2]`
+
+### 角色
+
+```text
+ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN
+```
+
+### 權限（18 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
+
+```text
+ioc:read       ioc:export      ioc:submit    ioc:import    ioc:report-fp   ioc:publish
+threat:read    stix:export
+sync:bloom     sync:delta
+apikey:create  apikey:revoke
+webhook:manage
+tenant:manage  user:manage
+audit:read
+source:manage  source:sync
+system:admin
+```
+
+### 角色與權限矩陣
+
+種子資料由 `V24__seed_rbac.sql` 寫入（冪等）。
+
+| 權限 | ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN |
+|---|---|---|---|---|---|
+| `ioc:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `threat:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ioc:export` | — | ✓ | ✓ | ✓ | ✓ |
+| `stix:export` | — | ✓ | ✓ | ✓ | ✓ |
+| `sync:bloom` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `sync:delta` | — | ✓ | ✓ | ✓ | ✓ |
+| `ioc:submit` | — | — | ✓ | ✓ | ✓ |
+| `ioc:import` | — | — | ✓ | ✓ | ✓ |
+| `ioc:report-fp` | — | ✓ | ✓ | ✓ | ✓ |
+| `ioc:publish` | — | — | — | — | ✓ |
+| `apikey:create` / `apikey:revoke` | — | ✓ | ✓ | ✓ | ✓ |
+| `webhook:manage` | — | — | ✓ | ✓ | ✓ |
+| `user:manage` | — | — | — | ✓ | ✓ |
+| `tenant:manage` | — | — | — | ✓ | ✓ |
+| `audit:read` | — | — | — | ✓ | ✓ |
+| `source:manage` / `source:sync` | — | — | — | — | ✓ |
+| `system:admin` | — | — | — | — | ✓ |
+
+> `ioc:publish`（把自己提交的 IOC 標為 `CLEAR`/`GREEN`）只給 `SYSTEM_ADMIN`——把租戶資料推入公開情資池是平台營運決策，不是租戶自助操作。
+
+### 實作要求
+
+| 規則 |
+|---|
+| **不得**在 controller 中散落 `if (role == ...)` 判斷 |
+| 使用 `@PreAuthorize("hasAuthority('ioc:export')")` |
+| 角色→權限對應存於資料庫（`roles`、`permissions`、`role_permissions`），可調整 |
+| 集中的 `PermissionEvaluator` 處理 tenant-scoped 權限 |
+| API key 的 `scopes` 必須 ⊆ 建立者在該 tenant 的角色所擁有的權限（不得提權，不變量 K4） |
+
+---
+
+## 10.4 JWT `[Phase 13 · M2]`
+
+| 項目 | 規格 |
+|---|---|
+| 演算法 | HS256（單體）；預留 RS256 供未來多服務使用 |
+| Access token | 預設 15 分鐘（`JWT_ACCESS_TOKEN_EXPIRATION=900`） |
+| Refresh token | 預設 30 天，**單次使用並輪替** |
+| Refresh token 儲存 | 資料庫存 `SHA-256` 雜湊，**絕不存原文** |
+| 撤銷 | refresh token 撤銷清單；access token 短命，不做黑名單 |
+| 重用偵測 | 已使用的 refresh token 再次出現 → 撤銷該 `familyId` 全部 token，記錄 `TOKEN_REUSE_DETECTED` 稽核事件 |
+| 密碼雜湊 | BCrypt（cost 12）或 Argon2id |
+| 登入鎖定 | 連續失敗 10 次 → 鎖定 15 分鐘 |
+
+`JWT_SECRET` 必須來自環境設定，長度 ≥ 32 bytes，**絕不 commit**。
+啟動時若 `ENVIRONMENT=prod` 且 `JWT_SECRET` 為樣板值或長度不足，**拒絕啟動**（見 [05-environment.md](05-environment.md#57-spring-設定對應本版新增)）。
+
+Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms`、`iat`、`exp`、`jti`。
+**不放** email、姓名或任何個資。
+
+---
+
+## 10.5 API Key `[Phase 13 · M2]`
+
+已認證的使用者／租戶可建立 API key。支援建立、撤銷、輪替、最後使用時間、過期、scope、租戶關聯。
+
+- 完整 key 格式：`ctip_<env>_<32 random base62>`，`env ∈ {mvp, dev, stg, prod}`
+- **完整 key 僅在建立當下回傳一次**，之後永不可查
+- 只儲存 `SHA-256(fullKey)` 與前 8 碼明碼前綴
+- 驗證流程：取請求中的前 8 碼 → 以 `ux_api_keys_prefix` 定位單一列 → 比對雜湊（**避免全表雜湊比對**）
+- `last_used_at` 非同步更新，容許最多 60 秒延遲（避免每次請求一次 UPDATE）
+- 數量上限 `plans.max_api_keys`
+
+---
+
+## 10.6 方案
+
+### 能力概述
+
+| 方案 | 說明 |
+|---|---|
+| **匿名** | 唯讀公開 `CLEAR` 情資、有限查詢、僅 public Bloom、最低限流 |
+| **FREE** | 需登入。額外可見 public tenant 的 `GREEN` 與自家 tenant 資料、可匯出、可建 1 支 API key |
+| **PREMIUM** | 更高額度、更快同步、可下載 tenant bloom、WebSocket、Webhook、**可提交與匯入 IOC** |
+| **ENTERPRISE** | 自訂 feed、最高限流、進階同步、即時事件整合、管理控制項 |
+
+> ⚠️ **方案不決定 TLP 可見度。** TLP 由認證狀態與資料歸屬決定（[07-domain-intel.md](07-domain-intel.md#tlp-可見度)）。`plans` 表**沒有** TLP 相關欄位。
+
+### 配額（強制，存於 `plans` 表，不得 hard-code）
+
+| 項目 | 匿名 | FREE | PREMIUM | ENTERPRISE |
+|---|---|---|---|---|
+| 請求／分鐘 | 60 | 300 | 1,200 | 6,000 |
+| 請求／日 | 1,000 | 20,000 | 500,000 | 依合約 |
+| 單次分頁上限 | 50 | 100 | 500 | 1,000 |
+| 批次驗證單次上限 | 20 | 100 | 1,000 | 5,000 |
+| 同步最短間隔 | 24h | 6h | 5min | 1min |
+| Public Bloom | ✓ | ✓ | ✓ | ✓ |
+| Tenant Bloom 容量 | — | — | 1,000,000 | 10,000,000 |
+| WebSocket | ✗ | ✗ | ✓ | ✓ |
+| Webhook 數量 | 0 | 0 | 5 | 50 |
+| API Key 數量 | 0 | 1 | 10 | 100 |
+| 自訂 feed | ✗ | ✗ | ✗ | ✓ |
+| STIX bundle 匯出 | ✗ | ≤1,000 物件 | ≤50,000 | 無限 |
+| **手動提交／日** | 0 | 0 | 1,000 | 50,000 |
+| **單檔匯入筆數上限** | 0 | 0 | 10,000 | 500,000 |
+
+所有數值必須可由 `.env` 覆寫（`CTIP_PLAN_<CODE>_<FIELD>` 命名慣例），啟動時載入並更新 `plans` 表。
+
+### 金流
+
+**MVP 與 M2 皆不串接金流。** 建立 `SubscriptionProvider` 抽象，讓 Stripe 或其他供應商日後可加入。`subscriptions` 表保留 `provider`、`external_subscription_id` 欄位。
+
+方案變更於 M2 由 `SYSTEM_ADMIN` 手動操作（`provider = MANUAL`）。
+
+---
+
+## 10.7 限流
+
+### 抽象
+
+```java
+public interface RateLimiterPort {
+    RateLimitResult tryConsume(RateLimitKey key, int tokens);
+}
+
+public record RateLimitResult(boolean allowed, long limit, long remaining, Instant resetAt) {}
+```
+
+| 實作 | 啟用條件 | 說明 |
+|---|---|---|
+| `InMemoryRateLimiter` | `RATE_LIMIT_BACKEND=memory` | Bucket4j 本地。**僅單一實例正確** |
+| `RedisRateLimiter` | `RATE_LIMIT_BACKEND=redis` | Bucket4j + Redis |
+
+啟動時若 `ENVIRONMENT != mvp` 但 `RATE_LIMIT_BACKEND=memory`，輸出 WARN。
+
+### Phase 歸屬（本版修正）
+
+v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必須受限流（M1），而 §58 的 Phase 表只把它掛在 Phase 17，DoD-MVP 完全沒測限流——三處互相矛盾。
+
+**修正後**：
+
+| 階段 | 內容 |
+|---|---|
+| **Phase 6（M1）** | `RateLimiterPort` + `InMemoryRateLimiter`，套用於所有端點。匿名超限回 `429`（列入 DoD-MVP） |
+| **Phase 17（M2）** | `RedisRateLimiter`，多實例正確性驗證 |
+
+### 維度
+
+限流鍵由以下組合而成，**由最specific到最general依序檢查，任一超限即拒絕**：
+
+```text
+1. API key       ratelimit:key:{apiKeyId}:{window}
+2. 使用者         ratelimit:user:{userId}:{window}
+3. 租戶           ratelimit:tenant:{tenantId}:{window}
+4. 匿名 IP        ratelimit:ip:{normalizedIp}:{window}
+5. 端點類別       ratelimit:{scope}:{endpointClass}:{window}
+```
+
+- `window` ∈ `{minute, day}`
+- 匿名 IP 正規化：IPv4 取完整位址；**IPv6 取 `/64` 前綴**（避免單一使用者以 `/64` 內的位址繞過）
+- `endpointClass` 分三類：`read`（GET/查詢）、`write`（POST/PATCH/DELETE）、`heavy`（bloom 下載、STIX bundle、import）
+
+> ⚠️ **反向代理下的 IP 取得**：必須設定 `server.forward-headers-strategy=framework` 並限定信任的代理來源。若無法確定真實 client IP，`docs/deployment/` 必須明確記載此限制——否則匿名限流可被單一 IP 偽造繞過。
+
+### 回應
+
+超限回 `429`，並帶標頭：
+
+```text
+X-RateLimit-Limit: 300
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1755763200
+Retry-After: 42
+```
+
+`X-RateLimit-*` 三個標頭在**所有**回應（含成功）都必須帶上，反映當下最緊的維度。
+
+### 實作方式
+
+**使用 Spring Security filter 或 `HandlerInterceptor`，禁止用 Decorator 堆疊。** 集中一處，可讀可除錯（見 [01-architecture.md](01-architecture.md#17-抽象判準強制)）。
+
+---
+
+*檔案結束。上次校對：2026-08-21。*

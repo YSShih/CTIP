@@ -1,0 +1,163 @@
+# CTIP — Cyber Threat Intelligence Platform
+
+> **This repository currently contains a specification, not an implementation.**
+>
+> CTIP is a multi-source cyber threat intelligence platform: it ingests indicators of compromise from
+> heterogeneous feeds through a plugin adapter architecture, normalizes them into a single domain model,
+> deduplicates and merges across sources, and exposes the result over a REST API with STIX 2.1 export and
+> Bloom-filter-based incremental sync for lightweight clients.
+>
+> The specification in [`docs/spec/`](docs/spec/) was **produced with AI assistance and is written to be
+> consumed by AI coding agents**. It is designed so that any capable agent can implement the system from it
+> independently, and so that two agents reading it at different times produce compatible results.
+> Architecture: Domain-Driven Design over Clean/Hexagonal Architecture.
+
+---
+
+## 這是什麼
+
+這個 repository 目前**只有規格書，沒有實作**。
+
+規格書位於 [`docs/spec/`](docs/spec/)，它是**用 AI 輔助產生、給 AI 使用**的軟體規格：
+
+```text
+GPT 產生初稿（v1.0）
+  → Claude 第一輪調整（v1.1，3,038 行單檔）
+  → Claude 逐行審查、24 輪設計決策訪談、對 Maven Central / npm / OASIS 等外部來源查證（v2.0）
+```
+
+它與一般的「架構文件」不同的地方在於**它被寫成可執行的契約**：
+
+- 每一條 Definition of Done 都對應一個回傳 0/1 的指令（90 項），無法自動化的 6 項被明確標為「需人工確認」
+- 每一張圖標註**規範等級**（CI 會擋／人工驗證／僅供參考），因為 ArchUnit 能驗證依賴方向但不能驗證「這個聚合有這個方法」
+- 27 張資料表全部有完整欄位定義，避免不同 agent 各自發明 schema
+- 附一份中英對照的 Ubiquitous Language 詞彙表，因為規格是中文而程式碼是英文，沒有這張表命名會發散
+
+規格書的導覽與檔案職責見 [`docs/spec/README.md`](docs/spec/README.md)。
+
+---
+
+## 系統摘要
+
+CTIP 的核心能力與所屬里程碑：
+
+| # | 能力 | 里程碑 |
+|---|---|---|
+| 1 | 從不同 Threat Intelligence Source 收集情資 | M1 |
+| 2 | 透過 Adapter / Plugin 架構整合異質來源（第三方可自行擴充） | M1 |
+| 3 | 正規化為統一 Domain Model（七種型別各有正規化規則） | M1 |
+| 4 | 去重、多來源合併、指紋、威脅評分 | M1 |
+| 5 | STIX 2.1 匯出（含 TLP 2.0 marking） | M1 |
+| 6 | REST API（cursor 分頁、統一錯誤結構、OpenAPI） | M1 |
+| 7 | 多租戶資料隔離 + 匿名唯讀公開情資 | M1（模型與過濾）／M2（完整認證） |
+| 8 | TLP 2.0 資料分級與可見度控制 | M1 |
+| 9 | 情資再散布政策（法遵：第三方 ToS 與 GDPR） | M1 |
+| 10 | 認證、RBAC、API Key | M2 |
+| 11 | Free / Premium / Enterprise 方案與配額 | M2 |
+| 12 | 使用者提交與匯入 IOC、誤判回報 | M2 |
+| 13 | 兩層 Bloom Filter + 增量同步（供 Browser Extension / App） | M2 |
+| 14 | Elasticsearch 搜尋（含 ES 故障時降級至 PostgreSQL） | M2 |
+| 15 | Kafka 事件、WebSocket / SSE / Webhook 通知 | M3 |
+| 16 | Audit Log（append-only）、資料保留政策 | M3 |
+| 17 | Prometheus / Grafana / OpenTelemetry 可觀測性 | M3 |
+
+三個里程碑各有獨立的驗收閘門：**M1（Phase 1–12，38 項）→ M2（Phase 13–19，27 項）→ M3（Phase 20–23，25 項）**。
+未通過前一個閘門不得開始下一個里程碑。
+
+### 明確不做的事
+
+不自建所有第三方情資來源、不做 ML 威脅偵測、不做完整 SIEM / SOAR、不做 Kubernetes-first 部署、不做多區域 active-active、不串接真實金流、不做 TAXII 2.1 Server（僅保留擴充點）。不採用 CQRS 與 Event Sourcing。
+
+---
+
+## 模組功能摘要
+
+### 後端 Maven Module（4 個）
+
+| Module | 對外提供 | 允許依賴 | Phase | 治理規格 |
+|---|---|---|---|---|
+| `ctip-sdk` | **Shared Kernel**：`ThreatSourceAdapter` 契約、跨界列舉（`IocType`／`Tlp`／`Severity`／`RedistributionPolicy` 等）。可獨立發布至 Maven Central | JDK、`jakarta.validation-api`。**零 Spring** | 1, 5 | [01 §1.3](docs/spec/01-architecture.md#13-maven-multi-module)、[02 §2.5](docs/spec/02-ddd-model.md#25-shared-kernelctip-sdk) |
+| `ctip-core` | `domain`（9 個聚合 + 不變量）+ `application`（service + out-port） | `ctip-sdk`、spring-context、spring-tx。**無 JPA、無 spring-data** | 4, 6–8 | [01](docs/spec/01-architecture.md)、[02](docs/spec/02-ddd-model.md) |
+| `ctip-adapters` | 內建與 mock 的 Threat Source Adapter 實作 | `ctip-sdk`、HTTP client、Resilience4j。**不依賴 `ctip-core`** | 5, 14 | [08 §8.1、§8.3](docs/spec/08-ingestion-sdk.md) |
+| `ctip-app` | Spring Boot 啟動類、`infrastructure`、`interfaces`、Flyway、設定檔。唯一產生可執行 jar 者 | 全部 | 3, 9–10, 13+ | [01 §1.4](docs/spec/01-architecture.md#14-package-結構)、[05](docs/spec/05-environment.md) |
+
+### 後端 Domain 模組（`ctip-core/domain/*`）
+
+| 模組 | 對外提供 | 允許依賴 | Phase | 治理規格 |
+|---|---|---|---|---|
+| `indicator` | `Indicator` 聚合根（14 條不變量）、`IndicatorSource`、`HashRecord`、`IndicatorMergePolicy`、正規化器 | sdk、`shared` | 4, 6, 7 | [07 §7.1–§7.5](docs/spec/07-domain-intel.md) |
+| `source` | `Source` 聚合根、`SourceHealth` 狀態機、`Reputation` | sdk、`shared` | 4, 5 | [08 §8.6](docs/spec/08-ingestion-sdk.md#86-來源健康) |
+| `tenant` | `Tenant` 聚合根、`TenantSlug`、public tenant 常數 | sdk、`shared` | 4 | [10 §10.1](docs/spec/10-identity-plans.md#101-多租戶) |
+| `fingerprint` | `FingerprintStrategy`、`Sha256FingerprintStrategy`、`Fingerprint` | sdk | 7 | [07 §7.4](docs/spec/07-domain-intel.md#74-去重與指紋) |
+| `stix` | STIX 物件模型與 builder、`StixTlpMarkings`、`StixPatternBuilder` | sdk、`indicator`、`threat` | 8, 18 | [07 §7.8](docs/spec/07-domain-intel.md#78-stix-21-映射) |
+| `event` | `DomainEvent` 型別 + 19 個具體事件 | sdk、`shared` | 4+ | [02 §2.4](docs/spec/02-ddd-model.md#24-domain-event-清單) |
+| `shared` | `Cursor`、`CursorPage`、共用型別 | sdk | 4 | [02 §2.6](docs/spec/02-ddd-model.md#26-值物件清單) |
+| `identity` | `User` 聚合根（7 條）、`RefreshToken`、`ApiKey` 聚合根（7 條） | sdk、`tenant`、`shared` | 13 | [10 §10.3–§10.5](docs/spec/10-identity-plans.md) |
+| `subscription` | `Subscription` 聚合根（5 條）、`BillingPeriod` | sdk、`tenant`、`shared` | 14 | [10 §10.6](docs/spec/10-identity-plans.md#106-方案) |
+| `bloom` | `BloomVersion` 聚合根（8 條）、`BloomArtifact`、`BloomParameters`、`Checksum` | sdk、`tenant`、`fingerprint` | 15 | [11](docs/spec/11-sync-bloom.md) |
+| `threat` | `Threat` 聚合根（6 條）、`ThreatIndicatorLink`、`ExternalReference` | sdk、`indicator`、`shared` | 18 | [02](docs/spec/02-ddd-model.md#threat)、[04](docs/spec/04-data-dictionary.md) |
+| `notification` | `Webhook` 聚合根（6 條）、`WebhookFilter` | sdk、`tenant`、`event` | 20 | [13 §13.2](docs/spec/13-platform-ops.md#132-通知-phase-20--m3) |
+
+`application` 之下的模組（`ingestion`、`search`、`sync`、`audit` 等）為對應的 service 層，out-port 集中於 `application/port`。
+
+### 前端 Feature（`frontend/src/features/*`）
+
+**feature 之間不得直接 import**（ESLint `import/no-restricted-paths` 強制）。共用內容上移至 `components/` 或 `hooks/`。
+
+| Feature | 對外提供 | 允許依賴 | Phase | 治理規格 |
+|---|---|---|---|---|
+| `ioc` | IOC 搜尋／詳情／提交／匯入的元件與 hook | `api/`、`components/`、`hooks/`、`utils/` | 12, 14 | [12 §12.5](docs/spec/12-frontend.md#125-頁面) |
+| `stix` | STIX JSON 檢視、關聯圖（M3 用 Cytoscape.js） | 同上 | 12, 20 | [12 §12.6](docs/spec/12-frontend.md#126-ui-要求) |
+| `auth` | 登入／註冊／token 刷新／路由守衛 | 同上 + `stores/authSlice` | 13 | [12](docs/spec/12-frontend.md) |
+| `sync` | Bloom 說明頁與同步狀態 | 同上 | 16 | [11 §11.7](docs/spec/11-sync-bloom.md#117-client-契約摘要必須複製進-sdk-與-api-文件) |
+| `subscription` | 方案與用量檢視 | 同上 | 14 | [10 §10.6](docs/spec/10-identity-plans.md#106-方案) |
+| `apikey` | API key 建立／撤銷（原文只顯示一次） | 同上 | 13 | [10 §10.5](docs/spec/10-identity-plans.md#105-api-key-phase-13--m2) |
+| `threat` | Threat feed 與詳情 | 同上 | 18 | [12 §12.5](docs/spec/12-frontend.md#125-頁面) |
+| `notification` | 通知中心、WebSocket 連線狀態 | 同上 + `stores/toastSlice` | 20 | [13 §13.2](docs/spec/13-platform-ops.md#132-通知-phase-20--m3) |
+| `audit` | 稽核紀錄檢視 | 同上 | 21 | [13 §13.5](docs/spec/13-platform-ops.md#135-稽核-phase-21--m3) |
+
+### 基礎設施
+
+| 服務 | 用途 | 啟動於哪個 profile |
+|---|---|---|
+| PostgreSQL 18 | **唯一的 source of truth** | 全部 |
+| Redis 8 / Valkey 9 | 快取 + 分散式限流 | `standard`、`full` |
+| Elasticsearch 9.5 / OpenSearch 3 | 讀取索引（可隨時由 DB 重建） | `full` |
+| Kafka 4.2（KRaft） | Domain event 傳輸 | `full` |
+| Nginx 1.30（stable） | 前端靜態服務 + 安全標頭 | 全部（production build） |
+| Prometheus / Grafana | 監控 | `full` |
+
+`SearchPort` 與 `CachePort` 的抽象讓 Elasticsearch → OpenSearch、Redis → Valkey 的替換只需改 infrastructure 實作與 image 名稱（授權與支援窗口考量見 [06 §6.5](docs/spec/06-tech-stack.md#65-授權注意事項)）。
+
+---
+
+## 如何使用這份規格
+
+**如果你是 AI agent**：從 [`docs/spec/README.md`](docs/spec/README.md) 開始，它會告訴你讀取順序。不要一次讀完全部檔案。
+
+**如果你是人類**：先讀上面的系統摘要與模組表，再讀 [`docs/spec/00-master.md`](docs/spec/00-master.md) 的 §0.6 變更摘要（那裡列出 v1.1 的 4 項建置阻斷缺陷、3 項版本錯誤、10 項內部衝突及其解法）。
+
+---
+
+## 現況
+
+| 項目 | 狀態 |
+|---|---|
+| 規格書 | ✅ v2.0 完成 |
+| `backend/` | ⬜ 尚未實作（Phase 1 起） |
+| `frontend/` | ⬜ 尚未實作（Phase 11 起） |
+| `environment/` | ⬜ 尚未實作（Phase 2） |
+
+實作開始後，本檔會由 Phase 23 **擴充**——新增啟動方式、API 概覽、Swagger 位置、測試方式等段落。
+**既有段落（這是什麼／系統摘要／模組功能摘要）不得被覆寫。**
+
+---
+
+## 授權與安全
+
+- 授權：見 `LICENSE`（實作階段建立）
+- 安全政策與漏洞回報：見 `SECURITY.md`（實作階段建立）
+- 第三方元件授權說明（Redis / Elasticsearch 的 copyleft 考量與替代方案）：`docs/deployment/licensing.md`
+- 個資與資料保留：`docs/deployment/privacy.md`
+
+⚠️ 本平台處理的 IP 位址在 GDPR 下**可能構成個人資料**。規格已納入資料保留政策、資料主體查詢與刪除程序，以及情資再散布的法遵限制（多數商業情資來源的 ToS 禁止再散布原始資料）。詳見 [07 §7.9](docs/spec/07-domain-intel.md#79-再散布政策法遵強制) 與 [13 §13.4](docs/spec/13-platform-ops.md#134-隱私與資料保留)。
