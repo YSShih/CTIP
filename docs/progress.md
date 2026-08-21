@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 2 完成,下一步 Phase 3 |
+| M1 — MVP | 1–12 | Phase 3 完成,下一步 Phase 4 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -66,3 +66,40 @@
     (由 up.sh 引導從 .example 複製);其餘 compose 檢查用 `.example`
   - `dod.sh` M1-15 需要 `jq`、M3-24 需要 `python3`(缺少時該項會 FAIL 並說明)
   - 本機已驗證 Docker 29.4.0 / Compose v5.1.2;mvp 的兩個 development image 已建置並留在本機快取
+
+---
+
+## Phase 3 — Spring Boot + PostgreSQL + Flyway + 種子資料
+
+- **狀態**:done(2026-08-21)
+- **執行單**:`docs/spec/phases/phase-03.md`
+- **Commit**:(見 git log,message `Phase 3: spring boot + postgresql + flyway + seed data`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='Migration…,PublicTenant…,SampleData…,RequiredIndex…,TlpRedAbsence…'`(逐字)✅ 22/22
+  - 另跑無過濾 `verify -Ptest-integration` ✅ 29/29(含 StartupValidatorTest 7 項 unit)、Spotless/Checkstyle/JaCoCo 全過
+  - `./environment/scripts/up.sh mvp` ✅ 三容器 healthy;`curl /actuator/health | jq -e '.status == "UP"'` ✅
+  - compose stack 內實測:indicators=1020、flyway 7 版全 success、sources=4
+- **交付物**:`CtipApplication`、`CtipProperties`(單一 @ConfigurationProperties record,@Validated)、
+  `StartupValidator`(五條守衛)、`SeedDataConfig`、`application.yml` + 四 profile yml、
+  `V1`–`V7` migrations、`db/seed/sample_data.sql`(1,020 IOC,冪等)、五個整合測試 + 1 個單元測試
+- **偏離事項 / ADR**:五項規格衝突處置,全部記錄於 `docs/architecture/decisions/0001-phase3-spec-conflict-resolutions.md`:
+  1. **public tenant 加 DB 觸發器**(T2 深度防禦,V2)
+  2. **V7 的 `fk_so_threat` 延後至 V25**(threats 是 M2 表,04 自身衝突;Phase 18 須以 ALTER TABLE 補 FK)
+  3. **JDWP 從 BACKEND_JAVA_OPTS 移到 spring-boot:run 的 jvmArguments**(JAVA_TOOL_OPTIONS 會使 Maven 與 app 兩個 JVM 搶 5005)
+  4. **postgres volume 掛載點改 `/var/lib/postgresql`**(postgres:18 拒絕掛 …/data;規格第五項建置阻斷缺陷)
+  5. **frontend node_modules 以 named volume 遮罩 + up.sh `npm ci` 預熱**(macOS 原生 binding 進 Linux 容器必失敗)
+  - 另兩項建置層修正(未列 ADR):Boot 4 模組化需明確加 `spring-boot-flyway` 依賴,否則 Flyway autoconfig 不存在、
+    migration 靜默不執行;parent surefire 設 `failIfNoSpecifiedTests=false`,否則規格判準的 `-Dtest=` 指令在無測試的 module 必炸
+- **給下一 session 的注意事項**(Phase 4 = Domain + 最小安全層,治理規格 02、07、10、01):
+  - Boot 4(4.1.0)已模組化:testcontainers 座標帶 `testcontainers-` 前綴(2.x,`PostgreSQLContainer` 在
+    `org.testcontainers.postgresql`,非泛型);per-tech autoconfig 在獨立 module(如 spring-boot-flyway)
+  - 整合測試基底 `AbstractPostgresIntegrationTest`:單例 postgres:18-alpine 容器 + mvp profile +
+    DynamicPropertySource 走真實 application.yml 對應;新整合測試直接繼承即可共用 context
+  - seed 載入順序:Boot 預設 script initializer 在 Flyway **之前**;`SeedDataConfig` 以
+    `@DependsOn("flywayInitializer")` 修正——若改動 seed 機制,不要退回 Boot 預設行為
+  - `spring-boot.run.skip` parent=true / ctip-app=false:dev 容器 CMD 的 `-pl ctip-app -am spring-boot:run`
+    會對每個 reactor module 執行 run goal,勿移除
+  - Phase 4 的 domain 類別須依 T2 在 domain 層再次強制 public tenant 不變量(DB 觸發器只是最後防線)
+  - mock 來源 V4 種子的 metadata(default_tlp/redistribution/reputation)是我依 08 §8.3 的合理選值;
+    Phase 5 實作 adapter 的 `SourceMetadata` 時應與 V4 對齊或回頭調整 V4(migration 不可改,必要時新增 migration)
+  - `environment/.env.mvp`(真實檔)已在本機由 example 複製,不進版控

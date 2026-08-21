@@ -1,0 +1,5 @@
+# staging profile:明確不載入開發樣本資料(db/seed/ 僅限 mvp/dev)。
+spring:
+  sql:
+    init:
+      mode: never

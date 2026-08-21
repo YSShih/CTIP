@@ -37,6 +37,9 @@
     <ctip.test.excludedGroups>slice,integration,heavy</ctip.test.excludedGroups>
     <!-- 各 module 以此覆寫行覆蓋率下限(docs/spec/14-testing.md §14.3);ctip-core 另以套件層級規則覆寫 -->
     <ctip.coverage.line-minimum>0.60</ctip.coverage.line-minimum>
+    <!-- dev 容器 CMD 為 `mvnw -pl ctip-app -am spring-boot:run`,run goal 會對 reactor 每個
+         module 執行;只有 ctip-app 有 main class,其餘一律跳過(ctip-app pom 覆寫為 false) -->
+    <spring-boot.run.skip>true</spring-boot.run.skip>
   </properties>
 
   <dependencyManagement>
@@ -166,6 +169,9 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <configuration>
             <excludedGroups>${ctip.test.excludedGroups}</excludedGroups>
+            <!-- 規格與 DoD 的判準以 -Dtest=<類名> 在 reactor 根執行;
+                 沒有該測試類的 module(如 ctip-sdk)不得因此失敗 -->
+            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
           </configuration>
         </plugin>
       </plugins>

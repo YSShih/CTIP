@@ -1,0 +1,6 @@
+# dev profile:載入 db/seed/ 開發樣本資料(docs/spec/05-environment.md §5.9)。
+spring:
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:db/seed/sample_data.sql

@@ -1,0 +1,71 @@
+# 共用設定(docs/spec/05-environment.md §5.7,強制對應)。
+# 環境變數 → Spring property 的唯一對應點;profile 差異在 application-{mvp,dev,staging,prod}.yml。
+spring:
+  application:
+    name: ctip
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    open-in-view: false # 強制:避免 lazy loading 洩漏到 view 層
+    hibernate:
+      ddl-auto: validate # 強制:schema 由 Flyway 管理
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${ACTUATOR_EXPOSED_ENDPOINTS:health,info}
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+
+ctip:
+  environment: ${ENVIRONMENT}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900}
+    refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:2592000}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    backend: ${RATE_LIMIT_BACKEND:redis}
+  ingestion:
+    enabled: ${INGESTION_ENABLED:true}
+    batch-size: ${INGESTION_BATCH_SIZE:500}
+  scheduler:
+    enabled: ${SCHEDULER_ENABLED:true}
+  bloom:
+    public-capacity: ${BLOOM_PUBLIC_CAPACITY:10000000}
+    public-false-positive-rate: ${BLOOM_PUBLIC_FALSE_POSITIVE_RATE:0.001}
+    tenant-default-capacity: ${BLOOM_TENANT_DEFAULT_CAPACITY:1000000}
+    snapshot-cron: "${BLOOM_SNAPSHOT_CRON:0 0 4 * * *}"
+    delta-cron: "${BLOOM_DELTA_CRON:0 0 * * * *}"
+    max-delta-chain: ${BLOOM_MAX_DELTA_CHAIN:24}
+  retention:
+    audit-days: ${AUDIT_RETENTION_DAYS:180}
+    raw-payload-days: ${RAW_PAYLOAD_RETENTION_DAYS:30}
+    rejection-days: ${REJECTION_RETENTION_DAYS:30}
+    delivery-days: ${DELIVERY_RETENTION_DAYS:30}
+    indicator-days: ${INDICATOR_RETENTION_DAYS:365}
+    bloom-artifact-keep: ${BLOOM_ARTIFACT_KEEP:30}

@@ -24,6 +24,23 @@ fi
 check_docker
 
 # 5. 啟動
+# 開發模式的容器依賴 named volume 快取(maven-cache / node-modules),首次啟動前先預熱:
+# - backend 以離線模式跑 ./mvnw -o spring-boot:run,空的 /root/.m2 必然失敗
+# - frontend 的 node_modules volume 遮罩 host 版本,空 volume 內無 vite
+if [ "$(env_get "$ENV_FILE" BACKEND_BUILD_TARGET)" = "development" ]; then
+  if ! compose "$ENV_NAME" run --rm --no-deps backend \
+       sh -c 'test -d /root/.m2/repository/org/springframework/boot' >/dev/null 2>&1; then
+    info "首次啟動:預熱 backend Maven 相依快取(下載至 maven-cache volume,需數分鐘)……"
+    compose "$ENV_NAME" run --rm --no-deps backend ./mvnw -B -q -pl ctip-app -am -DskipTests package
+  fi
+fi
+if [ "$(env_get "$ENV_FILE" FRONTEND_BUILD_TARGET)" = "development" ]; then
+  if ! compose "$ENV_NAME" run --rm --no-deps frontend \
+       sh -c 'test -x /workspace/node_modules/.bin/vite' >/dev/null 2>&1; then
+    info "首次啟動:在容器內安裝 frontend 相依(npm ci 至 node-modules volume)……"
+    compose "$ENV_NAME" run --rm --no-deps frontend npm ci
+  fi
+fi
 info "啟動 ${ENV_NAME} 環境……"
 compose "$ENV_NAME" up -d
 
@@ -31,12 +48,19 @@ compose "$ENV_NAME" up -d
 info "等待服務 healthcheck……"
 DEADLINE=$(( $(date +%s) + 300 ))
 while :; do
-  # 統計仍在 starting / unhealthy 的容器數(無 healthcheck 的服務視為就緒)
-  NOT_READY="$(compose "$ENV_NAME" ps --format '{{.Service}} {{.Health}}' \
-    | awk '$2 == "starting" || $2 == "unhealthy" { print $1 }')"
+  PS_STATE="$(compose "$ENV_NAME" ps -a --format '{{.Service}} {{.State}} {{.Health}}')"
+  # 任何服務異常退出即失敗,不空等 healthcheck
+  DEAD="$(printf '%s\n' "$PS_STATE" | awk '$2 == "exited" || $2 == "dead" { print $1 }')"
+  if [ -n "$DEAD" ]; then
+    compose "$ENV_NAME" ps -a
+    die "服務異常退出:$(printf '%s' "$DEAD" | tr '\n' ' ')。請看 logs.sh <service> ${ENV_NAME}"
+  fi
+  # 仍在 starting / unhealthy / created / restarting 的服務(無 healthcheck 的執行中服務視為就緒)
+  NOT_READY="$(printf '%s\n' "$PS_STATE" \
+    | awk '$3 == "starting" || $3 == "unhealthy" || $2 == "created" || $2 == "restarting" { print $1 }')"
   [ -z "$NOT_READY" ] && break
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
-    compose "$ENV_NAME" ps
+    compose "$ENV_NAME" ps -a
     die "等待 healthcheck 逾時(300s)。未就緒:$(printf '%s' "$NOT_READY" | tr '\n' ' ')"
   fi
   sleep 3

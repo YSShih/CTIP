@@ -12,7 +12,11 @@
 
   <artifactId>ctip-app</artifactId>
   <name>CTIP App</name>
-  <description>Spring Boot 啟動類、infrastructure、interfaces、Flyway、設定檔。唯一產生可執行 jar 的模組(Phase 3 起)</description>
+  <properties>
+    <!-- 覆寫 parent 的預設:只有本模組執行 spring-boot:run -->
+    <spring-boot.run.skip>false</spring-boot.run.skip>
+  </properties>
+  <description>Spring Boot 啟動類、infrastructure、interfaces、Flyway、設定檔。唯一產生可執行 jar 的模組</description>
 
   <dependencies>
     <dependency>
@@ -27,5 +31,100 @@
       <groupId>com.ctip</groupId>
       <artifactId>ctip-adapters</artifactId>
     </dependency>
+
+    <!-- 以下版本一律由 Spring Boot BOM 納管(docs/spec/06-tech-stack.md §6.1.3) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <!-- Boot 4 模組化:Flyway 的 auto-configuration 在獨立模組,缺少它 Flyway 不會執行 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-flyway</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+    <!-- Hot reload 契約(docs/spec/05-environment.md §5.11):reload.sh 觸發重編後由 DevTools 重啟 context -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <scope>runtime</scope>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Testcontainers 2.x(Boot 4 BOM 納管)的 artifact 名帶 testcontainers- 前綴 -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <!--
+            JDWP 掛在 run goal 而非 BACKEND_JAVA_OPTS(ADR 0001 決策 3):
+            compose 把 BACKEND_JAVA_OPTS 注入 JAVA_TOOL_OPTIONS,dev 容器跑 mvnw spring-boot:run
+            時 Maven JVM 與 forked app JVM 都會讀它,第二個 JVM 綁 5005 必然失敗。
+            此設定只影響 spring-boot:run(開發容器);production 走 java -jar,不受影響。
+          -->
+          <jvmArguments>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005</jvmArguments>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <configuration>
+          <!-- 覆蓋率排除(docs/spec/14-testing.md §14.3):Spring 組態類、啟動類、MapStruct 產物 -->
+          <excludes>
+            <exclude>com/ctip/config/**</exclude>
+            <exclude>com/ctip/CtipApplication.class</exclude>
+            <exclude>**/*MapperImpl.class</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>

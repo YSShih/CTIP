@@ -1,0 +1,6 @@
+# prod profile:明確不載入開發樣本資料(db/seed/ 僅限 mvp/dev)。
+# prod 的安全守衛(JWT_SECRET、CORS、Swagger、ddl-auto)由 StartupValidator 強制。
+spring:
+  sql:
+    init:
+      mode: never

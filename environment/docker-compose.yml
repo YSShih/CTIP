@@ -87,6 +87,9 @@ services:
       VITE_WS_URL:      ${VITE_WS_URL:-}
     volumes:
       - ${FRONTEND_MOUNT_SRC:-./.noop}:${FRONTEND_MOUNT_DST:-/opt/noop}:${FRONTEND_MOUNT_MODE:-ro}
+      # dev 掛 node-modules volume 遮罩 host 的 node_modules(macOS 原生 binding 進 Linux
+      # 容器必失敗;ADR 0001 決策 5)。prod 依預設值退化為無害掛載,同 maven-cache 模式。
+      - ${NODE_MODULES_SRC:-node-modules}:${NODE_MODULES_DST:-/opt/noop-node-modules}
     ports:
       - "${FRONTEND_BIND:-127.0.0.1:3000}:${FRONTEND_CONTAINER_PORT:-80}"
     depends_on: [ backend ]
@@ -99,7 +102,8 @@ services:
       POSTGRES_USER:     ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # postgres:18+ 要求掛載點為 /var/lib/postgresql(掛 …/data 會拒絕啟動;ADR 0001 決策 4)
+      - postgres-data:/var/lib/postgresql
       - ./config/postgres:/docker-entrypoint-initdb.d:ro
     ports:
       - "${POSTGRES_BIND:-127.0.0.1:5432}:5432"
@@ -188,3 +192,4 @@ volumes:
   prometheus-data:
   grafana-data:
   maven-cache:
+  node-modules:
