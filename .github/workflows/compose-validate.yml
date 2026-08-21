@@ -1,0 +1,37 @@
+# 四種 env 的 docker compose config + 防呆檢查
+# 規格:docs/spec/05-environment.md §5.2、docs/spec/13-platform-ops.md §13.8
+name: compose-validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  compose-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 四種環境的 compose config 皆有效
+        run: |
+          for e in mvp dev staging prod; do
+            docker compose --env-file "environment/.env.$e.example" \
+              -f environment/docker-compose.yml config -q || exit 1
+          done
+
+      - name: prod 設定不得含原始碼掛載
+        run: |
+          ! docker compose --env-file environment/.env.prod.example \
+              -f environment/docker-compose.yml config \
+            | grep -qE '\.\./(backend|frontend)'
+
+      - name: prod 設定不得含 JDWP debug agent
+        run: |
+          ! docker compose --env-file environment/.env.prod.example \
+              -f environment/docker-compose.yml config \
+            | grep -qi jdwp
+
+      - name: staging/prod 樣板不得出現 MOUNT 變數
+        run: |
+          ! grep -q '_MOUNT_' environment/.env.prod.example environment/.env.staging.example

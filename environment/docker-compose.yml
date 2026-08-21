@@ -1,0 +1,190 @@
+# CTIP 唯一的 compose 檔(docs/spec/05-environment.md §5.6,強制契約)。
+# 環境差異一律透過環境變數與 Compose profiles 控制,禁止建立 docker-compose.<env>.yml。
+name: ${PROJECT_NAME:-ctip}
+
+x-app-common: &app-common
+  restart: ${RESTART_POLICY:-unless-stopped}
+  networks: [ ctip ]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+
+  backend:
+    <<: *app-common
+    build:
+      context: ..
+      dockerfile: environment/docker/backend/Dockerfile
+      target: ${BACKEND_BUILD_TARGET:-production}
+    environment:
+      ENVIRONMENT:                    ${ENVIRONMENT:?ENVIRONMENT is required}
+      SPRING_PROFILES_ACTIVE:         ${SPRING_PROFILES_ACTIVE:-prod}
+      JAVA_TOOL_OPTIONS:              ${BACKEND_JAVA_OPTS:-}
+      SERVER_PORT:                    ${BACKEND_PORT:-8080}
+      POSTGRES_HOST:                  ${POSTGRES_HOST:-postgres}
+      POSTGRES_PORT:                  ${POSTGRES_PORT:-5432}
+      POSTGRES_DB:                    ${POSTGRES_DB:?}
+      POSTGRES_USER:                  ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD:              ${POSTGRES_PASSWORD:?}
+      REDIS_HOST:                     ${REDIS_HOST:-redis}
+      REDIS_PORT:                     ${REDIS_PORT:-6379}
+      REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
+      KAFKA_BOOTSTRAP_SERVERS:        ${KAFKA_BOOTSTRAP_SERVERS:-}
+      ELASTICSEARCH_URL:              ${ELASTICSEARCH_URL:-}
+      ELASTICSEARCH_USERNAME:         ${ELASTICSEARCH_USERNAME:-}
+      ELASTICSEARCH_PASSWORD:         ${ELASTICSEARCH_PASSWORD:-}
+      JWT_SECRET:                     ${JWT_SECRET:?}
+      JWT_ACCESS_TOKEN_EXPIRATION:    ${JWT_ACCESS_TOKEN_EXPIRATION:-900}
+      JWT_REFRESH_TOKEN_EXPIRATION:   ${JWT_REFRESH_TOKEN_EXPIRATION:-2592000}
+      CORS_ALLOWED_ORIGINS:           ${CORS_ALLOWED_ORIGINS:?}
+      SWAGGER_ENABLED:                ${SWAGGER_ENABLED:-false}
+      ACTUATOR_EXPOSED_ENDPOINTS:     ${ACTUATOR_EXPOSED_ENDPOINTS:-health,info}
+      RATE_LIMIT_ENABLED:             ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_BACKEND:             ${RATE_LIMIT_BACKEND:-redis}
+      SCHEDULER_ENABLED:              ${SCHEDULER_ENABLED:-true}
+      INGESTION_ENABLED:              ${INGESTION_ENABLED:-true}
+      INGESTION_BATCH_SIZE:           ${INGESTION_BATCH_SIZE:-500}
+      BLOOM_PUBLIC_CAPACITY:          ${BLOOM_PUBLIC_CAPACITY:-10000000}
+      BLOOM_PUBLIC_FALSE_POSITIVE_RATE: ${BLOOM_PUBLIC_FALSE_POSITIVE_RATE:-0.001}
+      BLOOM_TENANT_DEFAULT_CAPACITY:  ${BLOOM_TENANT_DEFAULT_CAPACITY:-1000000}
+      BLOOM_SNAPSHOT_CRON:            ${BLOOM_SNAPSHOT_CRON:-0 0 4 * * *}
+      BLOOM_DELTA_CRON:               ${BLOOM_DELTA_CRON:-0 0 * * * *}
+      BLOOM_MAX_DELTA_CHAIN:          ${BLOOM_MAX_DELTA_CHAIN:-24}
+      AUDIT_RETENTION_DAYS:           ${AUDIT_RETENTION_DAYS:-180}
+      RAW_PAYLOAD_RETENTION_DAYS:     ${RAW_PAYLOAD_RETENTION_DAYS:-30}
+      REJECTION_RETENTION_DAYS:       ${REJECTION_RETENTION_DAYS:-30}
+      DELIVERY_RETENTION_DAYS:        ${DELIVERY_RETENTION_DAYS:-30}
+      INDICATOR_RETENTION_DAYS:       ${INDICATOR_RETENTION_DAYS:-365}
+      BLOOM_ARTIFACT_KEEP:            ${BLOOM_ARTIFACT_KEEP:-30}
+    volumes:
+      - ${BACKEND_MOUNT_SRC:-./.noop}:${BACKEND_MOUNT_DST:-/opt/noop}:${BACKEND_MOUNT_MODE:-ro}
+      - ${MAVEN_CACHE_SRC:-maven-cache}:${MAVEN_CACHE_DST:-/opt/noop-m2}
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1:8080}:8080"
+      - "${BACKEND_DEBUG_BIND:-127.0.0.1:5005}:5005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+
+  frontend:
+    <<: *app-common
+    build:
+      context: ..
+      dockerfile: environment/docker/frontend/Dockerfile
+      target: ${FRONTEND_BUILD_TARGET:-production}
+    environment:
+      VITE_ENVIRONMENT: ${VITE_ENVIRONMENT:?}
+      VITE_API_URL:     ${VITE_API_URL:?}
+      VITE_WS_URL:      ${VITE_WS_URL:-}
+    volumes:
+      - ${FRONTEND_MOUNT_SRC:-./.noop}:${FRONTEND_MOUNT_DST:-/opt/noop}:${FRONTEND_MOUNT_MODE:-ro}
+    ports:
+      - "${FRONTEND_BIND:-127.0.0.1:3000}:${FRONTEND_CONTAINER_PORT:-80}"
+    depends_on: [ backend ]
+
+  postgres:
+    <<: *app-common
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:?}
+      POSTGRES_USER:     ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./config/postgres:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_BIND:-127.0.0.1:5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    <<: *app-common
+    profiles: [ "standard", "full" ]
+    image: redis:8-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?}", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_BIND:-127.0.0.1:6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    <<: *app-common
+    profiles: [ "full" ]
+    image: apache/kafka:4.2.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  elasticsearch:
+    <<: *app-common
+    profiles: [ "full" ]
+    image: elasticsearch:9.5.1
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
+      xpack.security.enabled: ${ES_SECURITY_ENABLED:-false}
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+
+  prometheus:
+    <<: *app-common
+    profiles: [ "full" ]
+    image: prom/prometheus:v3.6.0
+    volumes:
+      - ./config/monitoring/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    <<: *app-common
+    profiles: [ "full" ]
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?}
+    volumes:
+      - ./config/monitoring/grafana:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+
+networks:
+  ctip:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  kafka-data:
+  es-data:
+  prometheus-data:
+  grafana-data:
+  maven-cache:

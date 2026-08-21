@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 1 完成,下一步 Phase 2 |
+| M1 — MVP | 1–12 | Phase 2 完成,下一步 Phase 3 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -34,3 +34,35 @@
   - Checkstyle 設定在 `backend/config/checkstyle/ctip-checks.xml`,經 `${maven.multiModuleProjectDirectory}` 引用
   - frontend 的 feature 依賴規則 F1/F2/F4 已在 `eslint.config.js` 以 zones 實作(9 個 feature 名已預先列出);F3 由未來的 `api:check` script 負責(Phase 10)
   - Phase 2 是 Environment + Docker(compose、Dockerfile、四份 .env、scripts),治理規格 05-environment.md
+
+---
+
+## Phase 2 — Environment + Docker
+
+- **狀態**:done(2026-08-21)
+- **執行單**:`docs/spec/phases/phase-02.md`
+- **Commit**:(見 git log,message `Phase 2: environment + docker`)
+- **完成判準結果**:全綠 —
+  - 四種 env 的 `docker compose config -q` ✅
+  - prod 設定無原始碼掛載 ✅、無 JDWP ✅
+  - staging/prod 樣板無 `*_MOUNT_*` 變數 ✅
+  - `docker compose --env-file .env.mvp.example build` ✅(backend/frontend development stage 皆建成)
+  - 全部 `.sh` 過 `bash -n`;`dod.sh` 的 `--only`/`--skip`/單項/FAIL 輸出/exit code/人工清單行為煙霧測試 ✅
+- **交付物**:compose(§5.6 逐字)、backend/frontend Dockerfile(§5.3 逐字)、五份 `.env.*.example`、
+  `config/nginx/default.conf`(安全標頭 + SPA fallback)、`config/{postgres,redis,kafka,elasticsearch,monitoring/*}`
+  結構目錄、八支 scripts、`environment/README.md`、`.github/workflows/compose-validate.yml`
+- **偏離事項 / ADR**:無版本或契約偏離。兩個實作層決定(皆在規格自由度內,未另立 ADR):
+  1. nginx 靜態資產快取用 `expires` 而非 `add_header Cache-Control`——location 內出現 `add_header`
+     會整組遮蔽 server 層安全標頭(nginx 繼承規則),安全優先。
+  2. `dod.sh` 的單測項統一以 `-Ptest-all -Dsurefire.failIfNoSpecifiedTests=false` 執行,
+     避免預設 profile 的 unit tag 過濾使 `-Dtest=<IntegrationTest>` 空跑。
+- **給下一 session 的注意事項**(Phase 3 = Spring Boot 啟動 + PostgreSQL + Flyway 9 張表 + 種子資料,治理規格 04、05):
+  - compose 對 backend 的 `ENVIRONMENT`/`POSTGRES_*`/`JWT_SECRET`/`CORS_ALLOWED_ORIGINS` 用 `:?` 強制;
+    Spring 設定對應契約在 05 §5.7(`application.yml` + 四個 profile yml、`@ConfigurationProperties` record、
+    `StartupValidator` 守衛、`ddl-auto: validate`)——這些是 Phase 3 的範圍
+  - `migrate.sh` 呼叫 `mvnw -pl ctip-app flyway:migrate`,需要 Phase 3 在 ctip-app 加 Flyway maven plugin 才可用
+  - JWT_SECRET 樣板值的 canonical 字串是 `CHANGE_ME_MIN_32_BYTES`(`_common.sh` 與未來 StartupValidator 應一致)
+  - `dod.sh` 中依賴執行中 stack 的項目(M1-14/15/33/36/37、M2-25、M3-17)使用**真實** `.env.<env>`
+    (由 up.sh 引導從 .example 複製);其餘 compose 檢查用 `.example`
+  - `dod.sh` M1-15 需要 `jq`、M3-24 需要 `python3`(缺少時該項會 FAIL 並說明)
+  - 本機已驗證 Docker 29.4.0 / Compose v5.1.2;mvp 的兩個 development image 已建置並留在本機快取
