@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<!--
+  CTIP 可讀性硬性規則(docs/spec/01-architecture.md §1.8)。
+  只開五條規則;不使用 sun_checks / google_checks(噪音會導致規則被關掉)。
+-->
+<module name="Checker">
+  <property name="severity" value="error"/>
+  <property name="fileExtensions" value="java"/>
+
+  <!-- 規則 1:單一類別(檔案)≤ 300 行 -->
+  <module name="FileLength">
+    <property name="max" value="300"/>
+  </module>
+
+  <module name="TreeWalker">
+    <!-- 規則 2:單一方法 ≤ 50 行 -->
+    <module name="MethodLength">
+      <property name="max" value="50"/>
+    </module>
+    <!-- 規則 3:方法參數 ≤ 5 個 -->
+    <module name="ParameterNumber">
+      <property name="max" value="5"/>
+    </module>
+    <!-- 規則 4:巢狀深度 ≤ 3 -->
+    <module name="NestedIfDepth">
+      <property name="max" value="3"/>
+    </module>
+    <module name="NestedTryDepth">
+      <property name="max" value="3"/>
+    </module>
+  </module>
+</module>

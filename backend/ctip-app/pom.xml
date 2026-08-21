@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ctip</groupId>
+    <artifactId>ctip-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>ctip-app</artifactId>
+  <name>CTIP App</name>
+  <description>Spring Boot 啟動類、infrastructure、interfaces、Flyway、設定檔。唯一產生可執行 jar 的模組(Phase 3 起)</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.ctip</groupId>
+      <artifactId>ctip-sdk</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ctip</groupId>
+      <artifactId>ctip-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.ctip</groupId>
+      <artifactId>ctip-adapters</artifactId>
+    </dependency>
+  </dependencies>
+</project>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ctip</groupId>
+    <artifactId>ctip-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>ctip-sdk</artifactId>
+  <name>CTIP SDK</name>
+  <description>Shared Kernel: adapter 契約與跨界列舉/值物件。僅依賴 JDK 與 jakarta.validation-api,可獨立發布</description>
+
+  <properties>
+    <ctip.coverage.line-minimum>0.70</ctip.coverage.line-minimum>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs combine.children="append">
+            <arg>-Werror</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

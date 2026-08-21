@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.ctip</groupId>
+    <artifactId>ctip-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>ctip-adapters</artifactId>
+  <name>CTIP Adapters</name>
+  <description>內建與 mock 的 Threat Source Adapter。只認識 SDK 契約,不得依賴 ctip-core</description>
+
+  <properties>
+    <ctip.coverage.line-minimum>0.70</ctip.coverage.line-minimum>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.ctip</groupId>
+      <artifactId>ctip-sdk</artifactId>
+    </dependency>
+  </dependencies>
+</project>
