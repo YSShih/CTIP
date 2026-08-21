@@ -214,6 +214,7 @@ MAVEN_CACHE_SRC / _DST
 BACKEND_JAVA_OPTS
 FRONTEND_BUILD_TARGET
 FRONTEND_MOUNT_SRC / _DST / _MODE
+NODE_MODULES_SRC / _DST        # dev 以 named volume 遮罩 host 的 node_modules(§5.8.1 #3)
 FRONTEND_CONTAINER_PORT        # 5173 (vite dev) | 80 (nginx)
 ```
 
@@ -298,7 +299,8 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 | `BACKEND_MOUNT_SRC` | `../backend` | `../backend` | *(不設定)* | *(不設定)* |
 | `BACKEND_MOUNT_DST` | `/workspace` | `/workspace` | *(不設定)* | *(不設定)* |
 | `BACKEND_MOUNT_MODE` | `rw` | `rw` | *(不設定)* | *(不設定)* |
-| `BACKEND_JAVA_OPTS` | JDWP | JDWP | *(空)* | `-XX:MaxRAMPercentage=75` |
+| `BACKEND_JAVA_OPTS` | *(空)*¹ | *(空)*¹ | *(空)* | `-XX:MaxRAMPercentage=75` |
+| `NODE_MODULES_DST` | `/workspace/node_modules` | `/workspace/node_modules` | *(不設定)* | *(不設定)* |
 | `FRONTEND_CONTAINER_PORT` | 5173 | 5173 | 80 | 80 |
 | `FRONTEND_BIND` | **`127.0.0.1:5173`** | **`127.0.0.1:5173`** | `0.0.0.0:80` | 由代理層決定 |
 | `RESTART_POLICY` | `no` | `no` | `unless-stopped` | `always` |
@@ -312,6 +314,13 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 
 1. **`dev` 改用 `standard` profile**（v1.1 用 `full`）。v1.1 定義了 `standard` 但沒有任何環境使用它，導致 dev 在 M1 階段就會啟動 Kafka + Elasticsearch + Prometheus + Grafana（約 3GB RAM），而這些服務的程式碼要到 M2／M3 才存在。`dev` 需要 Redis（`RATE_LIMIT_BACKEND=redis`），故用 `standard`。
 2. **`FRONTEND_BIND` 在 dev 改為 `127.0.0.1:5173`**（v1.1 為 `:3000`）。Vite 的 HMR client 預設連回它自己認知的 port；host 3000 對映容器 5173 會使 HMR 靜默失效——而 DoD-MVP 有一條測 hot reload。讓兩端 port 一致比設定 `server.hmr.clientPort` 少一個變數。
+
+> ¹ **JDWP 不放 `BACKEND_JAVA_OPTS`**（2026-08-21 實作回饋修正，原規定 mvp/dev 填 JDWP）：
+> compose 把 `BACKEND_JAVA_OPTS` 注入 `JAVA_TOOL_OPTIONS`，而 `JAVA_TOOL_OPTIONS` 作用於**每一個** JVM——
+> dev 容器的 CMD 是 `mvnw spring-boot:run`，Maven JVM 先綁 5005，forked app JVM 再綁必然
+> `Address already in use` 而啟動失敗。JDWP 改由 `ctip-app/pom.xml` 的 spring-boot-maven-plugin
+> `<jvmArguments>` 提供（只作用於 `spring-boot:run` fork 出的應用 JVM），debug port 仍為 5005。
+> 詳見 §5.8.1 #2 與 ADR 0001 決策 3。
 
 ---
 
@@ -405,6 +414,8 @@ services:
       VITE_WS_URL:      ${VITE_WS_URL:-}
     volumes:
       - ${FRONTEND_MOUNT_SRC:-./.noop}:${FRONTEND_MOUNT_DST:-/opt/noop}:${FRONTEND_MOUNT_MODE:-ro}
+      # dev 以 named volume 遮罩 host 的 node_modules(§5.8.1 #3);prod 依預設值退化為無害掛載
+      - ${NODE_MODULES_SRC:-node-modules}:${NODE_MODULES_DST:-/opt/noop-node-modules}
     ports:
       - "${FRONTEND_BIND:-127.0.0.1:3000}:${FRONTEND_CONTAINER_PORT:-80}"
     depends_on: [ backend ]
@@ -417,7 +428,8 @@ services:
       POSTGRES_USER:     ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # postgres:18+ 要求掛載點為 /var/lib/postgresql;掛 …/data 會被 entrypoint 拒絕啟動(§5.8.1 #1)
+      - postgres-data:/var/lib/postgresql
       - ./config/postgres:/docker-entrypoint-initdb.d:ro
     ports:
       - "${POSTGRES_BIND:-127.0.0.1:5432}:5432"
@@ -506,9 +518,14 @@ volumes:
   prometheus-data:
   grafana-data:
   maven-cache:          # ← 必須宣告，見 5.8
+  node-modules:         # ← 必須宣告，見 5.8.1 #3
 ```
 
-**關於 debug port**：`5005` 在所有環境都會發布，但只綁 `127.0.0.1`，且 **staging/prod 的 `BACKEND_JAVA_OPTS` 不含 JDWP agent**，因此容器內沒有任何程序在 5005 監聽，此對映是惰性的。5.2 的防呆檢查 #2 驗證 prod 設定不含 `jdwp`。
+**關於 debug port**：`5005` 在所有環境都會發布，但只綁 `127.0.0.1`。JDWP agent 由
+`ctip-app/pom.xml` 的 spring-boot-maven-plugin `<jvmArguments>` 提供，**只作用於 `spring-boot:run`
+fork 出的應用 JVM**（即 development target 的容器）；staging/prod 跑 `java -jar`，不經該 plugin，
+容器內沒有任何程序在 5005 監聽，此對映是惰性的。`BACKEND_JAVA_OPTS` 在任何環境都**不得**含 JDWP
+（見 §5.5 註 ¹）。5.2 的防呆檢查 #2 驗證 prod 設定不含 `jdwp`。
 
 ---
 
@@ -591,6 +608,20 @@ ctip:
 | 3 | `.env.mvp.example` 設 `MAVEN_CACHE_SRC=maven-cache`（named volume），但頂層 `volumes:` 未宣告 | `docker compose config` 失敗：`service refers to undefined volume` | 5.6，宣告 `maven-cache` |
 | 4 | compose 未把 `ENVIRONMENT` 傳入 backend container | §27／§54.2／§29.1 的所有啟動守衛永遠不觸發 | 5.6 + 5.7 |
 
+### 5.8.1 實作回饋修正（2026-08-21，Phase 2–3 實測發現；詳見 ADR 0001）
+
+v2.0 初版仍有四項照字面實作必然失敗的缺陷，於 Phase 3 實測時發現並已修入本檔：
+
+| # | 缺陷 | 症狀 | 修正處 |
+|---|---|---|---|
+| 1 | postgres volume 掛 `/var/lib/postgresql/data` | `postgres:18` 起 entrypoint 改用 major-version 子目錄佈局，掛 `…/data` **直接拒絕啟動**，`depends_on` 卡死 | 5.6：掛載點改 `/var/lib/postgresql`（上游 18+ 建議組態） |
+| 2 | mvp/dev 的 `BACKEND_JAVA_OPTS` 填 JDWP | `JAVA_TOOL_OPTIONS` 作用於每個 JVM：Maven JVM 先綁 5005，forked app JVM 綁定失敗而啟動失敗，backend crash-loop | 5.5 註 ¹ + 5.6 debug 註記：JDWP 移至 spring-boot:run 的 `<jvmArguments>` |
+| 3 | dev 把 host 的 `node_modules` 一併綁進容器 | macOS/arm64 的原生 binding（Vite 8 的 rolldown 等）在 Linux 容器內載入必失敗，frontend crash | 5.4.2 / 5.5 / 5.6：`NODE_MODULES_*` named volume 遮罩（同 maven-cache 模式），`up.sh` 首次 `npm ci` 預熱 |
+| 4 | dev 容器離線跑 `mvnw -o`，但 maven-cache volume 初始為空 | 首次 `up` 時 backend 無法離線解析任何 plugin/相依，直接失敗 | 5.10：`up.sh` 對 development target 增加快取預熱步驟 |
+
+> 另兩項屬版本地雷而非本檔缺陷，記於 [06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)：
+> Spring Boot 4 模組化（缺 `spring-boot-flyway` 依賴則 Flyway **靜默不執行**）與 Testcontainers 2.x 座標改名。
+
 ---
 
 ## 5.9 Flyway
@@ -615,8 +646,10 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
 2. 檢查 `environment/.env.<env>` 存在（不存在則提示由 `.example` 複製並結束）
 3. 對 prod 額外檢查：`JWT_SECRET` 非樣板值且 ≥ 32 bytes、`CORS_ALLOWED_ORIGINS` 非 `*`
 4. 驗證 Docker 可用且版本 ≥ 27，Compose ≥ 2.24
-5. 執行 `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d`
-6. 等待 healthcheck 並印出服務狀態與存取網址
+5. development target 的首次快取預熱（§5.8.1 #3、#4）：maven-cache volume 為空時在容器內
+   `mvnw -pl ctip-app -am -DskipTests package`；node-modules volume 為空時在容器內 `npm ci`
+6. 執行 `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d`
+7. 等待 healthcheck 並印出服務狀態與存取網址；**任何服務異常退出（exited）視為失敗，不空等逾時**
 
 其餘腳本：
 

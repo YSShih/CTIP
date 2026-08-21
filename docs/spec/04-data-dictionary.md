@@ -106,6 +106,11 @@ type   = SYSTEM
 status = ACTIVE
 ```
 
+`V2` 同時建立 `trg_tenants_protect_public` 觸發器（BEFORE UPDATE OR DELETE）：
+拒絕對 public tenant 的 DELETE 與 slug/name/type 變更——不變量 T2 的 DB 層深度防禦
+（2026-08-21 新增，ADR 0001 決策 1）。domain 層自 Phase 4 起仍為第一道防線。
+（此觸發器與 4.0「`updated_at` 不使用 DB trigger」不衝突——該規則僅針對 `updated_at` 維護。）
+
 不變量見 [02-ddd-model.md](02-ddd-model.md#tenant)。
 
 ---
@@ -371,7 +376,10 @@ STIX 2.1 物件的**衍生投影**。PostgreSQL 的 domain model 才是 source o
 CONSTRAINT ux_stix_objects_stix_id UNIQUE (stix_id)
 CONSTRAINT fk_so_tenant    FOREIGN KEY (owner_tenant_id) REFERENCES tenants(id)
 CONSTRAINT fk_so_indicator FOREIGN KEY (indicator_id) REFERENCES indicators(id) ON DELETE CASCADE
-CONSTRAINT fk_so_threat    FOREIGN KEY (threat_id)    REFERENCES threats(id)    ON DELETE CASCADE
+-- fk_so_threat 不在 V7 建立:threats 表屬 M2(V25),M1 不得建立。
+-- V25 建立 threats 後以 ALTER TABLE 補上(見 §4.7;ADR 0001 決策 2):
+--   ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat
+--     FOREIGN KEY (threat_id) REFERENCES threats(id) ON DELETE CASCADE;
 CONSTRAINT ck_so_tlp       CHECK (tlp IN ('CLEAR','GREEN','AMBER','AMBER_STRICT','RED'))
 CONSTRAINT ck_so_origin    CHECK (
       (indicator_id IS NOT NULL AND threat_id IS NULL)
@@ -1078,13 +1086,13 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V4__seed_sources.sql` | `MANUAL` + 三個 mock 來源（冪等） | — |
 | `V5__create_indicators.sql` | `indicators`、`indicator_sources`、`hash_records` | 4, 5, 6 |
 | `V6__create_ingestion_rejections.sql` | `ingestion_rejections` | 7 |
-| `V7__create_stix.sql` | `stix_objects`、`stix_relationships` | 8, 9 |
+| `V7__create_stix.sql` | `stix_objects`、`stix_relationships`（`threat_id` 欄位保留、FK 延至 V25） | 8, 9 |
 | `V20__create_users_and_rbac.sql` | `users`、`roles`、`permissions`、`role_permissions`、`tenant_users` | 10–14 |
 | `V21__create_auth_tokens.sql` | `refresh_tokens`、`api_keys` | 15, 16 |
 | `V22__create_plans.sql` | `plans`、`subscriptions` | 17, 18 |
 | `V23__seed_plans.sql` | 四個方案（冪等） | — |
 | `V24__seed_rbac.sql` | 五個角色、18 個權限、角色權限對應（冪等） | — |
-| `V25__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` | 19–21 |
+| `V25__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
 | `V26__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
 | `V30__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |
 | `V31__create_audit_logs.sql` | `audit_logs` + `REVOKE UPDATE, DELETE` | 27 |

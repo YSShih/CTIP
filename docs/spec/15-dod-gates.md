@@ -25,6 +25,9 @@
 | **不得**因為某項失敗就中止後續檢查（要一次看到全部問題） |
 | 結尾必須印出「需人工確認」清單，並提示這些項目未被自動驗證 |
 
+> 判準中的 `./mvnw … -Dtest=<類名>` 在多 module reactor 下依賴 parent pom 的 surefire 設定
+> `failIfNoSpecifiedTests=false`（[06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) 第 4 點）；缺少該設定時，沒有該測試類的 module 會使整個指令失敗。
+
 ---
 
 ## 15.1 DoD-MVP（Phase 1–12）

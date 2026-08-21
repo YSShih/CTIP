@@ -217,4 +217,35 @@
 
 ---
 
-*主綱結束。規格版本 v2.0，2026-08-21。*
+## 0.7 實作回饋修訂（2026-08-21，Phase 2–3 實測後回寫）
+
+v2.0 初版在 Phase 2–3 實作時發現以下衝突／缺陷，**已全數修入對應主題檔**（規格維持 single source
+of truth）；完整決策記錄見 `docs/architecture/decisions/0001-phase3-spec-conflict-resolutions.md`。
+
+### 規格自身衝突（2 項）
+
+| # | 衝突 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | 表 8（M1 的 V7）定義 `fk_so_threat` 引用 M2 才建立的 `threats` | V7 保留 `threat_id` 欄位、FK 由 V25 以 `ALTER TABLE` 補上 | [04 表 8、§4.7](04-data-dictionary.md) |
+| 2 | mvp/dev 的 `BACKEND_JAVA_OPTS` 填 JDWP，但 `JAVA_TOOL_OPTIONS` 作用於 Maven 與 forked app 兩個 JVM，5005 雙綁必然啟動失敗 | JDWP 移至 spring-boot:run 的 `<jvmArguments>`；env 一律留空 | [05 §5.5 註 ¹、§5.6、§5.8.1](05-environment.md#581-實作回饋修正2026-08-21phase-23-實測發現詳見-adr-0001) |
+
+### 照字面實作必失敗的缺陷（3 項，補列於 05 §5.8.1）
+
+| # | 缺陷 | 解決 |
+|---|---|---|
+| 3 | postgres volume 掛 `…/data`，`postgres:18` 直接拒絕啟動 | 掛載點改 `/var/lib/postgresql` |
+| 4 | dev 綁定掛載把 host（macOS）的 `node_modules` 帶進 Linux 容器，原生 binding 載入必失敗 | `NODE_MODULES_*` named volume 遮罩 + `up.sh` 首次 `npm ci` 預熱 |
+| 5 | dev 容器離線跑 `mvnw -o`，但 maven-cache volume 初始為空 | `up.sh` 對 development target 增加預熱步驟（05 §5.10 第 5 步） |
+
+### 版本／工具鏈地雷（1 組，補列於 06 §6.3.6）
+
+Boot 4 模組化（缺 `spring-boot-flyway` 則 migration **靜默不執行**）、Testcontainers 2.x 座標與套件改名、
+`spring.sql.init` 先於 Flyway 的順序、多 module 下 `-Dtest` 需 `failIfNoSpecifiedTests=false`。
+
+### 規格新增（1 項）
+
+public tenant 不變量 T2 增加 DB 層深度防禦觸發器 `trg_tenants_protect_public`（V2 建立；[04 表 1](04-data-dictionary.md)）。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21 實作回饋修訂，見 §0.7）。*

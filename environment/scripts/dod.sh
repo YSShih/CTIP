@@ -245,13 +245,16 @@ errors = []
 def slugs(md: pathlib.Path):
     out = set()
     in_code = False
-    for line in md.read_text(encoding="utf-8").splitlines():
+    content = md.read_text(encoding="utf-8")
+    # 明確的 HTML anchor(<a id="...">)也算有效目標
+    out.update(re.findall(r'<a\s+id="([^"]+)"', content))
+    for line in content.splitlines():
         if line.strip().startswith("```"):
             in_code = not in_code
             continue
         if in_code or not line.startswith("#"):
             continue
-        text = line.lstrip("#").strip().replace("`", "")
+        text = re.sub(r"<[^>]+>", "", line.lstrip("#")).strip().replace("`", "")
         s = "".join(c for c in text.lower() if c.isalnum() or c in " -")
         out.add(s.replace(" ", "-"))
     return out

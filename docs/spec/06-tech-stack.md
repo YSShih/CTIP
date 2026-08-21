@@ -216,6 +216,24 @@ TypeScript 7 是以 Go 重寫的編譯器，效能大幅提升，但部分舊型
 
 PG 19 GA 預計 2026-09/10，落在本專案開發期內。**不自動升級**——`postgres:18-alpine` 的 major 浮動 tag 不會跳到 19。升級為 major 變更，須人工核准並寫 ADR（含 migration 相容性驗證）。
 
+### 6.3.6 Spring Boot 4 模組化與 Testcontainers 2.x（編譯地雷）
+
+Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修正，此處為後續 phase 的預警）：
+
+1. **Boot 4 把 auto-configuration 拆進各技術模組**。只加 `flyway-core` + `flyway-database-postgresql`
+   而缺 `org.springframework.boot:spring-boot-flyway` 時，Flyway 的 autoconfig 根本不存在——
+   **migration 靜默不執行**、應用照常啟動。日後引入 Redis／Kafka／ES 等時，同樣要確認對應的
+   `spring-boot-<tech>` 模組在 classpath 上（皆由 BOM 納管，不寫版本）。
+2. **Testcontainers 2.x（Boot 4 BOM 納管）改了座標與套件**：artifact 一律帶 `testcontainers-` 前綴
+   （`testcontainers-junit-jupiter`、`testcontainers-postgresql`……）；`PostgreSQLContainer` 移至
+   `org.testcontainers.postgresql` 且**不再是泛型**。
+3. **Boot 的 `spring.sql.init` script initializer 預設在 Flyway 之前執行**——對 Flyway 建立的表種資料
+   必然失敗。本專案以自定義 initializer bean + `@DependsOn("flywayInitializer")` 修正
+   （`ctip-app` 的 `SeedDataConfig`），勿退回 Boot 預設行為。
+4. **多 module reactor 下 `-Dtest=<類名>` 會使無該測試的 module 失敗**（surefire
+   `failIfNoSpecifiedTests` 預設 true）。parent pom 已於 surefire 設定
+   `<failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>`，本規格與 DoD 的判準指令依賴此設定。
+
 ---
 
 ## 6.4 版本複查程序（強制）

@@ -103,3 +103,28 @@
   - mock 來源 V4 種子的 metadata(default_tlp/redistribution/reputation)是我依 08 §8.3 的合理選值;
     Phase 5 實作 adapter 的 `SourceMetadata` 時應與 V4 對齊或回頭調整 V4(migration 不可改,必要時新增 migration)
   - `environment/.env.mvp`(真實檔)已在本機由 example 複製,不進版控
+
+---
+
+## 規格修訂 — Phase 2–3 衝突回寫(2026-08-21,Phase 3 之後)
+
+- **狀態**:done(使用者指示:修復規格衝突並將摘要回寫進 md)
+- **Commit**:(見 git log,message `Spec: write Phase 2-3 conflict resolutions back into spec (§0.7)`)
+- **內容**:Phase 2–3 發現的規格衝突已全數修入 `docs/spec/`,規格恢復 single source of truth;
+  總摘要新增於 `00-master.md` **§0.7**,逐項如下:
+  - `04`:表 8 的 `fk_so_threat` 改為 V25 以 ALTER TABLE 補上(§4.7 的 V7/V25 列同步更新);
+    表 1 補記 V2 的 `trg_tenants_protect_public` 觸發器(T2 深度防禦)
+  - `05`:§5.5 mvp/dev 的 `BACKEND_JAVA_OPTS` 改為空(JDWP 移至 spring-boot:run,註 ¹)、
+    新增 `NODE_MODULES_*` 變數與差異表列;§5.6 骨架修 postgres 掛載點(`/var/lib/postgresql`)、
+    加 node-modules 遮罩掛載與頂層 volume、改寫 debug port 註記;新增 **§5.8.1**(四項實作回饋缺陷表);
+    §5.10 up.sh 契約補預熱步驟(第 5 步)與「exited 即失敗」
+  - `06`:新增 **§6.3.6**(Boot 4 模組化缺 `spring-boot-flyway` 則 migration 靜默不執行、
+    Testcontainers 2.x 座標/套件改名、sql.init 先於 Flyway、`failIfNoSpecifiedTests=false`)
+  - `15`:§15.0 補註 `-Dtest` 判準依賴 parent surefire 設定
+  - `dod.sh` 的 M3-24 交叉引用檢查器修正:承認 `<a id="…">` HTML anchor(修正前對既有規格全是誤報);
+    修正後 M3-24 全綠,含本次新增的全部連結
+- **驗證**:M3-24 ✅;四環境 compose config ✅;M1-11/12/13 ✅(程式碼與環境檔在 Phase 3 已改好,
+  本次僅規格文字與檢查器,無行為變更)
+- **給下一 session 的注意事項**:讀規格時 §0.7 是 Phase 2–3 修訂的索引;05 §5.8.1 與 06 §6.3.6
+  是照字面實作會踩的坑清單,Phase 4 之後新增基礎設施(Redis/Kafka/ES)時記得對應的
+  `spring-boot-<tech>` autoconfig 模組
