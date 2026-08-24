@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 3 完成,下一步 Phase 4 |
+| M1 — MVP | 1–12 | Phase 4 完成,下一步 Phase 5 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -128,3 +128,44 @@
 - **給下一 session 的注意事項**:讀規格時 §0.7 是 Phase 2–3 修訂的索引;05 §5.8.1 與 06 §6.3.6
   是照字面實作會踩的坑清單,Phase 4 之後新增基礎設施(Redis/Kafka/ES)時記得對應的
   `spring-boot-<tech>` autoconfig 模組
+
+---
+
+## Phase 4 — Domain(Indicator / Tenant / Source / TLP)+ 最小安全層
+
+- **狀態**:done(2026-08-24)
+- **執行單**:`docs/spec/phases/phase-04.md`
+- **Commit**:(見 git log,message `Phase 4: domain aggregates + minimal security layer`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration` ✅ BUILD SUCCESS(sdk 13 + core 44 + app 45 = 102 tests;
+    JaCoCo 門檻全過:domain 各套件 ≥ 0.85、sdk ≥ 0.70、app ≥ 0.60)
+  - `test -Dtest=ArchitectureTest` ✅ 9/9;`test -Ptest-integration -Dtest=SecurityTest` ✅ 4/4(條號 1、2、3、9)
+- **交付物**:
+  - sdk:8 個 Shared Kernel 型別(Tlp.strictest/Severity.max/Confidence 驗證)+ 列舉成員契約測試
+  - core/domain:Indicator(I1–I14)、Tenant(T1–T4)、Source(S1–S5)、IndicatorMergePolicy(7.5 全公式)、
+    值物件(IocValue/ValidityPeriod/Fingerprint/Reputation/TenantSlug/Cursor/CursorPage/Visibility)、
+    Sha256FingerprintStrategy、DomainEvent + 11 個 M1 事件(PendingEvents 收集、信封欄位由發佈端補)
+  - core/application/port:Indicator/Source/Tenant Repository、SearchPort、EventPublisherPort、
+    RateLimiterPort、ClockPort、IdGeneratorPort
+  - app/infrastructure:9 張表 JPA entity(package-private 欄位)+ 3 個 RepositoryAdapter +
+    package-private JpaRepository + MapStruct mapper;security:TenantContext(@RequestScope)、
+    AnonymousTenantFilter、TlpSpecifications(唯一一套過濾)、AuthState;config/PortsConfig
+- **偏離事項 / ADR**(`docs/architecture/decisions/0002-…`,五項):
+  1. **TLP 過濾採複合條件**——§1.11 的單一 maxVisibleTlp 無法表達 §7.7 可見度表(自家全部 + public 上限),安全優先
+  2. 事件信封欄位(eventId/occurredAt/traceId)由發佈端補齊(規則 9 禁 domain 取時間/亂數)
+  3. 第 11 個事件 = IndicatorFalsePositiveReported(2.4 標 M2 但行為屬 Phase 4)
+  4. ArchUnit 規則 5 切片粒度 = 頂層模組(規格結構在子套件粒度必然成環)
+  5. entity 用 package-private 欄位(300 行限制 + 無 Lombok)
+- **給下一 session 的注意事項**(Phase 5 = SDK + Mock Adapter + Resilience + Source Health,治理規格 08):
+  - SDK 還缺 Phase 5 的型別:ThreatSourceAdapter、SourceMetadata、FetchContext、FetchResult、RawThreatRecord(簽章在 08 §8.1)
+  - 三個 mock adapter 的 SourceMetadata 應與 V4 種子值對齊(default_tlp/redistribution/reputation 見 V4__seed_sources.sql)
+  - S6(config 不存憑證)在 adapter 設定層落實;S5 的 CredentialMasker 已在 domain/source(package-private)
+  - IndicatorMergePolicy 已完整實作(非骨架):7.5 的加權/狀態判定含測試;Phase 7 接 pipeline 時
+    **必須把所有涉及來源的 Reputation 傳入**(重建後缺席的 reputation 以中性值 50 計)
+  - IndicatorSource.tags 為合併輸入、不隨 indicator_sources 持久化(聯集物化在 indicators.tags);
+    per-source tags 如需保留是 schema 變更,屆時新增 migration
+  - Indicator 建立走 NewIndicatorCommand + FingerprintStrategy(I2 由建構保證);id 由 IdGeneratorPort 產生
+  - repository findVisible* 已內建 tenant+TLP+再散布過濾(TlpSpecifications);Phase 9 controller
+    只需把「查無」映射 404,不得再自行過濾
+  - AnonymousTenantFilter 目前對所有請求綁匿名;Phase 13 在其中加憑證解析後改綁 bindAuthenticated
+  - 分頁 nextCursor 是 Cursor.encode() 的內部格式("epochMilli:uuid");Phase 9 的 CursorCodec 負責對外不透明包裝

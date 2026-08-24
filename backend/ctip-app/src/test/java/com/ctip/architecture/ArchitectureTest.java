@@ -1,0 +1,165 @@
+package com.ctip.architecture;
+
+import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
+import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
+import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noFields;
+
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.RestController;
+
+/** 9 條 ArchUnit 規則(docs/spec/01-architecture.md §1.9),跨模組掃描。 */
+@Tag("unit")
+class ArchitectureTest {
+
+    private static JavaClasses classes;
+
+    @BeforeAll
+    static void importClasses() {
+        classes = new ClassFileImporter()
+                .withImportOption(new ImportOption.DoNotIncludeTests())
+                .importPackages("com.ctip");
+    }
+
+    @Test
+    void rule1DomainMustNotDependOnFrameworks() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.domain..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
+                        "org.springframework..",
+                        "jakarta.persistence..",
+                        "org.hibernate..",
+                        "com.fasterxml.jackson..",
+                        "org.apache.kafka..",
+                        "io.lettuce..",
+                        "redis.clients..",
+                        "org.elasticsearch..",
+                        "co.elastic.clients..")
+                .check(classes);
+    }
+
+    @Test
+    void rule2SdkMustNotDependOnSpringOrJpa() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.sdk..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage("org.springframework..", "jakarta.persistence..")
+                .check(classes);
+    }
+
+    @Test
+    void rule3InterfacesMustNotImportPersistence() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.interfaces..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("com.ctip.infrastructure.persistence..")
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void rule4RestMustNotDependOnRepositoryPortsDirectly() {
+        noClasses()
+                .that()
+                .resideInAPackage("..interfaces.rest..")
+                .should()
+                .dependOnClassesThat(new DescribedPredicate<>("application.port 的 Repository") {
+                    @Override
+                    public boolean test(JavaClass input) {
+                        return input.getPackageName().startsWith("com.ctip.application.port")
+                                && input.getSimpleName().endsWith("Repository");
+                    }
+                })
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void rule5NoPackageCycles() {
+        SlicesRuleDefinition.slices()
+                .matching("com.ctip.(*)..")
+                .should()
+                .beFreeOfCycles()
+                .check(classes);
+    }
+
+    @Test
+    void rule6NoAutowiredFields() {
+        noFields()
+                .that()
+                .areDeclaredInClassesThat()
+                .areAnnotatedWith(Service.class)
+                .or()
+                .areDeclaredInClassesThat()
+                .areAnnotatedWith(Component.class)
+                .or()
+                .areDeclaredInClassesThat()
+                .areAnnotatedWith(Repository.class)
+                .or()
+                .areDeclaredInClassesThat()
+                .areAnnotatedWith(RestController.class)
+                .should()
+                .beAnnotatedWith(Autowired.class)
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void rule7RestDtosMustBeRecords() {
+        classes()
+                .that()
+                .resideInAPackage("..interfaces.rest.dto..")
+                .should()
+                .beRecords()
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void rule8ApplicationMustNotUseSpringDataDomain() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.application..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAPackage("org.springframework.data.domain..")
+                .check(classes);
+    }
+
+    @Test
+    void rule9DomainMustNotCallNowOrRandomUuid() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.domain..")
+                .should()
+                .callMethodWhere(target(owner(JavaClass.Predicates.belongToAnyOf(Instant.class, LocalDate.class))
+                                .and(name("now")))
+                        .or(target(owner(JavaClass.Predicates.belongToAnyOf(UUID.class))
+                                .and(name("randomUUID")))))
+                .check(classes);
+    }
+}

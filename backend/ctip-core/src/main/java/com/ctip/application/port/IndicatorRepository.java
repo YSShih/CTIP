@@ -1,0 +1,29 @@
+package com.ctip.application.port;
+
+import com.ctip.domain.indicator.Indicator;
+import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.shared.Cursor;
+import com.ctip.domain.shared.CursorPage;
+import com.ctip.domain.shared.Visibility;
+import com.ctip.domain.tenant.TenantId;
+import com.ctip.sdk.IocType;
+import java.util.Optional;
+
+/**
+ * Indicator 持久化 port(docs/spec/01-architecture.md §1.6)。
+ * findVisible* 一律套用統一的 tenant + TLP + 再散布過濾(§1.11);
+ * 跨租戶不可見即查無(API 層映射為 404,避免資源存在性洩漏)。
+ */
+public interface IndicatorRepository {
+
+    Optional<Indicator> findById(IndicatorId id);
+
+    /** 以識別鍵查詢(不變量 I1:type + normalizedValue + ownerTenantId)。 */
+    Optional<Indicator> findByIdentity(IocType type, String normalizedValue, TenantId ownerTenantId);
+
+    Optional<Indicator> findVisibleById(IndicatorId id, Visibility visibility);
+
+    CursorPage<Indicator> findVisible(Visibility visibility, Cursor after, int limit);
+
+    Indicator save(Indicator indicator);
+}
