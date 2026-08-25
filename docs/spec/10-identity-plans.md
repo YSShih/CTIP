@@ -210,6 +210,13 @@ public record RateLimitResult(boolean allowed, long limit, long remaining, Insta
 
 啟動時若 `ENVIRONMENT != mvp` 但 `RATE_LIMIT_BACKEND=memory`，輸出 WARN。
 
+> **實作回饋修訂（2026-08-25，Phase 6；ADR 0004）**：
+> 1. `RedisRateLimiter` 於 Phase 17 才存在。在此之前若設 `RATE_LIMIT_BACKEND=redis`
+>    （dev/staging/prod 樣板預設值），啟動**暫以記憶體實作代替並 WARN**——fail-fast 會讓
+>    dev 環境完全無法啟動，而 M1–M2 為單一實例，限流語意等價且仍然生效。
+> 2. Port 簽章自 Phase 6 起定形為本節的 `tryConsume(RateLimitKey, tokens) → RateLimitResult`
+>    （取代 Phase 4 的暫行 `tryAcquire(String)`）；`RateLimitKey` 即下方鍵格式的型別化表述。
+
 ### Phase 歸屬（本版修正）
 
 v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必須受限流（M1），而 §58 的 Phase 表只把它掛在 Phase 17，DoD-MVP 完全沒測限流——三處互相矛盾。
@@ -236,6 +243,12 @@ v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必
 - `window` ∈ `{minute, day}`
 - 匿名 IP 正規化：IPv4 取完整位址；**IPv6 取 `/64` 前綴**（避免單一使用者以 `/64` 內的位址繞過）
 - `endpointClass` 分三類：`read`（GET/查詢）、`write`（POST/PATCH/DELETE）、`heavy`（bloom 下載、STIX bundle、import）
+
+> **M1 實作範圍（2026-08-25，Phase 6；ADR 0004）**：只有匿名身分，故 Phase 6 實作維度 4
+> （匿名 IP × minute/day）；維度 1–3 與 `endpointClass` 隨 API key／方案於 Phase 14/17 加入。
+> 匿名數值（60/min、1000/day，§10.6）在 plans 表存在前以 property 預設值承載
+> （`ctip.rate-limit.anonymous-per-minute` / `-per-day`），Phase 14 移入 plans 表。
+> `/actuator/*` **不套用限流**——它是 compose healthcheck 與探針路徑，限流會使容器永遠 unhealthy。
 
 > ⚠️ **反向代理下的 IP 取得**：必須設定 `server.forward-headers-strategy=framework` 並限定信任的代理來源。若無法確定真實 client IP，`docs/deployment/` 必須明確記載此限制——否則匿名限流可被單一 IP 偽造繞過。
 

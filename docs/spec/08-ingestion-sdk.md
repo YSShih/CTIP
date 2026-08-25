@@ -85,6 +85,15 @@ public class AdapterRegistry {
 
 啟動時若同一 `SourceType` 有兩個實作，`toUnmodifiableMap` 會拋出 `IllegalStateException`——這是預期行為，不要改成「後者覆蓋前者」。
 
+> **實作回饋修訂（2026-08-25，Phase 5；ADR 0003）**：
+> 1. `SourceSyncService` 在 `ctip-core`、`AdapterRegistry` 在 `ctip-app`，而 core ↛ app——
+>    因此 core 於 `application/port/AdapterRegistryPort` 定義單方法 port
+>    （`Optional<ThreatSourceAdapter> find(SourceType)`），上述類別除逐字實作外加上
+>    `implements AdapterRegistryPort`。
+> 2. `ctip-adapters` 模組**零 Spring 相依**（維持 [02 §2.5](02-ddd-model.md#25-shared-kernelctip-sdk)
+>    「第三方只需依賴 ctip-sdk」的賣點）：adapter 不掛 `@Component`，bean 由 `ctip-app` 的
+>    `AdaptersConfig` 宣告，並在註冊前以 `FetchResilience.decorate(...)` 統一套用 §8.5 的韌性。
+
 ### SDK 文件 `[M2]`
 
 `docs/development/plugin-sdk.md` 必須依序說明：實作 adapter、宣告 metadata（含 TLP 與 redistribution policy）、解析來源資料、正規化輸出、註冊 adapter、設定憑證、測試 adapter。
@@ -146,6 +155,18 @@ IngestionPipeline ingestionPipeline(ParseStage p, ValidateStage v, NormalizeStag
 
 M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`——**只改這一個 `List.of`**。
 
+> **實作回饋修訂（2026-08-25，Phase 6；ADR 0004）**：
+> 1. **`StixProjectionStage` 於 Phase 8 插入**（它是 phase-08 執行單的明列交付物；Phase 6 放空殼
+>    違反規則 16）。Phase 6 裝配其餘 9 個 stage，插入方式同上——只改這一個 `List.of`。
+> 2. 上面的 bean 簽章範例有 10 個參數，違反本規格自己的 checkstyle `ParameterNumber ≤ 5`
+>    （[01 §1.8](01-architecture.md#18-可讀性硬性規則與執行機制)）。實作改為單一 `@Bean` 方法
+>    **內聯建構**全部 stage（`IngestionPipelineConfig`），順序仍以顯式 `List.of` 一處可見;
+>    stage 為純類別，單元測試直接 `new`。
+> 3. 拒絕規則的判定點：需要 **canonical 值**的規則（`PRIVATE_OR_RESERVED_IP`、
+>    `ALLOWLISTED_DOMAIN`、格式驗證失敗）依 [07 §7.3](07-domain-intel.md#73-拒絕規則強制) 的明文
+>    「比對完整正規化值」，於 Normalize（stage 3）canonical 化後緊接執行；Validate（stage 2）
+>    負責前置檢查（配額、長度上限、宣告雜湊長度）。行為與 §7.3 完全一致，只是判定點不同。
+
 ### 批次與交易邊界
 
 | 規則 |
@@ -174,6 +195,15 @@ M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`——**只
 2. 必須包含**刻意的髒資料**，且至少覆蓋 [07-domain-intel.md](07-domain-intel.md#73-拒絕規則強制) 的每一種 `reason`：大小寫不一致、前後空白、零寬字元、無效 IP、私有 IP、超長 URL、雜湊長度不符、批次內重複值
 3. 三個 mock 之間必須有**刻意重疊的 IOC**（至少 10 個），以驗證多來源合併：其中須包含 confidence 差異大的、severity 不同的、TLP 不同的、以及一個被某來源標為 `RETRACTED` 的
 4. **MVP 階段只啟用 `MockOpenPhishAdapter`**（`sources.enabled`），另兩個由 DoD-MVP 的合併測試以測試組態啟用
+
+> **實作回饋修訂（2026-08-25，Phase 5；ADR 0003）**：
+> 1. 確定性以**固定手寫資料集**實作（完全不用亂數）——比「固定 seed 的 Random」更強，
+>    不依賴 JDK Random 演算法的跨版本穩定性，且髒資料／重疊 IOC 可精確對應拒絕規則與合併測試。
+> 2. 要求 3 的「被某來源標為 `RETRACTED`」：`RawThreatRecord`（§8.1 契約）沒有撤回欄位；
+>    約定 STIX 風格來源以 `rawPayload["revoked"] == true`（STIX 2.1 Indicator 的 `revoked`）表達，
+>    ingestion 映射為該來源記錄 `RETRACTED`。
+> 3. 要求 2 的髒資料可覆蓋 §7.3 八種 reason 中的**七種**；`QUOTA_EXCEEDED` 屬手動提交／匯入
+>    （Phase 14），無法由 feed 資料觸發，由拒絕規則單元測試覆蓋（見 [07 §7.3](07-domain-intel.md#73-拒絕規則強制) 註記）。
 
 ### `ManualSubmissionAdapter` `[Phase 14 · M2]`
 
@@ -205,13 +235,18 @@ M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`——**只
 | 機制 | 預設值 |
 |---|---|
 | Timeout | connect 5s / read 30s |
-| Retry | 3 次，指數退避（1s、2s、4s），**加上 jitter** |
+| Retry | 3 次**重試**（總嘗試 4 次），指數退避（1s、2s、4s），**加上 jitter**¹ |
 | Circuit breaker | 失敗率 50%（滑動視窗 20 次）→ 開啟 60s |
 | Bulkhead | 每個來源最多 2 個並行抓取 |
 
 **單一來源故障不得使整個 ingestion 系統停止。** 排程任務逐一處理各來源，互不影響（`SourceSyncService` 對每個來源獨立 try/catch）。
 
 Resilience4j 的裝配集中於 `ctip-adapters/http/`，以組態方式套用於所有 HTTP adapter，**不要求每個 adapter 自己加註解**。
+
+> ¹ 2026-08-25 釐清（ADR 0003）：「3 次」指 3 次**重試**（間隔 1s、2s、4s），對應 Resilience4j
+> `maxAttempts = 4`。裝配實作為 `FetchResilience.decorate(...)`（retry / circuit breaker / bulkhead
+> 以 sourceType 為 key 各自獨立），M1 對 mock adapter 一併套用——韌性層自 M1 起即為上線的活代碼。
+> timeout 屬 HTTP 層，由 `HttpFeedClients`（同套件）對未來的真實 adapter（§8.4）提供。
 
 ---
 
@@ -243,7 +278,7 @@ SourceStatus: ACTIVE | DEGRADED | FAILED | DISABLED
 
 | 任務 | Phase | 預設排程 | 環境變數 |
 |---|---|---|---|
-| 來源同步 | M1 | 每來源依 `recommendedInterval` | `SOURCE_SYNC_CRON` |
+| 來源同步 | M1 | 每來源依 `recommendedInterval`¹ | `SOURCE_SYNC_CRON` |
 | IOC 過期標記 | M1 | 每日 03:00 | `IOC_EXPIRY_CRON` |
 | 失敗 ingestion 重試 | M1 | 每 15 分鐘 | `INGESTION_RETRY_CRON` |
 | Bloom full snapshot | M2 | 每日 04:00 | `BLOOM_SNAPSHOT_CRON` |
@@ -256,8 +291,12 @@ SourceStatus: ACTIVE | DEGRADED | FAILED | DISABLED
 | 拒絕記錄清理 | M3 | 每日 01:40 | `REJECTION_CLEANUP_CRON` |
 | Bloom artifact 清理 | M3 | 每日 01:50 | `BLOOM_ARTIFACT_CLEANUP_CRON` |
 
+> ¹ 2026-08-25 釐清（ADR 0004）：`SOURCE_SYNC_CRON`（預設每 5 分鐘）是**掃描節奏**；
+> 每次掃描對 enabled 且 syncable 的來源逐一判斷是否已依自身 `recommendedInterval` 到期
+> （`Source.isDueForSync`），到期者才同步。
+
 規則：
-- 全部排程由 `SCHEDULER_ENABLED` 總開關控制（測試環境關閉）
+- 全部排程由 `SCHEDULER_ENABLED` 總開關控制（測試環境關閉；整合測試基底已設 false）
 - 每個任務的 cron 皆可由環境變數覆寫
 - 每個排程任務**只做一件事，且必須呼叫 application service 的方法**，任務類別本身不含業務邏輯
 - 若未來需要多實例，改用 ShedLock（保留擴充點，M1–M3 不實作）

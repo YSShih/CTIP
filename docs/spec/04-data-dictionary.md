@@ -161,7 +161,10 @@ CREATE INDEX ix_sources_enabled_status ON sources (enabled, status) WHERE syncab
 
 ### 3. `source_sync` `[Phase 6 · M1]`
 
-每次 ingestion 執行一列。append-only，不更新。
+每次 ingestion 執行一列。append-only——精確語意（2026-08-25 Phase 6 實測釐清，ADR 0004）：
+列於同步**開始時**以 `result = 'RUNNING'` 建立（fetch 前即可見，獨立交易），**結束時回寫一次**終態
+（`SUCCESS`/`PARTIAL`/`FAILURE` + 計數 + `finished_at`）；終態之後不再更新。
+`finished_at IS NULL` 即表示仍在執行或異常中斷——這正是本表要建立即寫入的理由。
 
 | 欄位 | 型別 | NULL | 預設 | 說明 |
 |---|---|---|---|---|

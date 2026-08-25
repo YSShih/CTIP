@@ -248,4 +248,43 @@ public tenant 不變量 T2 增加 DB 層深度防禦觸發器 `trg_tenants_prote
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21 實作回饋修訂，見 §0.7）。*
+## 0.8 實作回饋修訂（2026-08-25，Phase 5–6 實測後回寫）
+
+Phase 5–6 實作時發現以下衝突／缺口，**已全數以引用區塊註記進對應主題檔**；完整決策記錄見
+`docs/architecture/decisions/0003-phase5-sdk-adapter-decisions.md` 與 `0004-phase6-ingestion-pipeline-decisions.md`。
+
+### 規格自身衝突（3 項）
+
+| # | 衝突 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | phase-06 要求「十個 stage」，但 `StixProjectionStage` 同時是 phase-08 的明列交付物；Phase 6 放空殼違反規則 16 | Phase 6 裝配 9 個 stage，Phase 8 插入 Stix（只改一個 `List.of`）；`ThreatScorer` 先行完成 | [08 §8.2](08-ingestion-sdk.md#82-攝取管線)、phase-06 註 ¹ |
+| 2 | §8.2 的 pipeline bean 範例有 10 個參數，違反規格自身 checkstyle `ParameterNumber ≤ 5`（01 §1.8） | 單一 @Bean 方法內聯建構，順序仍以顯式 `List.of` 一處可見 | [08 §8.2](08-ingestion-sdk.md#82-攝取管線) |
+| 3 | 結構契約把 `SourceSyncService` 放 core、`AdapterRegistry` 放 app，但 core ↛ app | core 新增 `AdapterRegistryPort`，AdapterRegistry 加 `implements`（§8.1 語意不變） | [08 §8.1](08-ingestion-sdk.md#81-plugin-sdk-契約ctip-sdk) |
+
+### 照字面實作會出錯的缺口（4 項）
+
+| # | 缺口 | 解決 | 修訂處 |
+|---|---|---|---|
+| 4 | `Indicator` 重建後 reputations 為空，直接合併使既有來源以中性值 50 計權（實測 confidence 55 vs 60） | 合併必須補入全部涉及來源的信譽（`mergeFrom` 三參數多載；MergeStage 查 `sources.reputation`） | [07 §7.5](07-domain-intel.md#75-多來源合併indicatormergepolicy) |
+| 5 | `RawThreatRecord` 無撤回欄位，mock 要求「標為 RETRACTED」無管道 | 約定 STIX 風格 `rawPayload["revoked"] == true` → 來源記錄 RETRACTED | [08 §8.3](08-ingestion-sdk.md#83-必要的-mock-adapter-phase-5--m1) |
+| 6 | `QUOTA_EXCEEDED` 在 M1 無 feed 觸發路徑，但八種 reason 是測試契約 | `BatchState.remainingQuota` 擴充點（feed 為 null）+ 單元測試覆蓋 | [07 §7.3](07-domain-intel.md#73-拒絕規則強制) |
+| 7 | `source_sync`「append-only，不更新」與 `result` 預設 `RUNNING`、`finished_at` null 語意矛盾 | 開始建 RUNNING 列、結束回寫一次終態，之後不再更新 | [04 表 3](04-data-dictionary.md) |
+
+### 版本／工具鏈（3 項）
+
+| # | 項目 | 處置 | 修訂處 |
+|---|---|---|---|
+| 8 | 規格點名 IDNA2008，JDK 只有 IDNA2003（`java.net.IDN`），版本表無 ICU4J | 以 IDNA2003 實作並回報（差異僅 ß、ZWJ 等極少數字元） | [07 §7.2](07-domain-intel.md#72-正規化規則強制) |
+| 9 | `RedisRateLimiter` 至 Phase 17 才存在，dev/staging/prod 樣板卻預設 `redis` | M1 暫以記憶體實作代替並 WARN（單一實例語意等價，限流仍生效） | [10 §10.7](10-identity-plans.md#107-限流) |
+| 10 | Boot 4 又拆一個測試模組：`@AutoConfigureMockMvc` 不在 starter-test | 需另加 `spring-boot-webmvc-test`，套件改 `…webmvc.test.autoconfigure` | [06 §6.3.6](06-tech-stack.md) |
+
+### 釐清（非衝突）
+
+Retry「3 次」= 3 次重試（`maxAttempts = 4`；08 §8.5 註 ¹）；`SOURCE_SYNC_CRON` 是掃描節奏、
+到期與否由各來源 `recommendedInterval` 決定（08 §8.7 註 ¹）；需 canonical 值的拒絕規則於
+Normalize 後判定（08 §8.2、07 §7.3）；M1 限流僅匿名 IP 維度、`/actuator` 不套用、匿名數值以
+property 預設承載至 Phase 14（10 §10.7）；mock 確定性以固定手寫資料集實作（08 §8.3）。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25 實作回饋修訂，見 §0.7–§0.8）。*

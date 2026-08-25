@@ -45,6 +45,11 @@ v1.0 把兩件不同的事都叫「Hash」，Coding LLM 幾乎必然混淆。**�
 
 實作位置：`ctip-core/domain/indicator/normalization/`，每個型別一個 `IocNormalizer` 實作，由 `IocType` 分派。**單元測試必須覆蓋上表每一列，含髒資料案例。**
 
+> **實作回饋修訂（2026-08-25，Phase 6；ADR 0004）**：DOMAIN 的 IDN 轉換以 JDK `java.net.IDN`
+> 實作，其為 **IDNA2003**（RFC 3490）而非本表點名的 IDNA2008——版本表（[06 §6.2](06-tech-stack.md)）
+> 沒有 ICU4J，規則 6 禁止自行加依賴。兩者差異僅在極少數字元（ß、ZWJ 等）。
+> 若需嚴格 IDNA2008，須先把 ICU4J 納入版本表再改實作。
+
 ---
 
 ## 7.3 拒絕規則（強制）
@@ -66,6 +71,15 @@ v1.0 把兩件不同的事都叫「Hash」，Coding LLM 幾乎必然混淆。**�
 > v1.1 寫「常見的良性大型服務網域（例如 google.com、microsoft.com）」。若實作為後綴比對，`docs.google.com/malicious-doc` 這類**極常見的實際釣魚 URL 會被當成良性丟棄**。
 > 規則：allowlist 只比對 `DOMAIN` 型別的完整正規化值；`URL` 型別**不套用** allowlist。
 > 預設 allowlist 為空，由 `ctip.data-quality.domain-allowlist` 設定。
+
+> **實作回饋修訂（2026-08-25，Phase 6；ADR 0004）**：
+> 1. `QUOTA_EXCEEDED` 在 M1 沒有 feed 觸發路徑（配額屬手動提交／匯入，Phase 14）。
+>    規則以 `BatchState.remainingQuota`（null = 無配額；feed 一律 null）承載擴充點，
+>    `RejectionRuleTest` 以配額歸零的批次覆蓋此分支——八種 reason 的測試契約不變。
+> 2. pipeline 中非預期的單筆錯誤映射為 `MALFORMED_VALUE` 並將例外訊息寫入 `detail`
+>    （本表八值受 DB CHECK 約束，不另設 INTERNAL_ERROR）。
+> 3. 判定點：需要正規化值的規則（本表 2、3 與正規化失敗）於 Normalize stage canonical 化後
+>    緊接執行，見 [08 §8.2](08-ingestion-sdk.md#82-攝取管線) 註記。
 
 ---
 
@@ -135,6 +149,12 @@ result   = min(100, round(weighted) + bonus)
 
 `sources.reputation`（0–100，預設 50）由管理員設定。M1 使用種子值即可。
 `reputation >= 80` 為「可信任撤回」門檻（`Reputation.isTrustedForRetraction()`）。
+
+> ⚠️ **重建後必須補入全部涉及來源的信譽（2026-08-25 Phase 6 實測補入；ADR 0004）**：
+> `Indicator` 聚合自持久化重建後，其 reputations 對照為**空**，缺席的來源在加權公式中以
+> 中性值 50 計——直接合併會算出錯誤的 `confidence`（實測 55 vs 正確 60）。
+> 任何合併路徑（pipeline 的 MergeStage、未來 Phase 14 的手動提交）都必須先查出既有來源
+> 記錄的 `sources.reputation` 一併傳入（`Indicator.mergeFrom(report, reputation, known)` 多載）。
 
 ---
 

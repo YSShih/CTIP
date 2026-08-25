@@ -4,7 +4,7 @@
 - Phase 5 完成判準全綠
 
 ## 交付物
-- `IngestionStage` 介面 + 十個 stage 實作（Parse → EventPublish）
+- `IngestionStage` 介面 + 十個 stage 實作（Parse → EventPublish）¹
 - `IngestionPipeline`（持有 `List<IngestionStage>`）+ `IngestionPipelineConfig`（顯式 `List.of(...)`）
 - 正規化：每個 `IocType` 一個 `IocNormalizer`（七條規則）
 - 拒絕規則：八種 `RejectionReason`，寫入 `ingestion_rejections`
@@ -35,3 +35,7 @@
 - 不得讓單筆失敗導致整批 rollback
 - `ALLOWLISTED_DOMAIN` **不得**做後綴比對（只做 exact match，且不套用於 URL 型別）
 - 不得靜默丟棄任何記錄（一律寫入 `ingestion_rejections`）
+
+> ¹ 實作回饋修訂（2026-08-25；ADR 0004）：`StixProjectionStage` 是 phase-08 執行單的明列交付物，
+> 於 Phase 8 插入（只改 IngestionPipelineConfig 的 List.of）；Phase 6 裝配其餘 9 個 stage，
+> 並先行完成 §7.6 的 `ThreatScorer`／`RuleBasedThreatScorer`（ScoreStage 所需）。

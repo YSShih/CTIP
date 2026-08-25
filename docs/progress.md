@@ -254,3 +254,24 @@
   - E2E 測試自行清理(snapshot 表 + sources 還原),新增整合測試若動 seed 資料請比照
   - python/sed 批量改碼注意:spotless 會折行,字串替換要 assert 有命中(本 phase 曾因此
     靜默漏改 call site)
+
+---
+
+## 規格修訂 — Phase 5–6 衝突回寫(2026-08-25,Phase 6 之後)
+
+- **狀態**:done(使用者指示:把與原規格不一致之處註記回規格)
+- **Commit**:(見 git log,message `Spec: write Phase 5-6 implementation feedback back into spec (§0.8)`)
+- **內容**:ADR 0003/0004 的偏離與釐清已全數以「實作回饋修訂」引用區塊註記進對應主題檔,
+  規格維持 single source of truth;總索引新增於 `00-master.md` **§0.8**(10 項 + 釐清段):
+  - `08`:§8.1 AdapterRegistryPort 與 adapters 零 Spring;§8.2 StixProjectionStage 留 Phase 8、
+    bean 範例參數數衝突、拒絕規則判定點;§8.3 固定資料集/revoked 約定/QUOTA_EXCEEDED 覆蓋方式;
+    §8.5 retry 次數釐清(3 次重試 = maxAttempts 4)+ 裝配位置;§8.7 SOURCE_SYNC_CRON 掃描節奏
+  - `07`:§7.2 IDNA2003 代 IDNA2008(版本表無 ICU4J);§7.3 QUOTA_EXCEEDED 擴充點、
+    非預期錯誤映射 MALFORMED_VALUE、判定點;§7.5 重建後必須補入全部來源信譽(⚠️)
+  - `10`:§10.7 redis 後端 M1 fallback + WARN、port 簽章定形、M1 維度範圍/匿名數值承載/actuator 排除
+  - `04`:表 3 source_sync「append-only」精確語意(RUNNING 建立 → 終態回寫一次)
+  - `06`:§6.3.6 第 5 條(spring-boot-webmvc-test / @AutoConfigureMockMvc 新套件)
+  - `phases/phase-06.md`:交付物加註 ¹(9+1 stage 的 phase 歸屬)
+- **驗證**:`dod.sh full M3-24` ✅(交叉引用全部指向存在的目標);純文件變更,無程式碼行為變更
+- **給下一 session 的注意事項**:讀規格時 §0.7(Phase 2–3)與 §0.8(Phase 5–6)是實作回饋
+  修訂的索引;07 §7.5 的「重建後補信譽」⚠️ 是 Phase 14 手動提交路徑必讀

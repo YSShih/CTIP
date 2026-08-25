@@ -233,6 +233,10 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
 4. **多 module reactor 下 `-Dtest=<類名>` 會使無該測試的 module 失敗**（surefire
    `failIfNoSpecifiedTests` 預設 true）。parent pom 已於 surefire 設定
    `<failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>`，本規格與 DoD 的判準指令依賴此設定。
+5. **MockMvc 測試支援也被拆出**（2026-08-25 Phase 6 實測補入）：`spring-boot-starter-test` 已
+   **不含** `@AutoConfigureMockMvc`。需另加 test 相依 `org.springframework.boot:spring-boot-webmvc-test`
+   （BOM 納管），且註解套件改為 `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`
+   （不是 Boot 3 的 `org.springframework.boot.test.autoconfigure.web.servlet`）。
 
 ---
 
