@@ -36,7 +36,9 @@ interface SourceMapper {
                 e.syncable,
                 e.recommendedIntervalSeconds == null ? null : Duration.ofSeconds(e.recommendedIntervalSeconds),
                 health,
-                e.lastErrorMessage));
+                e.lastErrorMessage,
+                e.nextCursor,
+                e.totalRecordsIngested));
     }
 
     /** 只回寫聚合會變動的欄位;身分欄位(source_type、顯示資訊)由種子/管理流程持有。 */
@@ -51,5 +53,7 @@ interface SourceMapper {
         e.lastFailureAt = s.health().lastFailureAt();
         e.avgLatencyMs = s.health().avgLatencyMs();
         e.lastErrorMessage = s.lastErrorMessage();
+        e.nextCursor = s.nextCursor();
+        e.totalRecordsIngested = s.totalRecordsIngested();
     }
 }

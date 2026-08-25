@@ -17,4 +17,6 @@ public record SourceSnapshot(
         boolean syncable,
         Duration recommendedInterval,
         SourceHealth health,
-        String lastErrorMessage) {}
+        String lastErrorMessage,
+        String nextCursor,
+        long totalRecordsIngested) {}

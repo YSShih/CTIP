@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 4 完成,下一步 Phase 5 |
+| M1 — MVP | 1–12 | Phase 5 完成,下一步 Phase 6 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -169,3 +169,40 @@
     只需把「查無」映射 404,不得再自行過濾
   - AnonymousTenantFilter 目前對所有請求綁匿名;Phase 13 在其中加憑證解析後改綁 bindAuthenticated
   - 分頁 nextCursor 是 Cursor.encode() 的內部格式("epochMilli:uuid");Phase 9 的 CursorCodec 負責對外不透明包裝
+
+---
+
+## Phase 5 — SDK + Mock Adapter + 韌性 + 來源健康
+
+- **狀態**:done(2026-08-25)
+- **執行單**:`docs/spec/phases/phase-05.md`
+- **Commit**:(見 git log,message `Phase 5: sdk + mock adapters + resilience + source health`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='MockAdapterDeterminismTest,ResilienceTest,SourceHealthTest'`(逐字)✅
+  - `test -Dtest=ArchitectureTest` ✅ 9/9
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 50 + adapters 24 + app 47;
+    Spotless/Checkstyle/JaCoCo 全過)
+- **交付物**:
+  - sdk:ThreatSourceAdapter、SourceMetadata、FetchContext、FetchResult、RawThreatRecord(08 §8.1 逐字)
+  - adapters/mock:三個確定性 mock(固定手寫資料集、零亂數、髒資料覆蓋 §7.3 七種 reason、
+    SharedIocs 11 個跨來源重疊、AlienVault 以 STIX revoked=true 標撤回)+ MockFeed 分頁 helper
+  - adapters/http:ResiliencePolicy(§8.5 預設值)、FetchResilience(retry+jitter/CB/bulkhead,
+    per-sourceType 隔離)、ResilientThreatSourceAdapter、HttpFeedClients(timeout 契約)
+  - core:AdapterRegistryPort、SourceHealthService(交易+事件發佈)、SourceSyncService
+    (逐一處理、單一失敗不影響其他、分頁迴圈上限 1000);Source 聚合補 nextCursor/totalRecordsIngested
+  - app:AdapterRegistry(§8.1 逐字 + implements port)、AdaptersConfig(bean + 韌性裝飾)、
+    SpringEventPublisherAdapter(AFTER_COMMIT 信封發佈,提前自 Phase 6)
+- **偏離事項 / ADR**:八項決策見 `docs/architecture/decisions/0003-phase5-sdk-adapter-decisions.md`
+  (AdapterRegistryPort、adapters 零 Spring、固定資料集、STIX revoked、Source 聚合擴充、
+  EventPublisherPort 提前、retry=4 attempts、config 空 Map)
+- **給下一 session 的注意事項**(Phase 6 = Ingestion pipeline + 資料品質 + 排程 + 記憶體限流):
+  - 判準的過濾式 `verify -Dtest=...` 之所以能過 JaCoCo,是因為 jacoco.exec 為 append 模式且
+    無測試執行的 module 會跳過 check;**驗證真實狀態一律用 `clean verify -Ptest-integration`**
+  - SourceSyncService 目前只抓取+記健康(records 只計數);Phase 6 改為餵進 IngestionPipeline
+    並寫 source_sync(RUNNING→SUCCESS/PARTIAL/FAILURE)與 IngestionStarted/Completed 事件
+  - mock 撤回記錄的映射約定:rawPayload["revoked"]==true → 該來源記錄 RETRACTED(ADR 0003 決策 4)
+  - RateLimiterPort 目前是 Phase 4 的簡化簽章(tryAcquire);Phase 6 須依 10 §10.7 改為
+    tryConsume(RateLimitKey, tokens) → RateLimitResult(含 X-RateLimit-* 標頭資料)
+  - 整合測試 base 未關排程;Phase 6 加 @Scheduled 後記得在 AbstractPostgresIntegrationTest
+    設 SCHEDULER_ENABLED=false,避免排程干擾測試
+  - anonymous 限流數值:10 §10.6(60/min、1000/day);M1 存 properties 預設值,M2 移入 plans 表

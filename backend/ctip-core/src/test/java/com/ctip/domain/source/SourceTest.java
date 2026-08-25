@@ -85,7 +85,9 @@ class SourceTest {
                 false,
                 null,
                 SourceHealth.initial(),
-                null));
+                null,
+                null,
+                0));
         assertThatThrownBy(() -> manual.recordFailure("x", NOW)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> manual.recordSuccess(1, Duration.ZERO, NOW)).isInstanceOf(IllegalStateException.class);
         assertThat(manual.health().status()).isEqualTo(SourceStatus.ACTIVE);
@@ -123,6 +125,8 @@ class SourceTest {
                 true,
                 Duration.ofHours(1),
                 SourceHealth.initial(),
-                null));
+                null,
+                null,
+                0));
     }
 }

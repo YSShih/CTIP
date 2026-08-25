@@ -5,9 +5,11 @@ import com.ctip.domain.event.PendingEvents;
 import com.ctip.domain.event.SourceEvents.SourceDegraded;
 import com.ctip.domain.event.SourceEvents.SourceFailed;
 import com.ctip.domain.event.SourceEvents.SourceRecovered;
+import com.ctip.sdk.FetchContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -22,6 +24,8 @@ public final class Source {
     private boolean enabled;
     private SourceHealth health;
     private String lastErrorMessage;
+    private String nextCursor;
+    private long totalRecordsIngested;
     private final PendingEvents pendingEvents = new PendingEvents();
 
     private Source(SourceSnapshot snapshot) {
@@ -30,6 +34,8 @@ public final class Source {
         this.enabled = snapshot.enabled();
         this.health = Objects.requireNonNull(snapshot.health());
         this.lastErrorMessage = snapshot.lastErrorMessage();
+        this.nextCursor = snapshot.nextCursor();
+        this.totalRecordsIngested = snapshot.totalRecordsIngested();
         if (!snapshot.syncable() && snapshot.health().status() != SourceStatus.ACTIVE) {
             throw new IllegalArgumentException("syncable=false 的來源恆為 ACTIVE(不變量 S4)");
         }
@@ -47,10 +53,17 @@ public final class Source {
         }
         SourceStatus before = health.status();
         this.health = health.afterSuccess(now, latency);
+        this.totalRecordsIngested += recordCount;
         if ((before == SourceStatus.DEGRADED || before == SourceStatus.FAILED)
                 && health.status() == SourceStatus.ACTIVE) {
             pendingEvents.record(new SourceRecovered(id()));
         }
+    }
+
+    /** 同步完成後保存來源自訂的續抓游標;抓到底(hasMore = false)時為 null,下次自頭開始。 */
+    public void advanceCursor(String cursor) {
+        requireSyncable();
+        this.nextCursor = cursor;
     }
 
     /** S2:連續失敗 3 次 → DEGRADED、10 次 → FAILED(發 SourceFailed);S5:訊息先遮罩。 */
@@ -126,7 +139,9 @@ public final class Source {
                 identity.syncable(),
                 identity.recommendedInterval(),
                 health,
-                lastErrorMessage);
+                lastErrorMessage,
+                nextCursor,
+                totalRecordsIngested);
     }
 
     public SourceId id() {
@@ -147,5 +162,18 @@ public final class Source {
 
     public String lastErrorMessage() {
         return lastErrorMessage;
+    }
+
+    public String nextCursor() {
+        return nextCursor;
+    }
+
+    public long totalRecordsIngested() {
+        return totalRecordsIngested;
+    }
+
+    /** 抓取輸入(docs/spec/08-ingestion-sdk.md §8.1):since = 上次成功時間、cursor = 續抓游標。 */
+    public FetchContext fetchContext(Map<String, String> config, int maxRecords) {
+        return new FetchContext(health.lastSuccessAt(), nextCursor, config, maxRecords);
     }
 }

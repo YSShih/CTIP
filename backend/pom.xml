@@ -30,6 +30,9 @@
     <!-- 未由 Spring Boot BOM 納管的相依/外掛,集中於此(docs/spec/06-tech-stack.md §6.1.3) -->
     <mapstruct.version>1.6.3</mapstruct.version>
     <archunit.version>1.4.1</archunit.version>
+    <!-- 06 §6.2:Resilience4j 2.3.x、Bucket4j 8.x(僅標 major 系列,取系列內現行版) -->
+    <resilience4j.version>2.3.0</resilience4j.version>
+    <bucket4j.version>8.10.1</bucket4j.version>
     <spotless-maven-plugin.version>2.46.1</spotless-maven-plugin.version>
     <palantir-java-format.version>2.97.0</palantir-java-format.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
