@@ -24,6 +24,8 @@ public record CtipProperties(
         @NotNull @Valid RateLimit rateLimit,
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
+        @NotNull @Valid Normalization normalization,
+        @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
         @NotNull @Valid Retention retention) {
 
@@ -42,7 +44,15 @@ public record CtipProperties(
             @Positive long accessTokenExpiration,
             @Positive long refreshTokenExpiration) {}
 
-    public record RateLimit(boolean enabled, @NotNull Backend backend) {
+    /**
+     * 匿名限流數值依 10-identity-plans.md §10.6(60/min、1000/day);
+     * M1 為 property 預設值,M2 起移入 plans 表依方案查表。
+     */
+    public record RateLimit(
+            boolean enabled,
+            @NotNull Backend backend,
+            @Positive long anonymousPerMinute,
+            @Positive long anonymousPerDay) {
 
         public enum Backend {
             MEMORY,
@@ -52,7 +62,18 @@ public record CtipProperties(
 
     public record Ingestion(boolean enabled, @Positive int batchSize) {}
 
-    public record Scheduler(boolean enabled) {}
+    /** 排程總開關與各任務 cron(docs/spec/08-ingestion-sdk.md §8.7,皆可由環境變數覆寫)。 */
+    public record Scheduler(
+            boolean enabled,
+            @NotBlank String sourceSyncCron,
+            @NotBlank String iocExpiryCron,
+            @NotBlank String ingestionRetryCron) {}
+
+    /** `www.` 前綴去除需可設定且預設不去除(docs/spec/07-domain-intel.md §7.2)。 */
+    public record Normalization(boolean stripWww) {}
+
+    /** 良性網域 allowlist(§7.3:僅 DOMAIN、exact match;預設為空)。 */
+    public record DataQuality(@NotNull java.util.List<String> domainAllowlist) {}
 
     public record Bloom(
             @Positive long publicCapacity,

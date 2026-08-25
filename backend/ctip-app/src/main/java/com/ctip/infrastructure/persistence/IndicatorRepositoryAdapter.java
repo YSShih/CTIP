@@ -3,14 +3,17 @@ package com.ctip.infrastructure.persistence;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.indicator.IndicatorStatus;
 import com.ctip.domain.shared.Cursor;
 import com.ctip.domain.shared.CursorPage;
 import com.ctip.domain.shared.Visibility;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.infrastructure.security.TlpSpecifications;
 import com.ctip.sdk.IocType;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
@@ -68,6 +71,14 @@ class IndicatorRepositoryAdapter implements IndicatorRepository {
         List<IndicatorEntity> page = hasMore ? rows.subList(0, limit) : rows;
         String nextCursor = hasMore ? new Cursor(page.getLast().lastSeen, page.getLast().id).encode() : null;
         return new CursorPage<>(page.stream().map(mapper::toDomain).toList(), nextCursor, hasMore);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Indicator> findExpirable(Instant now, int limit) {
+        return jpa.findByStatusAndValidUntilBefore(IndicatorStatus.ACTIVE.name(), now, Limit.of(limit)).stream()
+                .map(mapper::toDomain)
+                .toList();
     }
 
     @Override

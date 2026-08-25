@@ -2,10 +2,11 @@ package com.ctip.application.source;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ctip.application.ingestion.IngestionBatchProcessor;
+import com.ctip.application.ingestion.IngestionPipeline;
+import com.ctip.application.ingestion.IngestionSettings;
 import com.ctip.application.port.AdapterRegistryPort;
-import com.ctip.application.port.EventPublisherPort;
-import com.ctip.application.port.SourceRepository;
-import com.ctip.domain.event.DomainEvent;
+import com.ctip.application.port.SourceSyncLogPort;
 import com.ctip.domain.event.SourceEvents.SourceDegraded;
 import com.ctip.domain.event.SourceEvents.SourceFailed;
 import com.ctip.domain.event.SourceEvents.SourceRecovered;
@@ -25,6 +26,8 @@ import com.ctip.sdk.SourceType;
 import com.ctip.sdk.ThreatSourceAdapter;
 import com.ctip.sdk.Tlp;
 import com.ctip.testing.FixedClockPort;
+import com.ctip.testing.InMemorySourceRepository;
+import com.ctip.testing.RecordingEventPublisher;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -58,12 +61,12 @@ class SourceHealthTest {
 
         healthService.recordSuccess(source, 42, Duration.ofMillis(120), "17");
 
-        Source persisted = sources.saved.getLast();
+        Source persisted = sources.saved().getLast();
         assertThat(persisted.health().status()).isEqualTo(SourceStatus.ACTIVE);
         assertThat(persisted.health().consecutiveFailures()).isZero();
         assertThat(persisted.totalRecordsIngested()).isEqualTo(42);
         assertThat(persisted.nextCursor()).isEqualTo("17");
-        assertThat(events.published).hasSize(1).first().isInstanceOf(SourceRecovered.class);
+        assertThat(events.published()).hasSize(1).first().isInstanceOf(SourceRecovered.class);
     }
 
     @Test
@@ -73,7 +76,7 @@ class SourceHealthTest {
             healthService.recordFailure(source, "boom");
         }
         assertThat(source.health().status()).isEqualTo(SourceStatus.DEGRADED);
-        assertThat(events.published)
+        assertThat(events.published())
                 .filteredOn(SourceDegraded.class::isInstance)
                 .hasSize(1);
 
@@ -82,15 +85,17 @@ class SourceHealthTest {
         }
         assertThat(source.health().status()).isEqualTo(SourceStatus.FAILED);
         assertThat(source.health().consecutiveFailures()).isEqualTo(10);
-        assertThat(events.published).filteredOn(SourceFailed.class::isInstance).hasSize(1);
-        assertThat(sources.saved).hasSize(10);
+        assertThat(events.published())
+                .filteredOn(SourceFailed.class::isInstance)
+                .hasSize(1);
+        assertThat(sources.saved()).hasSize(10);
     }
 
     @Test
     void failureMessagesAreMaskedBeforePersistence() {
         Source source = syncable(SourceType.MOCK_OPENPHISH, 0);
         healthService.recordFailure(source, "fetch failed: token=VERY_SECRET_TOKEN");
-        assertThat(sources.saved.getLast().lastErrorMessage())
+        assertThat(sources.saved().getLast().lastErrorMessage())
                 .doesNotContain("VERY_SECRET_TOKEN")
                 .contains("token=***");
     }
@@ -99,7 +104,7 @@ class SourceHealthTest {
     void syncProcessesEachDueSourceAndOneFailureDoesNotAffectOthers() {
         Source failing = syncable(SourceType.MOCK_OPENPHISH, 0);
         Source healthy = syncable(SourceType.MOCK_ABUSEIPDB, 0);
-        sources.enabledSyncable = List.of(failing, healthy);
+        sources.enabledSyncable(List.of(failing, healthy));
 
         Map<SourceType, ThreatSourceAdapter> adapters = new HashMap<>();
         adapters.put(SourceType.MOCK_OPENPHISH, new ThrowingAdapter(SourceType.MOCK_OPENPHISH));
@@ -121,7 +126,7 @@ class SourceHealthTest {
     @Test
     void sourceWithoutAdapterIsRecordedAsFailure() {
         Source orphan = syncable(SourceType.MOCK_ALIENVAULT, 0);
-        sources.enabledSyncable = List.of(orphan);
+        sources.enabledSyncable(List.of(orphan));
         SourceSyncService sync = syncService(Map.of());
 
         List<SourceSyncOutcome> outcomes = sync.syncDueSources();
@@ -135,7 +140,7 @@ class SourceHealthTest {
     void notDueSourcesAreSkipped() {
         Source recentlySynced = syncable(SourceType.MOCK_OPENPHISH, 0);
         recentlySynced.recordSuccess(1, Duration.ofMillis(5), NOW.minus(Duration.ofMinutes(10)));
-        sources.enabledSyncable = List.of(recentlySynced); // interval 1h,10 分鐘前剛同步
+        sources.enabledSyncable(List.of(recentlySynced)); // interval 1h,10 分鐘前剛同步
 
         SourceSyncService sync =
                 syncService(Map.of(SourceType.MOCK_OPENPHISH, new PagedAdapter(SourceType.MOCK_OPENPHISH, 1, 1)));
@@ -144,7 +149,24 @@ class SourceHealthTest {
 
     private SourceSyncService syncService(Map<SourceType, ThreatSourceAdapter> adapters) {
         AdapterRegistryPort registry = type -> Optional.ofNullable(adapters.get(type));
-        return new SourceSyncService(sources, registry, healthService, clock);
+        IngestionBatchProcessor processor = new IngestionBatchProcessor(
+                new IngestionPipeline(List.of()), r -> {}, new IngestionSettings(true, 500));
+        SourceSyncRecorder recorder = new SourceSyncRecorder(new NoopSyncLog(), healthService, events, clock);
+        return new SourceSyncService(sources, registry, processor, recorder, clock);
+    }
+
+    /** 測試用 no-op source_sync log(source_sync 表的行為由 IngestionEndToEndTest 驗證)。 */
+    private static final class NoopSyncLog implements SourceSyncLogPort {
+        @Override
+        public UUID start(SourceId sourceId, java.time.Instant startedAt) {
+            return UUID.nameUUIDFromBytes(
+                    sourceId.value().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        }
+
+        @Override
+        public void finish(SourceSyncReport report) {
+            // no-op
+        }
     }
 
     private static Source syncable(SourceType type, int priorFailures) {
@@ -166,43 +188,6 @@ class SourceHealthTest {
                 null,
                 null,
                 0));
-    }
-
-    private static final class InMemorySourceRepository implements SourceRepository {
-        private List<Source> enabledSyncable = List.of();
-        private final List<Source> saved = new ArrayList<>();
-
-        @Override
-        public Optional<Source> findById(SourceId id) {
-            return enabledSyncable.stream().filter(s -> s.id().equals(id)).findFirst();
-        }
-
-        @Override
-        public Optional<Source> findBySourceType(SourceType sourceType) {
-            return enabledSyncable.stream()
-                    .filter(s -> s.snapshot().sourceType() == sourceType)
-                    .findFirst();
-        }
-
-        @Override
-        public List<Source> findEnabledSyncable() {
-            return enabledSyncable;
-        }
-
-        @Override
-        public Source save(Source source) {
-            saved.add(source);
-            return source;
-        }
-    }
-
-    private static final class RecordingEventPublisher implements EventPublisherPort {
-        private final List<DomainEvent> published = new ArrayList<>();
-
-        @Override
-        public void publish(DomainEvent event) {
-            published.add(event);
-        }
     }
 
     /** 固定頁數 × 每頁筆數的假 adapter。 */

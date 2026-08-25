@@ -110,6 +110,15 @@ public final class Indicator {
         return new Indicator(snapshot);
     }
 
+    /**
+     * 多來源合併(重建後的聚合):合併前補入既有來源的信譽——重建後 reputations 為空,
+     * 缺席者在聚合公式中以中性值 50 計(§7.5),pipeline 必須把所有涉及來源的信譽傳入。
+     */
+    public void mergeFrom(IndicatorSource report, Reputation sourceReputation, Map<SourceId, Reputation> known) {
+        reputations.putAll(known);
+        mergeFrom(report, sourceReputation);
+    }
+
     /** 多來源合併:同來源 UPSERT、跨來源新增,再依 I5–I11 重新聚合。 */
     public void mergeFrom(IndicatorSource report, Reputation sourceReputation) {
         reputations.put(report.sourceId(), sourceReputation);
@@ -189,6 +198,19 @@ public final class Indicator {
         this.tlp = IndicatorMergePolicy.strictestTlp(sources);
         this.tags.addAll(IndicatorMergePolicy.unionTags(sources));
         this.status = IndicatorMergePolicy.determineStatus(sources, reputations);
+    }
+
+    /** I12:score 0–100;由注入的 {@link ThreatScorer} 計算(§7.6),來源與信譽由聚合自身提供。 */
+    public void applyScore(ThreatScorer scorer) {
+        int computed = scorer.score(this, List.copyOf(sources), Map.copyOf(reputations));
+        if (computed < 0 || computed > 100) {
+            throw new IllegalArgumentException("score 必須在 0–100 之間(不變量 I12):" + computed);
+        }
+        this.score = computed;
+    }
+
+    public int score() {
+        return score;
     }
 
     public List<DomainEvent> pullEvents() {

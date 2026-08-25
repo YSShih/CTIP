@@ -73,6 +73,12 @@
       <artifactId>mapstruct</artifactId>
       <version>${mapstruct.version}</version>
     </dependency>
+    <!-- 記憶體限流(docs/spec/10-identity-plans.md §10.7;版本見 parent properties) -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j-core</artifactId>
+      <version>${bucket4j.version}</version>
+    </dependency>
     <!-- Hot reload 契約(docs/spec/05-environment.md §5.11):reload.sh 觸發重編後由 DevTools 重啟 context -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -84,6 +90,12 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Boot 4 模組化(06 §6.3.6 同型態):MockMvc 測試支援移至 per-tech 模組 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-webmvc-test</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

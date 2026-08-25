@@ -50,11 +50,22 @@ ctip:
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     backend: ${RATE_LIMIT_BACKEND:redis}
+    # 匿名配額(10-identity-plans.md §10.6);M2 起由 plans 表依方案查表
+    anonymous-per-minute: ${RATE_LIMIT_ANONYMOUS_PER_MINUTE:60}
+    anonymous-per-day: ${RATE_LIMIT_ANONYMOUS_PER_DAY:1000}
   ingestion:
     enabled: ${INGESTION_ENABLED:true}
     batch-size: ${INGESTION_BATCH_SIZE:500}
   scheduler:
     enabled: ${SCHEDULER_ENABLED:true}
+    # 各任務 cron 皆可由環境變數覆寫(docs/spec/08-ingestion-sdk.md §8.7)
+    source-sync-cron: "${SOURCE_SYNC_CRON:0 */5 * * * *}"
+    ioc-expiry-cron: "${IOC_EXPIRY_CRON:0 0 3 * * *}"
+    ingestion-retry-cron: "${INGESTION_RETRY_CRON:0 */15 * * * *}"
+  normalization:
+    strip-www: ${NORMALIZATION_STRIP_WWW:false}
+  data-quality:
+    domain-allowlist: ${DOMAIN_ALLOWLIST:}
   bloom:
     public-capacity: ${BLOOM_PUBLIC_CAPACITY:10000000}
     public-false-positive-rate: ${BLOOM_PUBLIC_FALSE_POSITIVE_RATE:0.001}

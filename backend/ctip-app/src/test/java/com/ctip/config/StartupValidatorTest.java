@@ -108,9 +108,11 @@ class StartupValidatorTest {
                 environment,
                 new Cors(corsOrigins),
                 new Jwt(jwtSecret, 900, 2592000),
-                new RateLimit(true, backend),
+                new RateLimit(true, backend, 60, 1000),
                 new Ingestion(true, 500),
-                new Scheduler(true),
+                new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),
+                new CtipProperties.Normalization(false),
+                new CtipProperties.DataQuality(java.util.List.of()),
                 new Bloom(10_000_000, 0.001, 1_000_000, "0 0 4 * * *", "0 0 * * * *", 24),
                 new Retention(180, 30, 30, 30, 365, 30));
         return new StartupValidator(properties, springEnv);

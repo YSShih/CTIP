@@ -7,6 +7,8 @@ import com.ctip.domain.shared.CursorPage;
 import com.ctip.domain.shared.Visibility;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.sdk.IocType;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -24,6 +26,9 @@ public interface IndicatorRepository {
     Optional<Indicator> findVisibleById(IndicatorId id, Visibility visibility);
 
     CursorPage<Indicator> findVisible(Visibility visibility, Cursor after, int limit);
+
+    /** 過期標記排程用(§7.10):status = ACTIVE 且 validUntil &lt; now,最多 limit 筆。 */
+    List<Indicator> findExpirable(Instant now, int limit);
 
     Indicator save(Indicator indicator);
 }

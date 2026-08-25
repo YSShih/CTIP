@@ -1,7 +1,10 @@
 package com.ctip.infrastructure.persistence;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -19,4 +22,7 @@ interface IndicatorJpaRepository
     @EntityGraph(attributePaths = {"sources", "hashRecords"})
     Optional<IndicatorEntity> findByTypeAndNormalizedValueAndOwnerTenantId(
             String type, String normalizedValue, UUID ownerTenantId);
+
+    @EntityGraph(attributePaths = {"sources", "hashRecords"})
+    List<IndicatorEntity> findByStatusAndValidUntilBefore(String status, Instant validUntil, Limit limit);
 }

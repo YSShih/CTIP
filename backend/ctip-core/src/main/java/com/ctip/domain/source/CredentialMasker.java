@@ -5,8 +5,9 @@ import java.util.regex.Pattern;
 /**
  * 錯誤訊息憑證遮罩(不變量 S5:last_error_message 不得包含憑證,寫入前必須經過遮罩)。
  * 保守遮罩常見的「鍵=值」憑證樣式與 Bearer token;呼叫端仍應優先避免把憑證放進錯誤訊息。
+ * source_sync.error_message 與 ingestion 事件的 maskedReason 也共用本遮罩,故為 public。
  */
-final class CredentialMasker {
+public final class CredentialMasker {
 
     private static final Pattern KEY_VALUE = Pattern.compile(
             "(?i)(password|passwd|pwd|secret|token|api[-_]?key|authorization|credential)(\\s*[=:]\\s*)\\S+");
@@ -14,7 +15,7 @@ final class CredentialMasker {
 
     private CredentialMasker() {}
 
-    static String mask(String message) {
+    public static String mask(String message) {
         if (message == null) {
             return null;
         }

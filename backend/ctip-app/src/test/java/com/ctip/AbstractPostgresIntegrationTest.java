@@ -33,5 +33,9 @@ public abstract class AbstractPostgresIntegrationTest {
         registry.add("ENVIRONMENT", () -> "mvp");
         registry.add("JWT_SECRET", () -> "integration-test-only-secret-0123456789abcdef");
         registry.add("CORS_ALLOWED_ORIGINS", () -> "http://localhost:5173");
+        // 排程在測試中一律關閉,避免 @Scheduled 任務與測試資料互相干擾(docs/spec/08 §8.7 總開關)
+        registry.add("SCHEDULER_ENABLED", () -> "false");
+        // mvp 環境的限流後端(避免對 redis 預設值發出 WARN 誤導)
+        registry.add("RATE_LIMIT_BACKEND", () -> "memory");
     }
 }

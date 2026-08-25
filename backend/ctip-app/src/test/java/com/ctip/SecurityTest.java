@@ -1,6 +1,9 @@
 package com.ctip;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SourceRepository;
@@ -32,11 +35,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 安全測試 1、2、3、9(docs/spec/14-testing.md §14.4),Phase 4 於 repository/Specification 層驗證;
- * Phase 9 起同一批條號在 REST 端點層(404 語意)再驗一次。方法名含條號以便追溯。
+ * 安全測試 1、2、3、7、9(docs/spec/14-testing.md §14.4):1、2、3、9 於 repository/Specification 層
+ * 驗證(Phase 4);7(限流 429)於 filter 層驗證(Phase 6)。Phase 9 起同一批條號在 REST 端點層
+ * (404 語意)再驗一次。方法名含條號以便追溯。
  */
+@AutoConfigureMockMvc
 class SecurityTest extends AbstractPostgresIntegrationTest {
 
     private static final Instant SEEN = Instant.parse("2026-08-10T00:00:00Z");
@@ -49,6 +56,9 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     private static final IndicatorId PUBLIC_CLEAR = fixedId("42");
     private static final IndicatorId B_AMBER = fixedId("43");
     private static final IndicatorId DEMO_INTERNAL_ONLY = fixedId("44");
+
+    @Autowired
+    private MockMvc mvc;
 
     @Autowired
     private IndicatorRepository indicators;
@@ -157,5 +167,17 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
 
     private static IndicatorId fixedId(String suffix) {
         return new IndicatorId(UUID.fromString("00000000-0000-0000-0000-0000000000" + suffix));
+    }
+
+    /** 條號 7:超出限流回 429,且帶 X-RateLimit-* 與 Retry-After(mvp 預設匿名 60/min)。 */
+    @Test
+    void security7AnonymousExceedingRateLimitGets429WithHeaders() throws Exception {
+        for (int i = 0; i < 60; i++) {
+            mvc.perform(get("/api/v1/security7-probe")).andExpect(header().exists("X-RateLimit-Limit"));
+        }
+        mvc.perform(get("/api/v1/security7-probe"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("X-RateLimit-Remaining", "0"))
+                .andExpect(header().exists("Retry-After"));
     }
 }

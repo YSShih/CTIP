@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 5 完成,下一步 Phase 6 |
+| M1 — MVP | 1–12 | Phase 6 完成,下一步 Phase 7 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -206,3 +206,51 @@
   - 整合測試 base 未關排程;Phase 6 加 @Scheduled 後記得在 AbstractPostgresIntegrationTest
     設 SCHEDULER_ENABLED=false,避免排程干擾測試
   - anonymous 限流數值:10 §10.6(60/min、1000/day);M1 存 properties 預設值,M2 移入 plans 表
+
+---
+
+## Phase 6 — Ingestion Pipeline + 資料品質 + 排程 + 記憶體限流
+
+- **狀態**:done(2026-08-25)
+- **執行單**:`docs/spec/phases/phase-06.md`
+- **Commit**:(見 git log,message `Phase 6: ingestion pipeline + data quality + scheduling + in-memory rate limit`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='NormalizationTest,RejectionRuleTest,IngestionEndToEndTest,RateLimitTest'`(逐字)✅
+    (Normalization 21、RejectionRule 9(八種 reason 各 ≥1)、E2E 4、RateLimit 2)
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 112 + adapters 24 + app 54;
+    含 ArchitectureTest 9/9、SecurityTest 5/5(新增條號 7);Spotless/Checkstyle/JaCoCo 全過)
+- **交付物**:
+  - core/domain:`normalization/`(IocNormalizer × 6 型別、IocNormalizers 清理/分派/推斷、
+    ReservedIpRanges)、ThreatScorer + RuleBasedThreatScorer(§7.6 四權重)、
+    Indicator.applyScore / mergeFrom(known reputations overload)
+  - core/application/ingestion:IngestionStage + 9 個 stage(Parse→Validate→Normalize→Fingerprint→
+    Deduplicate→Merge→Score→Persist→PublishEvent)、IngestionPipeline、IngestionBatchProcessor
+    (一批一交易、單筆失敗記錄後 continue)、RejectionReason(8)、BatchState、SourceContext
+  - core/application:SourceSyncService(fetch 交易外、滿批進 pipeline)+ SourceSyncRecorder
+    (source_sync RUNNING→SUCCESS/PARTIAL/FAILURE、健康、Ingestion 事件)、IndicatorExpiryService;
+    port:RejectionLogPort、SourceSyncLogPort、RateLimiterPort(§10.7 定形)+ RateLimitKey/Result
+  - app:RejectionLogAdapter、SourceSyncLogAdapter(REQUIRES_NEW)、IndicatorRepository.findExpirable、
+    IngestionPipelineConfig(顯式 List.of)、IngestionSchedulers(來源同步/IOC 過期 03:00/重試 15 分,
+    SCHEDULER_ENABLED 總開關)、InMemoryRateLimiter(Bucket4j)+ RateLimitFilter(全端點、
+    X-RateLimit-* 全回應、429+Retry-After、IPv6 /64)、CtipProperties/application.yml 擴充
+    (scheduler crons、normalization.strip-www、data-quality.domain-allowlist、匿名限流配額)
+- **偏離事項 / ADR**(`docs/architecture/decisions/0004-…`,十項):StixProjectionStage 留 Phase 8
+  (pipeline 現為 9 stage)、pipeline bean 內聯建構(規格範例 10 參數違反自身 checkstyle)、
+  需 canonical 值的拒絕規則移 NormalizeStage、QUOTA_EXCEEDED 以 BatchState 配額測試覆蓋、
+  IDNA2003 代 IDNA2008(版本表無 ICU4J,回報)、redis 後端 M1 fallback 記憶體 + WARN、
+  匿名限流 60/1000 property 預設(M2 移 plans 表)、source_sync start/finish 一次回寫、
+  合併補 known reputations、RateLimitFilter 由 config 建立(ArchUnit 規則 5)
+- **給下一 session 的注意事項**(Phase 7 = 去重/合併/指紋/評分,治理規格 07):
+  - Phase 7 的大部分交付物已先行完成:IndicatorMergePolicy(Phase 4)、三步 valid_until 與
+    indicator_sources UPSERT + report_count(Phase 4 domain、Phase 6 接線)、Sha256FingerprintStrategy
+    (Phase 4)、ThreatScorer/RuleBasedThreatScorer(Phase 6)。Phase 7 的主要工作是其判準測試:
+    IndicatorMergePolicyTest(已有,需補三來源+RETRACTED rep≥80 案例)、ValidityPeriodTest、
+    ThreatScorerTest(需含「confidence 與 score 來源數定義一致」案例)、FingerprintTest;
+    以及 hash_records 寫入(目前 pipeline 未寫 hash_records——FILE_HASH 的 HashRecord 物化待補)
+  - 修 bug 的教訓:重建後 Indicator.reputations 為空,合併「必須」帶 known reputations
+    (MergeStage.knownReputations);任何新的合併路徑(Phase 14 手動提交)都要走同一 overload
+  - Boot 4 模組化:MockMvc 在 spring-boot-webmvc-test,@AutoConfigureMockMvc 套件
+    org.springframework.boot.webmvc.test.autoconfigure(建議回寫 06 §6.3.6)
+  - E2E 測試自行清理(snapshot 表 + sources 還原),新增整合測試若動 seed 資料請比照
+  - python/sed 批量改碼注意:spotless 會折行,字串替換要 assert 有命中(本 phase 曾因此
+    靜默漏改 call site)
