@@ -196,6 +196,22 @@ curl -fsS http://localhost:8080/actuator/health
 `./environment/scripts/reload.sh backend mvp` 熱替換；其餘腳本見
 [`environment/README.md`](environment/README.md)。
 
+### 疑難排解：backend 沒回應（Swagger / API 打不開，容器卻顯示 Up）
+
+dev 容器與 host **共享 `backend/*/target/classes`**（bind mount）。在 host 上跑
+`mvnw verify`／`clean` 會重寫這些 class 檔，容器內的 Spring DevTools 偵測到變更就熱重啟，
+偶爾撞上「半寫入」的 classpath 導致 application context 啟動失敗——此時 **JVM 還活著、
+`docker ps` 仍顯示 Up（healthcheck 稍後才轉 unhealthy），但 8080 沒人聽**。
+症狀：`curl http://localhost:8080/actuator/health` 無回應或空回應。restart 即恢復：
+
+<!-- 此區塊刻意用 sh 而非 bash:dod.sh M1-38 會執行 README 的全部 bash 區塊,疑難排解指令不應被閘門盲跑 -->
+```sh
+docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml restart backend
+```
+
+`dod.sh` 的 M1-14／M1-33 已內建同款自我修復；根治（容器建置輸出與 host target/ 分離）留待
+後續里程碑評估（詳見 ADR 0009 與 `docs/progress.md` Phase 12 注意事項）。
+
 ---
 
 ## 授權與安全
