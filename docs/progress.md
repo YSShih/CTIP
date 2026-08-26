@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 6 完成,下一步 Phase 7 |
+| M1 — MVP | 1–12 | Phase 7 完成,下一步 Phase 8 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -275,3 +275,41 @@
 - **驗證**:`dod.sh full M3-24` ✅(交叉引用全部指向存在的目標);純文件變更,無程式碼行為變更
 - **給下一 session 的注意事項**:讀規格時 §0.7(Phase 2–3)與 §0.8(Phase 5–6)是實作回饋
   修訂的索引;07 §7.5 的「重建後補信譽」⚠️ 是 Phase 14 手動提交路徑必讀
+
+---
+
+## Phase 7 — 去重 · 合併 · 指紋 · 評分
+
+- **狀態**:done(2026-08-26)
+- **執行單**:`docs/spec/phases/phase-07.md`
+- **Commit**:(見 git log,message `Phase 7: dedup + merge + fingerprint + scoring tests, hash_records materialization`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='IndicatorMergePolicyTest,ValidityPeriodTest,ThreatScorerTest,FingerprintTest'`(逐字)✅ 25/25
+    (MergePolicy 8 含三來源+RETRACTED rep≥80 → REVOKED;ValidityPeriod 7 含「未明示 → 型別預設 TTL」與
+    「FILE_HASH → null」兩關鍵分支;ThreatScorer 4 含 confidence/score 來源數定義一致案例;Fingerprint 6 含 I2)
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 103 + adapters 24 + app 54;
+    Spotless/Checkstyle/JaCoCo 全過)
+- **交付物**(多數已於 Phase 4/6 先行完成,本 phase 補缺口與判準測試):
+  - `Indicator.create` 物化平台去重指紋 `HashRecord`(SHA256,sourceId=null)→ 經既有 mapper
+    reconcile 落 `hash_records`(缺口:Phase 6 前 pipeline 從未寫入此表)
+  - 新測試:`ValidityPeriodTest`(§4.6 三步計算 + 值物件)、`ThreatScorerTest`(§7.6 四權重、
+    上限 5 來源、30 天半衰期)、`FingerprintTest`(吸收原 Sha256FingerprintStrategyTest,加 I2 與
+    HashRecord 物化案例);`IndicatorMergePolicyTest` 補信譽加權與可信任撤回案例
+  - `IngestionEndToEndTest` 補兩條斷言:每筆新 indicator 恰一列平台 SHA256 hash_record 且
+    digest == indicators.fingerprint;重同步不重複物化
+- **偏離事項 / ADR**:無新 ADR。既有實作(IndicatorMergePolicy、三步 valid_until、UPSERT+report_count、
+  Sha256FingerprintStrategy、RuleBasedThreatScorer)經判準測試驗證即符合規格,未改行為
+- **給下一 session 的注意事項**(Phase 8 = STIX 正規化與匯出,治理規格 07 §7.8、04 表 8/9):
+  - 一次完整 verify 曾見 `RateLimitTest.actuatorProbesAreNotRateLimited` 回 503——是宿主機睡眠造成的
+    環境性 flake(該次輸出的 elapsed 高達 51596s),重跑即綠;非程式問題
+  - 判準的過濾式 `verify -Dtest=...` 要在 full verify 之後**不 clean** 執行才能過 JaCoCo(append 模式)
+  - StixProjectionStage 是 pipeline 第 8 stage(Score 與 Persist 之間),只改 IngestionPipelineConfig
+    的那一個 `List.of`(08 §8.2 註 1)
+  - stage 8 在 Persist **之前**執行:新 indicator 尚無 created_at/updated_at,STIX created/modified
+    需以 ClockPort + UPSERT 保留 created 的方式近似,屆時寫 ADR
+  - M1 匿名無 `stix:export`(10 §10.6 匿名 bundle 匯出 ✗):bundle 端點 M1 對匿名回 403 較符合
+    安全優先,屆時寫 ADR;GET /api/v1/stix/{stixId} 為匿名可存取
+  - StixSchemaValidationTest 需離線驗證:vendor OASIS cti-stix2-json-schemas 的 schemas/common/ 全部
+    + sdos/indicator.json(draft 2020-12、相對 $ref);版本表無 JSON Schema 驗證器,需加 test-scope
+    networknt json-schema-validator 並以 ADR 回報(比照 Phase 6 IDNA 前例)
+  - `stix_objects`/`stix_relationships` entity(V7 表)已存在於 persistence 套件(package-private,尚無 repository)

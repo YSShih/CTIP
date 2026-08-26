@@ -98,7 +98,7 @@ public final class Indicator {
                 IndicatorMergePolicy.determineStatus(initial, reputations),
                 IndicatorMergePolicy.unionTags(initial),
                 List.of(cmd.firstReport()),
-                List.of());
+                List.of(new HashRecord(strategy.algorithm(), fp.hex(), null)));
         Indicator indicator = new Indicator(snapshot);
         indicator.reputations.putAll(reputations);
         indicator.pendingEvents.record(new IndicatorCreated(

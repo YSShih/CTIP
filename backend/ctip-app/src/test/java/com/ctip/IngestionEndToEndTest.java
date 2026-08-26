@@ -120,6 +120,15 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
         assertThat(((Number) row.get("score")).intValue()).isPositive();
         assertThat(row.get("valid_until")).isNotNull(); // 三步過期計算:來源未明示 → 型別預設 TTL
 
+        // hash_records 寫入(04 表 6):每筆新 indicator 恰一列平台計算(source_id null)的
+        // SHA256 記錄,digest 與 indicators.fingerprint 一致(指紋對 normalized_value 計算)
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM indicators i WHERE i.id NOT IN (SELECT id FROM e2e_indicator_snapshot)"
+                                + " AND 1 <> (SELECT count(*) FROM hash_records h WHERE h.indicator_id = i.id"
+                                + " AND h.algorithm = 'SHA256' AND h.source_id IS NULL AND h.digest = i.fingerprint)",
+                        Integer.class))
+                .isZero();
+
         // TLP 取最嚴格:AbuseIPDB(GREEN)+ AlienVault(CLEAR)→ GREEN
         assertThat(jdbc.queryForObject(
                         "SELECT tlp FROM indicators WHERE normalized_value = '198.51.100.23'", String.class))
@@ -163,6 +172,13 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
                                 + " AND src.source_type = 'MOCK_OPENPHISH'",
                         Integer.class))
                 .isEqualTo(2);
+
+        // 重同步不得重複物化 hash_records(reconcile 依 (algorithm, digest) 冪等)
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM hash_records h WHERE h.indicator_id NOT IN"
+                                + " (SELECT id FROM e2e_indicator_snapshot)",
+                        Integer.class))
+                .isEqualTo(indicatorsAfterFirstRun);
     }
 
     private boolean normalizedExists(String normalizedValue) {

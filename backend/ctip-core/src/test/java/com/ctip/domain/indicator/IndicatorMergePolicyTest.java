@@ -56,6 +56,39 @@ class IndicatorMergePolicyTest {
     }
 
     @Test
+    void confidenceIsWeightedBySourceReputation() {
+        List<IndicatorSource> records = List.of(
+                new IndicatorSource(
+                        report(SOURCE_A).confidence(Confidence.of(90)).build()),
+                new IndicatorSource(
+                        report(SOURCE_B).confidence(Confidence.of(30)).build()));
+        Map<SourceId, Reputation> reputations = Map.of(SOURCE_A, new Reputation(80), SOURCE_B, new Reputation(20));
+        // (90×80 + 30×20) / (80+20) = 78;兩個 ACTIVE 來源,無 +10 加成
+        assertThat(IndicatorMergePolicy.aggregateConfidence(records, reputations)
+                        .value())
+                .isEqualTo(78);
+    }
+
+    @Test
+    void trustedRetractionAmongThreeOverlappingSourcesRevokes() {
+        List<IndicatorSource> records = List.of(
+                new IndicatorSource(report(SOURCE_A).build()),
+                new IndicatorSource(
+                        report(SOURCE_B).status(SourceRecordStatus.RETRACTED).build()),
+                new IndicatorSource(
+                        report(com.ctip.testing.IndicatorTestBuilder.SOURCE_C).build()));
+        Map<SourceId, Reputation> reputations = Map.of(
+                SOURCE_A,
+                new Reputation(50),
+                SOURCE_B,
+                new Reputation(80),
+                com.ctip.testing.IndicatorTestBuilder.SOURCE_C,
+                new Reputation(50));
+        // I11 規則 1 短路:即使仍有兩個 ACTIVE 來源,可信任撤回(reputation >= 80)優先 → REVOKED
+        assertThat(IndicatorMergePolicy.determineStatus(records, reputations)).isEqualTo(IndicatorStatus.REVOKED);
+    }
+
+    @Test
     void fileHashWithoutExplicitValidUntilNeverExpires() {
         IndicatorSource record = new IndicatorSource(report(SOURCE_A).build());
         assertThat(record.effectiveValidUntil(IocType.FILE_HASH)).isNull();
