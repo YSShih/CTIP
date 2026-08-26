@@ -423,3 +423,21 @@
     (setRemoteAddr)隔離;SecurityTest 條號 7 會吃滿 127.0.0.1 的 60/min
   - 背景/新 shell 跑 maven:JAVA_HOME 可能沒設(會撿到系統 JDK 20 → `-proc:full` 炸),
     一律 `export JAVA_HOME=/usr/local/opt/openjdk` 且 cwd 用絕對路徑
+
+---
+
+## 規格修訂 + README 回寫 — Phase 9 衝突回寫(2026-08-26,Phase 9 之後)
+
+- **狀態**:done(使用者指示:§7.9 修正回寫規格 + README 更新;並確立每 phase 收尾必含
+  「全部驗證無誤 + 規格回寫 + README 更新」三件事)
+- **Commit**:(見 git log,message `Spec+README: write Phase 9 §7.9 security fix into spec (§0.10), update README to Phase 9`)
+- **內容**:
+  - `07 §7.9`:作用域修正的偽碼加上 `!owner.isPublic()` 條件,並以引用區塊說明安全性缺陷
+    (匿名綁 public tenant,原字面會使再散布過濾對公開輸出失效)與三處落實位置
+  - `00-master.md` 新增 **§0.10**(Phase 9 回寫索引);結尾版本註記更新為 §0.7–§0.10
+  - `README.md`:進度更新至 Phase 9(en/zh)、現況表(backend 256 tests、四輪修訂、ADR 0001–0006)、
+    快速開始補 REST API 端點示例列
+- **驗證**:`dod.sh full M3-24` ✅;純文件變更,無程式碼行為變更
+- **給下一 session 的注意事項**:每個 phase 收尾固定三件事(已存入使用者層記憶):
+  ① 判準逐字 + 無過濾 `clean verify -Ptest-integration` 全綠;② 規格衝突回寫
+  (主題檔引用區塊 + §0.x 索引 + ADR + M3-24);③ README 進度/現況/示例同步

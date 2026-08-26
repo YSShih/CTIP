@@ -405,9 +405,20 @@ v1.1 寫「不得出現在任何對外 API 或 Bloom filter 中」。照字面�
 **修正後的作用域**：`RedistributionFilter` 只作用於**跨租戶與公開輸出**。
 
 ```text
-if (viewerTenantId == indicator.ownerTenantId) → 不套用再散布過濾（租戶對自己的資料看得到全貌）
+if (viewerTenantId == indicator.ownerTenantId
+    && !indicator.ownerTenantId.isPublic())   → 不套用再散布過濾（租戶對自己的資料看得到全貌）
 else                                          → 套用完整過濾
 ```
+
+> **實作回饋修訂（2026-08-26，Phase 9；ADR 0006）——豁免必須排除 public tenant**：
+> 本節原偽碼只寫 `viewerTenantId == ownerTenantId`。但匿名身分綁定的 viewerTenantId **就是**
+> public tenant（[01 §1.11](01-architecture.md#111-m1-最小安全層強制phase-4)），而 feed 攝取的
+> 情資 owner 也是 public tenant——照原字面實作，匿名對全部公開情資都算「擁有租戶」，
+> 規則 3/4/5 對公開輸出**完全失效**，這正是本節要防的法遵場景。
+> public tenant 無成員，對 public 資料的任何存取都是「公開輸出」；豁免僅適用非 public 租戶
+> 看自家資料（原修正的本意——手動提交歸屬提交者租戶，不受影響）。
+> 同一規則落實於三處：domain `Indicator.canBeRedistributedTo`（I14）、
+> query 層 `TlpSpecifications`、輸出層 `RedistributionFilter`。
 
 Bloom 一律套用（Bloom 沒有 viewer 概念）。
 
