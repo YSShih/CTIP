@@ -359,3 +359,22 @@
   - bundle 匯出上限計法 = marking + indicator 合計;Phase 14 把 StixExportSettings 換成 plans 查表
   - vendored schema 在 ctip-app/src/test/resources/stix-schemas/(BSD-3-Clause,README 記出處);
     升級 STIX schema 時整包替換
+
+---
+
+## 規格修訂 + README 回寫 — Phase 7–8 衝突回寫(2026-08-26,Phase 8 之後)
+
+- **狀態**:done(使用者指示:確認異動回寫 README 與 06 §6.3.6 編譯地雷清單)
+- **Commit**:(見 git log,message `Spec+README: write Phase 7-8 feedback into spec (§0.9), update README to Phase 8`)
+- **內容**:
+  - `06 §6.3.6` 補第 6 條:**Boot 4 的 Jackson 是 3.x**(`tools.jackson.*` 座標與套件、
+    unchecked 例外;僅 jackson-annotations 維持 fasterxml 2.x 座標;IDE 自動 import 易誤引)
+  - `08 §8.2` 補註 4:StixProjectionStage 只建構、寫出在批次交易提交後(FK 順序 + §7.8.6 失敗隔離)
+  - `07 §7.8.2` 補引用區塊:created/modified 的近似計法;external_references 必附 description/url/external_id
+    之一(OASIS schema 的 oneOf 會拒絕只有 source_name)
+  - `00-master.md` 新增 **§0.9**(Phase 7–8 回寫索引;Phase 7 無規格偏離);結尾版本註記更新
+  - `README.md`:開頭進度(en/zh)更新至 Phase 8、現況表(backend Phase 1–8、規格書三輪修訂、
+    ADR 0001–0005)、快速開始補 STIX 端點示例、§0.7–§0.9 導覽連結
+- **驗證**:`dod.sh full M3-24` ✅(曾抓到一個 anchor 筆誤:檢查器 slug 會丟棄底線,
+  `stix_objects` 標題的 anchor 是 `#786-stixobjects-…`);純文件變更,無程式碼行為變更
+- **給下一 session 的注意事項**:規格內部連結若指向含底線的 code span 標題,anchor 要去掉底線

@@ -237,6 +237,13 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
    **不含** `@AutoConfigureMockMvc`。需另加 test 相依 `org.springframework.boot:spring-boot-webmvc-test`
    （BOM 納管），且註解套件改為 `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`
    （不是 Boot 3 的 `org.springframework.boot.test.autoconfigure.web.servlet`）。
+6. **Boot 4 的 Jackson 是 3.x，座標與套件整個改名**（2026-08-26 Phase 8 實測補入）：
+   `ObjectMapper` 等 core/databind 類別在 `tools.jackson.*`（Maven 座標
+   `tools.jackson.core:jackson-databind`），**不是** Boot 3 的 `com.fasterxml.jackson.*`；
+   序列化例外改為 unchecked（`JacksonException`），`writeValueAsString` 不再宣告 checked exception。
+   僅 `jackson-annotations` 仍維持 `com.fasterxml.jackson.core` 座標（2.x 版號）。
+   注意 IDE 自動 import 很容易誤引 fasterxml——classpath 上兩者可能並存
+   （test-scope 工具如 json-schema-validator 會傳遞引入 Jackson 2）。
 
 ---
 

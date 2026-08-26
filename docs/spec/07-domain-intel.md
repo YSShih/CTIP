@@ -275,6 +275,14 @@ STIX id 使用 domain 物件自己的 UUID，保證穩定且可逆：`indicator-
 
 `created_by_ref` 於 M1 省略（`identity` 物件為 M2）。
 
+> **實作回饋修訂（2026-08-26，Phase 8；ADR 0005）**：
+> 1. `created`/`modified` 對照的 `created_at`/`updated_at` 由 DB 於 persist 時產生，但投影建構於
+>    Persist **之前**（stage 8）——實作以「既有投影的 `stix_created`（UPSERT 保留）、當下時間為
+>    modified」近似，語意等價（created ≈ 首次投影、modified ≈ 本次合併時間）。
+> 2. `external_references` 除 `source_name` 外必須附 `description`/`url`/`external_id` 之一——
+>    OASIS JSON Schema 對 external-reference 的 oneOf 會拒絕只有 source_name 的物件。
+>    M1 的 `Source` 無 homepage 欄位，故附固定 `description`；M2 補 homepage 後改附 `url`。
+
 ### 7.8.3 STIX Patterning 模板（強制）
 
 `pattern` 必須是合法的 STIX Patterning 語言。**六個型別各有固定模板**：

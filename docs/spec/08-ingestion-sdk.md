@@ -166,6 +166,12 @@ M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`——**只
 >    `ALLOWLISTED_DOMAIN`、格式驗證失敗）依 [07 §7.3](07-domain-intel.md#73-拒絕規則強制) 的明文
 >    「比對完整正規化值」，於 Normalize（stage 3）canonical 化後緊接執行；Validate（stage 2）
 >    負責前置檢查（配額、長度上限、宣告雜湊長度）。行為與 §7.3 完全一致，只是判定點不同。
+> 4. **StixProjectionStage 只「建構」投影，「寫出」在批次交易提交後**（2026-08-26 Phase 8 實測補入；
+>    ADR 0005）：`stix_objects.indicator_id` 的 FK 指向 `indicators`（04 表 8），stage 8 在 Persist
+>    之前，同交易先寫 stix 必然 FK 違規；且 [07 §7.8.6](07-domain-intel.md#786-stixobjects-表的定位)
+>    要求投影失敗不得使 ingestion 失敗，同交易內的寫入失敗會污染交易使整批 rollback。
+>    實作：stage 8 建構 `StixProjection` 放入 context，`IngestionBatchExecutor` 於交易提交後
+>    逐筆寫出（單筆失敗只記錄）。stage 順序與本節一致，寫出時點是實作細節。
 
 ### 批次與交易邊界
 

@@ -287,4 +287,22 @@ property 預設承載至 Phase 14（10 §10.7）；mock 確定性以固定手寫
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25 實作回饋修訂，見 §0.7–§0.8）。*
+## 0.9 實作回饋修訂（2026-08-26，Phase 7–8 實測後回寫）
+
+Phase 7 無規格偏離（既有實作經判準測試驗證即符合規格）。Phase 8 的修訂**已註記進對應主題檔**；
+完整決策記錄見 `docs/architecture/decisions/0005-phase8-stix-projection-decisions.md`。
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | stage 8 在 Persist 前，但 `stix_objects` 的 FK 指向 `indicators`；且投影失敗不得使 ingestion 失敗 | stage 8 只建構投影，批次交易提交後逐筆寫出（失敗隔離） | [08 §8.2](08-ingestion-sdk.md#82-攝取管線) |
+| 2 | STIX `created`/`modified` 對照的 DB 欄位在 stage 8 尚不存在 | 既有投影 created（UPSERT 保留）+ 當下時間為 modified 近似 | [07 §7.8.2](07-domain-intel.md#782-indicator-映射強制對照表) |
+| 3 | OASIS schema 拒絕只有 `source_name` 的 external-reference | 附固定 `description`（M2 補 homepage 後改 `url`） | [07 §7.8.2](07-domain-intel.md#782-indicator-映射強制對照表) |
+| 4 | Boot 4 的 Jackson 是 3.x（`tools.jackson.*`、unchecked 例外） | 編譯地雷清單補第 6 條 | [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+
+其餘實作決策（marking 由常數供應不落 `stix_objects`、bundle 端點 M1 對匿名 403、匯出上限以
+property 承載、STIX 2.1 JSON Schema 驗證器以 test scope 引入 networknt + vendored OASIS schema）
+屬規格自由度內的選擇，僅記錄於 ADR 0005，未修改主題檔正文。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.9）。*
