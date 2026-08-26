@@ -535,6 +535,12 @@ v1.1 定義了環境變數，卻從未說明它們如何對映到 Spring 屬性�
 
 `ctip-app/src/main/resources/` 必須有：`application.yml` 與 `application-{mvp,dev,staging,prod}.yml`。
 
+> **實作回饋修訂（2026-08-26，Phase 12；ADR 0009）**:`ctip.cors.allowed-origins` 只是屬性承載,
+> **必須**另有 `WebCorsConfig`(`WebMvcConfigurer.addCorsMappings`)把它套用到 `/api/**`
+> (GET/POST、exposedHeaders 帶 `X-RateLimit-*` 與 `Retry-After`、M1 不開 allowCredentials)。
+> Phase 3–11 只有屬性與 StartupValidator 守衛、無 MVC 接線,瀏覽器跨源呼叫全數被擋
+> (Phase 12 前端首次整合即發現)。
+
 **`application.yml`（共用）關鍵對應**
 
 ```yaml
@@ -567,7 +573,7 @@ springdoc:
 
 ctip:
   environment: ${ENVIRONMENT}
-  cors.allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  cors.allowed-origins: ${CORS_ALLOWED_ORIGINS}   # ← 由 WebCorsConfig(WebMvcConfigurer)套用到 /api/**,見下方修訂
   jwt:
     secret: ${JWT_SECRET}
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:900}
@@ -650,6 +656,12 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
    驗證快取完整性**，失敗（首次啟動**或 pom 相依變更後**）即在容器內
    `mvnw -pl ctip-app -am -DskipTests dependency:go-offline package` 重新預熱；
    node-modules volume 為空時在容器內 `npm ci`
+
+   > **實作回饋修訂（2026-08-26，Phase 12；ADR 0009）**:frontend 守衛同樣不得只認
+   > 「volume 為空／vite 存在」——偵測不到 package-lock 漂移,Phase 11/12 新增 npm 相依後
+   > dev 容器必然啟動失敗(與上一則 backend 守衛同類問題)。改為
+   > `cmp package-lock.json node_modules/.ctip-lock-stamp` 戳記比對,
+   > `npm ci` 成功後寫入戳記;首次與 lockfile 變更後皆自動重新預熱。
 
    > **實作回饋修訂（2026-08-26，Phase 10；ADR 0007）**:原契約只寫「volume 為空時」預熱——
    > 守衛只認目錄存在,偵測不到**相依漂移**:後續 phase 在 pom 新增相依後,舊快取使

@@ -250,6 +250,15 @@ Domain → Mapper → Response DTO
 
 ## 9.6 OpenAPI / Swagger
 
+> **實作回饋修訂（2026-08-26，Phase 12;ADR 0009）— springdoc 註解陷阱(照字面實作文件必與行為不符)**
+> 1. 以 record 承載 GET query 參數(如 `IocListParams`)時,handler 參數**必須**加
+>    `@ParameterObject`,否則 openapi 會把整個 record 呈現為單一物件 query 參數
+>    (`?params={...}`),與 Spring 實際的攤平繫結不符——generated client 會送錯 wire 格式。
+> 2. 回傳 `List<T>` 的端點,`@ApiResponse` 的 content **必須**用
+>    `array = @ArraySchema(schema = @Schema(implementation = T.class))`;
+>    誤用單物件 `@Schema` 會使 generated 型別是單物件而非陣列
+>    (Phase 12 修正:`/iocs/{id}/sources`、`/sources`、`/stats/sources`)。
+
 使用 springdoc-openapi 3.1.0（3.x 才相容 Spring Boot 4，**不得使用 2.x**）。
 
 ```text

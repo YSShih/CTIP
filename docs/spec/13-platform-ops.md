@@ -277,6 +277,21 @@ public interface SearchPort {
 搜尋欄位：IOC value、normalized value、type、tags、source、severity、confidence、score、status、TLP、時間區間。
 能力：精確查詢、前綴查詢（domain/URL）、模糊查詢（**僅 M2**，用於 typosquatting 偵測）、分頁、排序、篩選。
 
+> **實作回饋修訂（2026-08-26，Phase 12 實測；詳見 ADR 0009）**
+> 1. **`SearchPort` 實作簽章**（Phase 9 既成、Phase 12 確認）：
+>    `CursorPage<Indicator> searchByValue(String term, IndicatorFilter filter, Visibility visibility, Cursor after, int limit)`
+>    ——§1.11 要求可見度是查詢輸入（不得事後過濾），故簽章帶 `Visibility`；
+>    `IndicatorSummary` 投影在 M1 無消費者，回傳完整 `Indicator`。語意與上方原型等價。
+> 2. **搜尋欄位已於 Phase 12 全數落實**：`IndicatorFilter` 擴充 tags（**全部包含**語意，
+>    `@>` 走 `ix_indicators_tags` GIN）、sourceId（EXISTS `indicator_sources`）、
+>    confidence/score 閉區間、lastSeen 時間區間；GET /iocs 與 POST /iocs/search 同步支援。
+> 3. **排序在 M1 為固定 `lastSeen DESC, id DESC`**——keyset cursor 分頁的前提
+>    （04 表 4 `ix_indicators_last_seen` 不可移除）；自由排序需每種排序鍵一套 cursor 編碼，
+>    留待 M2 與 Elasticsearch 一併設計。
+> 4. **Hibernate 地雷**：`String[]` 屬性綁 `varchar[]`，PostgreSQL 的 anyarray 運算子不對
+>    `text[] @> varchar[]` 做隱式統一；tags 過濾需自訂 HQL 函式顯式 `cast(? as text[])`
+>    （`PostgresFunctionContributor`），否則 SQL 直接報 operator does not exist。
+
 ### 一致性
 
 | 規則 |

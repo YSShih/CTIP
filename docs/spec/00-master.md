@@ -332,4 +332,21 @@ OpenAPI 註解集中於 `interfaces/rest/openapi/*Api` 文件介面由 controlle
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.11）。*
+## 0.12 實作回饋修訂（2026-08-26，Phase 11–12 實測後回寫）
+
+Phase 11 無規格正文偏離（版本表未列的必要配套相依與 shadcn 手寫等價等實作決策記錄於 ADR 0008）。
+Phase 12 的修訂**已註記進對應主題檔**；完整決策記錄見
+`docs/architecture/decisions/0009-phase12-search-pages-decisions.md`。
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | §13.7 的 `SearchPort` 簽章與 §1.11「可見度是查詢輸入」衝突；`IndicatorSummary` 無消費者 | 實作簽章 `searchByValue(term, filter, visibility, cursor, limit)` 定形（Phase 9 既成偏離補註記） | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 2 | 排序能力與 keyset cursor 分頁互斥 | M1 固定 `lastSeen DESC, id DESC`，自由排序留待 M2 + ES | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 3 | Hibernate 將 `String[]` 綁 `varchar[]`，`text[] @> varchar[]` 直接報錯 | 自訂 HQL 函式顯式 `cast(? as text[])`（`PostgresFunctionContributor`） | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 4 | `CORS_ALLOWED_ORIGINS` 只有屬性與啟動守衛，無 MVC 接線——瀏覽器跨源全擋 | 新增 `WebCorsConfig`（`/api/**`、GET/POST、expose `X-RateLimit-*`） | [05 §5.7](05-environment.md#57-spring-設定對應本版新增) |
+| 5 | `up.sh` frontend 預熱守衛只認 vite 存在，偵測不到 lockfile 漂移 | 改 `package-lock` 戳記比對（同 Phase 10 backend 守衛前例） | [05 §5.10](05-environment.md#510-腳本契約) |
+| 6 | springdoc：record query 參數缺 `@ParameterObject`、List 回應誤用單物件 `@Schema`——文件與行為不符 | 補 `@ParameterObject` 與 `@ArraySchema`，重產 openapi.json（破壞性檢查 PASS） | [09 §9.6](09-api.md#96-openapi--swagger) |
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.12）。*
