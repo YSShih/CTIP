@@ -1,0 +1,49 @@
+# OpenAPI 產出 → 比對 committed 版本 → 破壞性變更檢查
+# 規格:docs/spec/09-api.md §9.6(docs/api/openapi.json 由建置產生,不得手改)
+name: openapi-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  openapi-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要 base ref / HEAD~1 取得前一版 openapi.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: 產生 openapi.json(OpenApiCompletenessTest 同時做逐端點完整性檢查)
+        run: ./backend/mvnw -f backend/pom.xml verify -Ptest-integration -Dtest=OpenApiCompletenessTest
+
+      - name: 產出必須與 committed 版本一致(不得手改、不得漏 commit)
+        run: git diff --exit-code docs/api/openapi.json
+
+      - name: 上傳 openapi.json artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-json
+          path: docs/api/openapi.json
+
+      - name: 破壞性變更檢查(相對於 base)
+        env:
+          GH_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ -n "$GH_BASE_REF" ]; then
+            BASE_REF="origin/$GH_BASE_REF"
+          else
+            BASE_REF="HEAD~1"
+          fi
+          if git show "$BASE_REF:docs/api/openapi.json" > /tmp/openapi-base.json 2>/dev/null; then
+            python3 environment/scripts/openapi-breaking-check.py /tmp/openapi-base.json docs/api/openapi.json
+          else
+            echo "base 無 openapi.json(首次引入),略過破壞性比對"
+          fi

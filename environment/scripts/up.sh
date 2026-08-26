@@ -28,10 +28,13 @@ check_docker
 # - backend 以離線模式跑 ./mvnw -o spring-boot:run,空的 /root/.m2 必然失敗
 # - frontend 的 node_modules volume 遮罩 host 版本,空 volume 內無 vite
 if [ "$(env_get "$ENV_FILE" BACKEND_BUILD_TARGET)" = "development" ]; then
+  # 守衛以離線 go-offline 驗證快取完整性:首次啟動與「pom 相依變更後」都會觸發重新預熱
+  # (2026-08-26 Phase 10 實測:只檢查目錄存在無法偵測相依漂移,舊快取使 -o 容器必然啟動失敗)
   if ! compose "$ENV_NAME" run --rm --no-deps backend \
-       sh -c 'test -d /root/.m2/repository/org/springframework/boot' >/dev/null 2>&1; then
-    info "首次啟動:預熱 backend Maven 相依快取(下載至 maven-cache volume,需數分鐘)……"
-    compose "$ENV_NAME" run --rm --no-deps backend ./mvnw -B -q -pl ctip-app -am -DskipTests package
+       ./mvnw -o -B -q -pl ctip-app -am -DskipTests dependency:go-offline >/dev/null 2>&1; then
+    info "預熱 backend Maven 相依快取(首次啟動或相依變更;下載至 maven-cache volume,需數分鐘)……"
+    compose "$ENV_NAME" run --rm --no-deps backend \
+      ./mvnw -B -q -pl ctip-app -am -DskipTests dependency:go-offline package
   fi
 fi
 if [ "$(env_get "$ENV_FILE" FRONTEND_BUILD_TARGET)" = "development" ]; then

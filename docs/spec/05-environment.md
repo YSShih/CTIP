@@ -646,8 +646,15 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
 2. 檢查 `environment/.env.<env>` 存在（不存在則提示由 `.example` 複製並結束）
 3. 對 prod 額外檢查：`JWT_SECRET` 非樣板值且 ≥ 32 bytes、`CORS_ALLOWED_ORIGINS` 非 `*`
 4. 驗證 Docker 可用且版本 ≥ 27，Compose ≥ 2.24
-5. development target 的首次快取預熱（§5.8.1 #3、#4）：maven-cache volume 為空時在容器內
-   `mvnw -pl ctip-app -am -DskipTests package`；node-modules volume 為空時在容器內 `npm ci`
+5. development target 的快取預熱（§5.8.1 #3、#4）：backend 以**離線 `dependency:go-offline`
+   驗證快取完整性**，失敗（首次啟動**或 pom 相依變更後**）即在容器內
+   `mvnw -pl ctip-app -am -DskipTests dependency:go-offline package` 重新預熱；
+   node-modules volume 為空時在容器內 `npm ci`
+
+   > **實作回饋修訂（2026-08-26，Phase 10；ADR 0007）**:原契約只寫「volume 為空時」預熱——
+   > 守衛只認目錄存在,偵測不到**相依漂移**:後續 phase 在 pom 新增相依後,舊快取使
+   > `mvnw -o` 的 dev 容器必然啟動失敗(Phase 10 實測:Phase 5 的 resilience4j 起全數缺件)。
+   > 改為離線 go-offline 探測,首次與相依變更後皆會自動重新預熱,其餘啟動只多一次快速離線檢查。
 6. 執行 `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d`
 7. 等待 healthcheck 並印出服務狀態與存取網址；**任何服務異常退出（exited）視為失敗，不空等逾時**
 

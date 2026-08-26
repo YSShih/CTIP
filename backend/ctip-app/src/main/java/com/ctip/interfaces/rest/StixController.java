@@ -6,6 +6,7 @@ import com.ctip.infrastructure.security.AuthState;
 import com.ctip.infrastructure.security.TenantContext;
 import com.ctip.interfaces.rest.error.ApiException;
 import com.ctip.interfaces.rest.error.ErrorCode;
+import com.ctip.interfaces.rest.openapi.StixApi;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/stix")
-class StixController {
+class StixController implements StixApi {
 
     private final StixQueryService query;
     private final StixExportService export;
@@ -39,8 +40,9 @@ class StixController {
         this.tenantContext = tenantContext;
     }
 
+    @Override
     @GetMapping(value = "/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<String> bundle() {
+    public ResponseEntity<String> bundle() {
         if (tenantContext.authState() != AuthState.AUTHENTICATED) {
             throw new ApiException(ErrorCode.FORBIDDEN, "Bundle export requires stix:export");
         }
@@ -48,8 +50,9 @@ class StixController {
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(json);
     }
 
+    @Override
     @GetMapping(value = "/{stixId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<Object> byStixId(@PathVariable String stixId) {
+    public ResponseEntity<Object> byStixId(@PathVariable String stixId) {
         var marking = query.findMarking(stixId);
         if (marking.isPresent()) {
             return ResponseEntity.ok(marking.get());

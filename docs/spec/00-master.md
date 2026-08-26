@@ -317,4 +317,19 @@ Phase 9 發現一項**安全性缺陷**並依 §0.4 優先序（安全性最先�
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.10）。*
+## 0.11 實作回饋修訂（2026-08-26，Phase 10 實測後回寫）
+
+完整決策記錄見 `docs/architecture/decisions/0007-phase10-openapi-decisions.md`。
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | `up.sh` 預熱守衛只認「volume 為空」，偵測不到 pom 相依漂移——後續 phase 新增相依後，離線 dev 容器必然啟動失敗 | 守衛改為離線 `dependency:go-offline` 探測，首次與相依變更後自動重新預熱 | [05 §5.10](05-environment.md#510-腳本契約) |
+
+其餘 Phase 10 實作決策（`docs/api/openapi.json` 由 `OpenApiCompletenessTest` 產生——版本表無
+springdoc maven plugin；破壞性比對用自寫 `openapi-breaking-check.py`——版本表無 oasdiff；
+OpenAPI 註解集中於 `interfaces/rest/openapi/*Api` 文件介面由 controller 實作——checkstyle 300 行限制）
+屬規格自由度內的選擇，僅記錄於 ADR 0007。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.11）。*

@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 9 完成,下一步 Phase 10 |
+| M1 — MVP | 1–12 | Phase 10 完成,下一步 Phase 11 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -441,3 +441,41 @@
 - **給下一 session 的注意事項**:每個 phase 收尾固定三件事(已存入使用者層記憶):
   ① 判準逐字 + 無過濾 `clean verify -Ptest-integration` 全綠;② 規格衝突回寫
   (主題檔引用區塊 + §0.x 索引 + ADR + M3-24);③ README 進度/現況/示例同步
+
+---
+
+## Phase 10 — OpenAPI / Swagger
+
+- **狀態**:done(2026-08-26)
+- **執行單**:`docs/spec/phases/phase-10.md`
+- **Commit**:(見 git log,message `Phase 10: openapi/swagger + completeness test + committed openapi.json + ci check`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest=OpenApiCompletenessTest`(逐字)✅ 3/3
+  - `./environment/scripts/up.sh mvp` ✅ 三容器 healthy;
+    `curl /swagger-ui/index.html` ✅;`curl /v3/api-docs | jq -e '.paths | length > 0'` ✅ true
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 135 + adapters 24 + app 87 = 259;
+    Spotless/Checkstyle/JaCoCo 全過);openapi.json 跨執行位元一致(確定性驗證)
+- **交付物**:
+  - springdoc-openapi-starter-webmvc-ui **3.1.0**(parent property;SWAGGER_ENABLED 開關與四環境
+    樣板 Phase 2–3 已就位,prod=false);OpenApiConfig(info + OperationCustomizer 統一掛 429/500)
+  - `interfaces/rest/openapi/{System,Ioc,Stats,Source,Stix}Api` 文件介面(summary/description/
+    schemas/錯誤/@SecurityRequirements/每端點至少一個範例),controller implements 繼承註解
+  - `OpenApiCompletenessTest`:逐端點檢查必要欄位(認證需求以描述含「認證」驗證)+
+    產出 canonical `docs/api/openapi.json`(鍵排序,§9.6 不得手改)
+  - `.github/workflows/openapi-check.yml`(產生 → git diff 比對 committed → artifact →
+    對 base 跑破壞性檢查);`environment/scripts/openapi-breaking-check.py`(移除端點/必填/改型別,
+    含煙霧測試驗證)
+  - **up.sh 預熱守衛修正**:離線 go-offline 探測取代「volume 為空」檢查(相依漂移自動重預熱;
+    已端到端實測:偵測 → 重預熱 → healthy → 判準過)
+- **偏離事項 / ADR**(`docs/architecture/decisions/0007-phase10-openapi-decisions.md`,六項):
+  openapi.json 由判準測試產生(版本表無 springdoc maven plugin)、破壞性比對自寫 python
+  (版本表無 oasdiff)、文件介面模式(300 行限制)、M1 認證需求雙軌表達、429/500 統一掛載、
+  up.sh 守衛修正(已回寫 05 §5.10 + §0.11)
+- **給下一 session 的注意事項**(Phase 11 = React 前端骨架 + 型別產生 + 版面,治理規格 12):
+  - 前端型別由 `docs/api/openapi.json` 產生(12 §12.x;openapi-typescript?依 06 §6.2 版本表);
+    F3 依賴規則與 `api:check` script(比對產生型別 drift)在此 phase 落實
+  - springdoc 註解掛在 openapi/*Api 介面;新端點記得同步文件介面,否則 OpenApiCompletenessTest 會擋
+  - @Content 一律要顯式 `mediaType = "application/json"`,否則 springdoc 產出落在 `*/*`
+  - mvp stack 目前在本機執行中(swagger UI 可直接開);down.sh mvp 可停
+  - openapi.json 是 committed 產物:改了任何端點/DTO 註解後要重跑 OpenApiCompletenessTest
+    再 commit,否則 CI drift check 會 fail

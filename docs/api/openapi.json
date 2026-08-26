@@ -1,0 +1,1417 @@
+{
+  "components" : {
+    "schemas" : {
+      "AttributionDto" : {
+        "properties" : {
+          "homepage" : {
+            "type" : "string"
+          },
+          "sourceName" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DailyCountDto" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "date" : {
+            "format" : "date",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ErrorResponse" : {
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "details" : {
+            "items" : {
+              "$ref" : "#/components/schemas/FieldIssue"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "status" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "timestamp" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "traceId" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "FieldIssue" : {
+        "properties" : {
+          "field" : {
+            "type" : "string"
+          },
+          "issue" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "HealthDto" : {
+        "properties" : {
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IocDto" : {
+        "properties" : {
+          "attribution" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AttributionDto"
+            },
+            "type" : "array"
+          },
+          "confidence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "firstSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "hashType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "score" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "sourceCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "tlp" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "validUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IocListParams" : {
+        "properties" : {
+          "cursor" : {
+            "type" : "string"
+          },
+          "includeExpired" : {
+            "type" : "boolean"
+          },
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "offset" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "severity" : {
+            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "ACTIVE", "EXPIRED", "REVOKED", "FALSE_POSITIVE" ],
+            "type" : "string"
+          },
+          "tlp" : {
+            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
+            "type" : "string"
+          },
+          "type" : {
+            "enum" : [ "IPV4", "IPV6", "DOMAIN", "URL", "FILE_HASH", "EMAIL" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "IocSourceDto" : {
+        "properties" : {
+          "redistributionPolicy" : {
+            "type" : "string"
+          },
+          "reportCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sourceConfidence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sourceFirstSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sourceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceLastSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sourceName" : {
+            "type" : "string"
+          },
+          "sourceSeverity" : {
+            "type" : "string"
+          },
+          "sourceTlp" : {
+            "type" : "string"
+          },
+          "sourceValidUntil" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LookupRequest" : {
+        "properties" : {
+          "values" : {
+            "items" : {
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          }
+        },
+        "required" : [ "values" ],
+        "type" : "object"
+      },
+      "LookupResponse" : {
+        "properties" : {
+          "results" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Result"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "PageResponse" : {
+        "properties" : {
+          "hasMore" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : { },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Result" : {
+        "properties" : {
+          "found" : {
+            "type" : "boolean"
+          },
+          "ioc" : {
+            "$ref" : "#/components/schemas/IocDto"
+          },
+          "value" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SearchRequest" : {
+        "properties" : {
+          "cursor" : {
+            "type" : "string"
+          },
+          "includeExpired" : {
+            "type" : "boolean"
+          },
+          "limit" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "query" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tlp" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "query" ],
+        "type" : "object"
+      },
+      "SourceDto" : {
+        "properties" : {
+          "defaultTlp" : {
+            "type" : "string"
+          },
+          "displayName" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "homepage" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "redistributionPolicy" : {
+            "type" : "string"
+          },
+          "reputation" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "sourceType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "syncable" : {
+            "type" : "boolean"
+          },
+          "totalRecordsIngested" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SourceStatsDto" : {
+        "properties" : {
+          "displayName" : {
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "indicatorCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastSuccessAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "sourceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "sourceType" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SourceStatusDto" : {
+        "properties" : {
+          "avgLatencyMs" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "consecutiveFailures" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastErrorMessage" : {
+            "type" : "string"
+          },
+          "lastFailureAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSuccessAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSyncAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "StatsSummaryDto" : {
+        "properties" : {
+          "byType" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "totalActive" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "trend" : {
+            "items" : {
+              "$ref" : "#/components/schemas/DailyCountDto"
+            },
+            "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "VersionDto" : {
+        "properties" : {
+          "apiVersion" : {
+            "type" : "string"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Cyber Threat Intelligence Platform read API. M1 exposes anonymous read access to public TLP:CLEAR intelligence with cursor pagination; authentication, RBAC and write endpoints arrive in M2. All errors share a single ErrorResponse shape with a log-correlated traceId (see docs/spec/09-api.md §9.4).",
+    "title" : "CTIP API",
+    "version" : "v1"
+  },
+  "openapi" : "3.1.0",
+  "paths" : {
+    "/api/v1/health" : {
+      "get" : {
+        "description" : "Returns UP when the API is able to serve requests. Dependency health (database, etc.) is exposed separately at /actuator/health. 認證:匿名。",
+        "operationId" : "health",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "status" : "UP"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthDto"
+                }
+              }
+            },
+            "description" : "Service is up"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Liveness probe",
+        "tags" : [ "System" ]
+      }
+    },
+    "/api/v1/iocs" : {
+      "get" : {
+        "description" : "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp; EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。",
+        "operationId" : "list_1",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "params",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/IocListParams"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "hasMore" : true,
+                  "items" : [ {
+                    "attribution" : [ {
+                      "homepage" : null,
+                      "sourceName" : "Mock OpenPhish"
+                    } ],
+                    "confidence" : 60,
+                    "firstSeen" : "2026-08-01T00:00:00Z",
+                    "hashType" : null,
+                    "id" : "1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                    "lastSeen" : "2026-08-20T10:00:00Z",
+                    "score" : 42,
+                    "severity" : "HIGH",
+                    "sourceCount" : 1,
+                    "status" : "ACTIVE",
+                    "tags" : [ "sample", "phishing" ],
+                    "tlp" : "CLEAR",
+                    "type" : "DOMAIN",
+                    "validUntil" : "2026-11-18T10:00:00Z",
+                    "value" : "mal-8.ctip-sample.net"
+                  } ],
+                  "nextCursor" : "eyJscyI6IjIwMjYtMDgtMjBUMTA6MDA6MDBaIiwiaWQiOiIuLi4ifQ=="
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponse"
+                }
+              }
+            },
+            "description" : "One page of indicators"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "INVALID_CURSOR / OFFSET_TOO_LARGE / INVALID_REQUEST"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "List IOCs (cursor pagination)",
+        "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/iocs/lookup" : {
+      "post" : {
+        "description" : "Verifies up to the plan limit of values in one call (anonymous: 20). Values are cleaned and normalized before identity matching; unparsable or invisible values are reported as found=false, never as errors. Bloom-filter clients must confirm hits here (11 §11.6). 認證:匿名。",
+        "operationId" : "lookup",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "example" : {
+                "values" : [ "MAL-8.CTIP-SAMPLE.NET.", "203.0.113.7" ]
+              },
+              "schema" : {
+                "$ref" : "#/components/schemas/LookupRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "results" : [ {
+                    "found" : true,
+                    "ioc" : {
+                      "attribution" : [ {
+                        "homepage" : null,
+                        "sourceName" : "Mock OpenPhish"
+                      } ],
+                      "confidence" : 60,
+                      "firstSeen" : "2026-08-01T00:00:00Z",
+                      "hashType" : null,
+                      "id" : "1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                      "lastSeen" : "2026-08-20T10:00:00Z",
+                      "score" : 42,
+                      "severity" : "HIGH",
+                      "sourceCount" : 1,
+                      "status" : "ACTIVE",
+                      "tags" : [ "sample", "phishing" ],
+                      "tlp" : "CLEAR",
+                      "type" : "DOMAIN",
+                      "validUntil" : "2026-11-18T10:00:00Z",
+                      "value" : "mal-8.ctip-sample.net"
+                    },
+                    "value" : "MAL-8.CTIP-SAMPLE.NET."
+                  }, {
+                    "found" : false,
+                    "ioc" : null,
+                    "value" : "203.0.113.7"
+                  } ]
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/LookupResponse"
+                }
+              }
+            },
+            "description" : "Per-value verification results"
+          },
+          "413" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "PAYLOAD_TOO_LARGE (batch above plan limit)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Batch exact lookup",
+        "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/iocs/search" : {
+      "post" : {
+        "description" : "Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint. M1 backs this with PostgreSQL; M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
+        "operationId" : "search",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "example" : {
+                "limit" : 5,
+                "query" : "ctip-sample",
+                "type" : "DOMAIN"
+              },
+              "schema" : {
+                "$ref" : "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "hasMore" : true,
+                  "items" : [ {
+                    "attribution" : [ {
+                      "homepage" : null,
+                      "sourceName" : "Mock OpenPhish"
+                    } ],
+                    "confidence" : 60,
+                    "firstSeen" : "2026-08-01T00:00:00Z",
+                    "hashType" : null,
+                    "id" : "1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                    "lastSeen" : "2026-08-20T10:00:00Z",
+                    "score" : 42,
+                    "severity" : "HIGH",
+                    "sourceCount" : 1,
+                    "status" : "ACTIVE",
+                    "tags" : [ "sample", "phishing" ],
+                    "tlp" : "CLEAR",
+                    "type" : "DOMAIN",
+                    "validUntil" : "2026-11-18T10:00:00Z",
+                    "value" : "mal-8.ctip-sample.net"
+                  } ],
+                  "nextCursor" : "eyJscyI6IjIwMjYtMDgtMjBUMTA6MDA6MDBaIiwiaWQiOiIuLi4ifQ=="
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponse"
+                }
+              }
+            },
+            "description" : "One page of matches"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "INVALID_REQUEST (blank query, unknown enum value, bad cursor)"
+          },
+          "415" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "UNSUPPORTED_MEDIA_TYPE"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Search IOCs",
+        "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/iocs/{id}" : {
+      "get" : {
+        "description" : "Returns a single indicator by id. Cross-tenant or invisible resources are always 404 (existence is never disclosed). 認證:匿名。",
+        "operationId" : "byId_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "attribution" : [ {
+                    "homepage" : null,
+                    "sourceName" : "Mock OpenPhish"
+                  } ],
+                  "confidence" : 60,
+                  "firstSeen" : "2026-08-01T00:00:00Z",
+                  "hashType" : null,
+                  "id" : "1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "lastSeen" : "2026-08-20T10:00:00Z",
+                  "score" : 42,
+                  "severity" : "HIGH",
+                  "sourceCount" : 1,
+                  "status" : "ACTIVE",
+                  "tags" : [ "sample", "phishing" ],
+                  "tlp" : "CLEAR",
+                  "type" : "DOMAIN",
+                  "validUntil" : "2026-11-18T10:00:00Z",
+                  "value" : "mal-8.ctip-sample.net"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "The indicator"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND (missing or not visible)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get one IOC",
+        "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/iocs/{id}/sources" : {
+      "get" : {
+        "description" : "Per-source observations for one indicator. Redistribution policy is enforced: for non-owner viewers only PUBLIC_REDISTRIBUTABLE and ATTRIBUTION_REQUIRED records are returned (DERIVED_ONLY and INTERNAL_ONLY are masked). 認證:匿名。",
+        "operationId" : "sources_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "redistributionPolicy" : "ATTRIBUTION_REQUIRED",
+                  "reportCount" : 2,
+                  "sourceConfidence" : 60,
+                  "sourceFirstSeen" : "2026-08-01T00:00:00Z",
+                  "sourceId" : "6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "sourceLastSeen" : "2026-08-20T10:00:00Z",
+                  "sourceName" : "Mock OpenPhish",
+                  "sourceSeverity" : "HIGH",
+                  "sourceTlp" : "CLEAR",
+                  "sourceValidUntil" : null,
+                  "status" : "ACTIVE"
+                } ],
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocSourceDto"
+                }
+              }
+            },
+            "description" : "Visible source records (may be empty when policy masks them)"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND (missing or not visible)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get IOC source records",
+        "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/sources" : {
+      "get" : {
+        "description" : "All configured threat sources with their TLP defaults, redistribution policy snapshot basis and health status. 認證:匿名。",
+        "operationId" : "list",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "defaultTlp" : "CLEAR",
+                  "displayName" : "Mock OpenPhish",
+                  "enabled" : true,
+                  "homepage" : null,
+                  "id" : "6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "redistributionPolicy" : "ATTRIBUTION_REQUIRED",
+                  "reputation" : 70,
+                  "sourceType" : "MOCK_OPENPHISH",
+                  "status" : "ACTIVE",
+                  "syncable" : true,
+                  "totalRecordsIngested" : 56
+                } ],
+                "schema" : {
+                  "$ref" : "#/components/schemas/SourceDto"
+                }
+              }
+            },
+            "description" : "All sources"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "List threat sources",
+        "tags" : [ "Source" ]
+      }
+    },
+    "/api/v1/sources/{id}" : {
+      "get" : {
+        "description" : "A single source by id. 認證:匿名。",
+        "operationId" : "byId",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "defaultTlp" : "CLEAR",
+                  "displayName" : "Mock OpenPhish",
+                  "enabled" : true,
+                  "homepage" : null,
+                  "id" : "6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "redistributionPolicy" : "ATTRIBUTION_REQUIRED",
+                  "reputation" : 70,
+                  "sourceType" : "MOCK_OPENPHISH",
+                  "status" : "ACTIVE",
+                  "syncable" : true,
+                  "totalRecordsIngested" : 56
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SourceDto"
+                }
+              }
+            },
+            "description" : "The source"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get one threat source",
+        "tags" : [ "Source" ]
+      }
+    },
+    "/api/v1/sources/{id}/status" : {
+      "get" : {
+        "description" : "Sync health for one source: status transitions (ACTIVE/DEGRADED/FAILED/DISABLED), consecutive failures, timestamps and masked last error. 認證:匿名。",
+        "operationId" : "status",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "avgLatencyMs" : 12,
+                  "consecutiveFailures" : 0,
+                  "id" : "6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "lastErrorMessage" : null,
+                  "lastFailureAt" : null,
+                  "lastSuccessAt" : "2026-08-26T02:00:00Z",
+                  "lastSyncAt" : "2026-08-26T02:00:00Z",
+                  "status" : "ACTIVE"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SourceStatusDto"
+                }
+              }
+            },
+            "description" : "Health detail"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get source health status",
+        "tags" : [ "Source" ]
+      }
+    },
+    "/api/v1/stats/sources" : {
+      "get" : {
+        "description" : "Indicator counts, enablement, health status and last success time per threat source. 認證:匿名。",
+        "operationId" : "sources",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "displayName" : "Mock OpenPhish",
+                  "enabled" : true,
+                  "indicatorCount" : 351,
+                  "lastSuccessAt" : "2026-08-26T02:00:00Z",
+                  "sourceId" : "6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                  "sourceType" : "MOCK_OPENPHISH",
+                  "status" : "ACTIVE"
+                } ],
+                "schema" : {
+                  "$ref" : "#/components/schemas/SourceStatsDto"
+                }
+              }
+            },
+            "description" : "One row per configured source"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Per-source counts and health",
+        "tags" : [ "Stats" ]
+      }
+    },
+    "/api/v1/stats/summary" : {
+      "get" : {
+        "description" : "Total visible ACTIVE indicators, distribution by type and the last-7-day trend (daily counts by lastSeen, zero-filled). Scoped by the caller's visibility — anonymous callers see public TLP:CLEAR data only. 認證:匿名。",
+        "operationId" : "summary",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "byType" : {
+                    "DOMAIN" : 40,
+                    "URL" : 38
+                  },
+                  "totalActive" : 231,
+                  "trend" : [ {
+                    "count" : 3,
+                    "date" : "2026-08-20"
+                  }, {
+                    "count" : 0,
+                    "date" : "2026-08-21"
+                  } ]
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/StatsSummaryDto"
+                }
+              }
+            },
+            "description" : "Summary statistics"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Public statistics summary",
+        "tags" : [ "Stats" ]
+      }
+    },
+    "/api/v1/stix/bundle" : {
+      "get" : {
+        "description" : "Exports visible, redistributable indicators plus the referenced TLP 2.0 marking-definitions as one STIX 2.1 bundle. Object count is capped by plan (PLAN_LIMIT_EXCEEDED above the cap). 認證:stix:export——匿名不可用;M1 尚無登入流程,一律回 403,Phase 13 起依 RBAC 判定。",
+        "operationId" : "bundle",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "id" : "bundle--7c94...",
+                  "objects" : [ {
+                    "type" : "marking-definition"
+                  }, {
+                    "type" : "indicator"
+                  } ],
+                  "type" : "bundle"
+                }
+              }
+            },
+            "description" : "STIX 2.1 bundle"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "FORBIDDEN (anonymous) / PLAN_LIMIT_EXCEEDED (over object cap)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Export a STIX 2.1 bundle",
+        "tags" : [ "STIX" ]
+      }
+    },
+    "/api/v1/stix/{stixId}" : {
+      "get" : {
+        "description" : "Returns a stored STIX 2.1 object by its STIX id: indicator projections (indicator--{uuid}) after visibility and redistribution filtering, and the five fixed TLP 2.0 marking-definitions served from constants. 認證:匿名。",
+        "operationId" : "byStixId",
+        "parameters" : [ {
+          "description" : "STIX id, e.g. indicator--{uuid} or marking-definition--{uuid}",
+          "in" : "path",
+          "name" : "stixId",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "created" : "2022-10-01T00:00:00.000Z",
+                  "id" : "marking-definition--94868c89-83c2-464b-929b-a1a8aa3c8487",
+                  "name" : "TLP:CLEAR",
+                  "spec_version" : "2.1",
+                  "type" : "marking-definition"
+                }
+              }
+            },
+            "description" : "The STIX object (verbatim stored JSON for indicators)"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND (unknown id, invisible or non-redistributable)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get one STIX object",
+        "tags" : [ "STIX" ]
+      }
+    },
+    "/api/v1/version" : {
+      "get" : {
+        "description" : "Returns the API contract version (v1) and the build version of the running application (dev when running from sources). 認證:匿名。",
+        "operationId" : "version",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "apiVersion" : "v1",
+                  "version" : "dev"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/VersionDto"
+                }
+              }
+            },
+            "description" : "Version information"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "API and build version",
+        "tags" : [ "System" ]
+      }
+    }
+  },
+  "servers" : [ {
+    "description" : "Generated server url",
+    "url" : "http://localhost"
+  } ],
+  "tags" : [ {
+    "description" : "Public dashboard statistics. Authentication: anonymous.",
+    "name" : "Stats"
+  }, {
+    "description" : "Threat source catalog and health. Authentication: anonymous.",
+    "name" : "Source"
+  }, {
+    "description" : "Liveness and version. Authentication: anonymous.",
+    "name" : "System"
+  }, {
+    "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
+    "name" : "IOC"
+  }, {
+    "description" : "STIX 2.1 objects and bundle export (07 §7.8).",
+    "name" : "STIX"
+  } ]
+}

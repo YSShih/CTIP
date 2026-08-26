@@ -6,6 +6,7 @@ import com.ctip.infrastructure.security.TenantContext;
 import com.ctip.interfaces.rest.dto.stats.SourceStatsDto;
 import com.ctip.interfaces.rest.dto.stats.StatsSummaryDto;
 import com.ctip.interfaces.rest.mapper.SourceDtoMapper;
+import com.ctip.interfaces.rest.openapi.StatsApi;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Dashboard 統計端點(docs/spec/09-api.md §9.1,匿名;統計口徑經統一可見度過濾)。 */
 @RestController
 @RequestMapping("/api/v1/stats")
-class StatsController {
+class StatsController implements StatsApi {
 
     private final StatsQueryService stats;
     private final TenantContext tenantContext;
@@ -26,8 +27,9 @@ class StatsController {
         this.sourceMapper = sourceMapper;
     }
 
+    @Override
     @GetMapping("/summary")
-    StatsSummaryDto summary() {
+    public StatsSummaryDto summary() {
         StatsPort.StatsSummary summary = stats.summary(tenantContext.visibility());
         return new StatsSummaryDto(
                 summary.totalActive(),
@@ -37,8 +39,9 @@ class StatsController {
                         .toList());
     }
 
+    @Override
     @GetMapping("/sources")
-    List<SourceStatsDto> sources() {
+    public List<SourceStatsDto> sources() {
         return stats.sources().stream().map(sourceMapper::toStatsDto).toList();
     }
 }

@@ -7,6 +7,7 @@ import com.ctip.interfaces.rest.dto.source.SourceDto;
 import com.ctip.interfaces.rest.dto.source.SourceStatusDto;
 import com.ctip.interfaces.rest.error.ApiException;
 import com.ctip.interfaces.rest.mapper.SourceDtoMapper;
+import com.ctip.interfaces.rest.openapi.SourceApi;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** 來源端點(docs/spec/09-api.md §9.1,匿名)。sources 表無租戶歸屬,不需 tenant 過濾。 */
 @RestController
 @RequestMapping("/api/v1/sources")
-class SourceController {
+class SourceController implements SourceApi {
 
     private final SourceQueryService sources;
     private final SourceDtoMapper mapper;
@@ -27,18 +28,21 @@ class SourceController {
         this.mapper = mapper;
     }
 
+    @Override
     @GetMapping
-    List<SourceDto> list() {
+    public List<SourceDto> list() {
         return sources.all().stream().map(mapper::toDto).toList();
     }
 
+    @Override
     @GetMapping("/{id}")
-    SourceDto byId(@PathVariable UUID id) {
+    public SourceDto byId(@PathVariable UUID id) {
         return mapper.toDto(source(id));
     }
 
+    @Override
     @GetMapping("/{id}/status")
-    SourceStatusDto status(@PathVariable UUID id) {
+    public SourceStatusDto status(@PathVariable UUID id) {
         return mapper.toStatusDto(source(id));
     }
 

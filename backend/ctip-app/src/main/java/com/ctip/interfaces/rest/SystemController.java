@@ -3,6 +3,7 @@ package com.ctip.interfaces.rest;
 import com.ctip.CtipApplication;
 import com.ctip.interfaces.rest.dto.system.HealthDto;
 import com.ctip.interfaces.rest.dto.system.VersionDto;
+import com.ctip.interfaces.rest.openapi.SystemApi;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,15 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1")
-class SystemController {
+class SystemController implements SystemApi {
 
+    @Override
     @GetMapping("/health")
-    HealthDto health() {
+    public HealthDto health() {
         return new HealthDto("UP");
     }
 
+    @Override
     @GetMapping("/version")
-    VersionDto version() {
+    public VersionDto version() {
         String implementation = CtipApplication.class.getPackage().getImplementationVersion();
         return new VersionDto("v1", implementation == null ? "dev" : implementation);
     }

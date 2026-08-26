@@ -17,6 +17,7 @@ import com.ctip.interfaces.rest.dto.ioc.LookupResponse;
 import com.ctip.interfaces.rest.dto.ioc.SearchRequest;
 import com.ctip.interfaces.rest.error.ApiException;
 import com.ctip.interfaces.rest.error.ErrorCode;
+import com.ctip.interfaces.rest.openapi.IocApi;
 import com.ctip.sdk.IocType;
 import com.ctip.sdk.Severity;
 import com.ctip.sdk.Tlp;
@@ -38,7 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/iocs")
-class IocController {
+class IocController implements IocApi {
 
     private static final int MAX_OFFSET = 10_000;
 
@@ -61,8 +62,9 @@ class IocController {
         this.api = properties.api();
     }
 
+    @Override
     @GetMapping
-    PageResponse<IocDto> list(IocListParams params) {
+    public PageResponse<IocDto> list(IocListParams params) {
         IndicatorFilter filter = new IndicatorFilter(
                 params.type(), params.severity(), params.status(), params.tlp(), params.includeExpiredOrDefault());
         int pageSize = clampLimit(params.limit());
@@ -80,18 +82,21 @@ class IocController {
                 query.list(filter, tenantContext.visibility(), after, pageSize), tenantContext.tenantId());
     }
 
+    @Override
     @GetMapping("/{id}")
-    IocDto byId(@PathVariable UUID id) {
+    public IocDto byId(@PathVariable UUID id) {
         return assembler.toDto(visibleIndicator(id), tenantContext.tenantId());
     }
 
+    @Override
     @GetMapping("/{id}/sources")
-    List<IocSourceDto> sources(@PathVariable UUID id) {
+    public List<IocSourceDto> sources(@PathVariable UUID id) {
         return assembler.toSourceDtos(visibleIndicator(id), tenantContext.tenantId());
     }
 
+    @Override
     @PostMapping("/search")
-    PageResponse<IocDto> search(@Valid @RequestBody SearchRequest request) {
+    public PageResponse<IocDto> search(@Valid @RequestBody SearchRequest request) {
         IndicatorFilter filter = new IndicatorFilter(
                 parseEnum(IocType.class, request.type(), "type"),
                 parseEnum(Severity.class, request.severity(), "severity"),
@@ -105,8 +110,9 @@ class IocController {
                 tenantContext.tenantId());
     }
 
+    @Override
     @PostMapping("/lookup")
-    LookupResponse lookup(@Valid @RequestBody LookupRequest request) {
+    public LookupResponse lookup(@Valid @RequestBody LookupRequest request) {
         if (request.values().size() > api.maxBatchLookup()) {
             throw new ApiException(
                     ErrorCode.PAYLOAD_TOO_LARGE, "Batch lookup exceeds limit of " + api.maxBatchLookup());
