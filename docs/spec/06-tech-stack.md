@@ -247,6 +247,11 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
 
 ---
 
+7. **spring-boot-maven-plugin 4.x:run mojo 的 `directories` 參數更名 `additionalClasspathElements`**
+   (2026-08-26 ADR 0010 實測補入):要把額外目錄(如 DevTools trigger file 的載體)掛進
+   `spring-boot:run` 的 classpath 時,沿用 3.1 以前的 `<directories>` **不報錯但靜默無效**;
+   4.x 必須用 `<additionalClasspathElements><additionalClasspathElement>…`(3.2.0 起)。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

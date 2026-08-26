@@ -4,3 +4,7 @@ spring:
     init:
       mode: always
       data-locations: classpath:db/seed/sample_data.sql
+  devtools:
+    restart:
+      # ADR 0010:只在 reload.sh 觸碰 trigger file 時重啟,host 端建置不再觸發(避免半寫入 classpath)
+      trigger-file: .reloadtrigger

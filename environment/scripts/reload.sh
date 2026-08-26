@@ -2,8 +2,9 @@
 # 熱替換(docs/spec/05-environment.md §5.11)。
 # 用法:./environment/scripts/reload.sh <service> <mvp|dev|staging|prod>
 #
-# backend:在容器內重新編譯,寫入被掛載的 target/classes;
-#         Spring DevTools 偵測 classpath 變更後自動重啟 application context。
+# backend:在容器內重新編譯,寫入被掛載的 target/classes,再觸碰 DevTools trigger file;
+#         restart 只由 trigger file 觸發(ADR 0010)——host 端 mvn 重建不再引發容器熱重啟,
+#         避免 DevTools 撞上半寫入的 classpath 使 app context 死亡。
 # frontend:Vite HMR 全自動,無需(也不應)手動 reload。
 
 set -euo pipefail
@@ -28,7 +29,10 @@ case "$SERVICE" in
   backend)
     info "在 backend 容器內重新編譯(離線模式)……"
     compose "$ENV_NAME" exec backend ./mvnw -o -q -pl ctip-app -am compile
-    ok "編譯完成;Spring DevTools 將偵測 classpath 變更並重啟 application context。"
+    # 編譯「成功後」才觸發 restart:DevTools 設 trigger-file(ADR 0010),
+    # 保證重啟時 classpath 是完整一致的
+    touch "${REPO_ROOT}/backend/ctip-app/.devtools/.reloadtrigger"
+    ok "編譯完成;已觸碰 trigger file,Spring DevTools 將重啟 application context。"
     ;;
   frontend)
     info "frontend 使用 Vite HMR:修改 .tsx 檔即自動生效,無需 reload。"

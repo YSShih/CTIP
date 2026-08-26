@@ -1,0 +1,1 @@
+# Spring DevTools trigger file(ADR 0010):reload.sh 編譯成功後 touch 本檔觸發重啟

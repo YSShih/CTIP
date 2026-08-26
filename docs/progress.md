@@ -564,3 +564,20 @@
   - openapi.json 為 committed 產物:後端 DTO/參數改動 → OpenApiCompletenessTest 重產 → commit →
     前端 `npm run api:generate` 並 git add(api:check 的 diff 是對 index 比)
   - 前端加 npm 相依後跑 `./environment/scripts/up.sh mvp` 會自動重預熱(lockfile 戳記守衛)
+
+---
+
+## 環境維護 — DevTools trigger file 根治(2026-08-26,M1 閘門之後)
+
+- **狀態**:done(使用者指示:根治「host 建置打死 dev 容器 app」問題)
+- **Commit**:(見 git log,message `Env: devtools trigger-file — host builds no longer restart dev container (ADR 0010)`)
+- **內容**:DevTools restart 改由 trigger file 觸發(`spring.devtools.restart.trigger-file`)——
+  mvp/dev yml 設定、`backend/ctip-app/.devtools/.reloadtrigger`(進版控,經
+  `additionalClasspathElements` 掛進 spring-boot:run classpath)、reload.sh 編譯成功後 touch。
+  host 端 `mvnw verify`/`clean` 不再引發容器熱重啟,半寫入 classpath 的死亡窗口消失。
+- **驗證**:M1-37 ✅(reload <10s);host compile(重寫全部共享 classes)與 host clean
+  (刪除全部 classes)皆 **0 重啟**、app 保持 UP、swagger 200
+- **地雷**:Boot 4 plugin 將 run mojo 的 `directories` 更名 `additionalClasspathElements`,
+  舊名**靜默無效**(已回寫 06 §6.3.6 第 7 條);ADR 0010、05 §5.11 引用區塊、§0.12 第 7 列
+- **給下一 session 的注意事項**:reload 契約 = reload.sh(編譯 + touch trigger);
+  直接在容器內手動 mvn compile 不會再觸發重啟,要生效請一律走 reload.sh

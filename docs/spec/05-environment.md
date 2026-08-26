@@ -702,8 +702,23 @@ Vite dev server 在容器內以 `--host 0.0.0.0` 執行，host port 與容器 po
 # 內部執行：
 #   docker compose exec backend ./mvnw -o -q -pl ctip-app -am compile
 #   → 寫入被掛載的 target/classes
-#   → Spring DevTools 偵測 classpath 變更並重啟 application context
+#   → touch backend/ctip-app/.devtools/.reloadtrigger
+#   → Spring DevTools 偵測 trigger file 變更並重啟 application context
 ```
+
+> **實作回饋修訂（2026-08-26，M1 閘門後；ADR 0010）— restart 只由 trigger file 觸發**
+> DevTools 預設「classpath 任何變更即重啟」在本專案是缺陷:dev 容器與 host 共享
+> `target/classes`,host 端 `mvnw verify`/`clean`(含 DoD 閘門自身)重寫 class 檔時,
+> DevTools 幾乎必然撞上**半寫入的 classpath** → context 啟動失敗、JVM 存活但 8080 無人聽、
+> 容器仍顯示 Up 且不自癒。修正:
+> 1. mvp/dev profile 設 `spring.devtools.restart.trigger-file: .reloadtrigger`;
+> 2. trigger file 位於 `backend/ctip-app/.devtools/`(進版控;刻意不放 target/ 或
+>    src/main/resources——兩者都會被 host 建置改到,又變成觸發源);
+> 3. ctip-app pom 以 spring-boot-maven-plugin 的 `additionalClasspathElements` 把
+>    `.devtools/` 掛進 spring-boot:run 的 classpath(⚠️ Boot 4 將 `directories` 參數
+>    更名,舊名靜默無效,見 06 §6.3.6 第 7 條);
+> 4. reload.sh 於編譯成功後 touch trigger → 重啟時 classpath 保證一致。
+> 實測:host 端 compile/clean 皆 **0 重啟**、app 保持 UP;reload.sh 重啟仍 <10 秒(M1-37)。
 
 DoD 判準改為：**「修改 Java 檔後執行 `reload.sh`，10 秒內新行為生效」**——可執行、可計時、必定準確。
 

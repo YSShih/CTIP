@@ -148,6 +148,15 @@
             此設定只影響 spring-boot:run(開發容器);production 走 java -jar,不受影響。
           -->
           <jvmArguments>-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005</jvmArguments>
+          <!--
+            DevTools trigger file 的載體目錄(ADR 0010):.devtools/ 加入 spring-boot:run 的
+            classpath,restart 只由 reload.sh 觸碰 .reloadtrigger 觸發——host 端 mvn 重建共享的
+            target/classes 不再引發容器內熱重啟(半寫入 classpath 曾使 app context 死亡)。
+            只影響 spring-boot:run(開發容器);production 走 java -jar,不受影響。
+          -->
+          <additionalClasspathElements>
+            <additionalClasspathElement>${project.basedir}/.devtools</additionalClasspathElement>
+          </additionalClasspathElements>
         </configuration>
       </plugin>
       <plugin>

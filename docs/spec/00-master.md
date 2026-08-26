@@ -346,6 +346,7 @@ Phase 12 的修訂**已註記進對應主題檔**；完整決策記錄見
 | 4 | `CORS_ALLOWED_ORIGINS` 只有屬性與啟動守衛，無 MVC 接線——瀏覽器跨源全擋 | 新增 `WebCorsConfig`（`/api/**`、GET/POST、expose `X-RateLimit-*`） | [05 §5.7](05-environment.md#57-spring-設定對應本版新增) |
 | 5 | `up.sh` frontend 預熱守衛只認 vite 存在，偵測不到 lockfile 漂移 | 改 `package-lock` 戳記比對（同 Phase 10 backend 守衛前例） | [05 §5.10](05-environment.md#510-腳本契約) |
 | 6 | springdoc：record query 參數缺 `@ParameterObject`、List 回應誤用單物件 `@Schema`——文件與行為不符 | 補 `@ParameterObject` 與 `@ArraySchema`，重產 openapi.json（破壞性檢查 PASS） | [09 §9.6](09-api.md#96-openapi--swagger) |
+| 7 | DevTools「classpath 變更即重啟」+ host/container 共享 target/classes：host 建置使容器 app 死於半寫入 classpath（閘門後根治，ADR 0010） | restart 改由 trigger file 觸發（`.devtools/.reloadtrigger` + reload.sh 編譯成功後 touch）；Boot 4 plugin `directories` 更名地雷回寫 06 | [05 §5.11](05-environment.md#511-hot-reload-契約本版修正)、[06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
 
 ---
 
