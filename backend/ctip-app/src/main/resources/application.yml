@@ -67,6 +67,11 @@ ctip:
   stix:
     # bundle 物件數上限(07 §7.8.5);M1 以 property 承載(預設取 FREE 方案值),Phase 14 移入 plans 表
     export-max-objects: ${STIX_EXPORT_MAX_OBJECTS:1000}
+  api:
+    # 匿名讀取配額(09 §9.3、10 §10.6);Phase 14 起依方案查 plans 表
+    default-page-size: ${API_DEFAULT_PAGE_SIZE:50}
+    max-page-size: ${API_MAX_PAGE_SIZE:50}
+    max-batch-lookup: ${API_MAX_BATCH_LOOKUP:20}
   data-quality:
     domain-allowlist: ${DOMAIN_ALLOWLIST:}
   bloom:
@@ -83,3 +88,8 @@ ctip:
     delivery-days: ${DELIVERY_RETENTION_DAYS:30}
     indicator-days: ${INDICATOR_RETENTION_DAYS:365}
     bloom-artifact-keep: ${BLOOM_ARTIFACT_KEEP:30}
+
+# traceId 進日誌(09 §9.4:錯誤回應的 traceId 必須與日誌可對應;TraceIdFilter 設定 MDC)
+logging:
+  pattern:
+    correlation: "[%X{traceId:-}] "

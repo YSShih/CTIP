@@ -112,6 +112,7 @@ class StartupValidatorTest {
                 new Ingestion(true, 500),
                 new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),
                 new CtipProperties.Normalization(false),
+                new CtipProperties.Api(50, 50, 20),
                 new CtipProperties.Stix(1000),
                 new CtipProperties.DataQuality(java.util.List.of()),
                 new Bloom(10_000_000, 0.001, 1_000_000, "0 0 4 * * *", "0 0 * * * *", 24),

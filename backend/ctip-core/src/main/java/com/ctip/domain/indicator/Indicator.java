@@ -168,9 +168,13 @@ public final class Indicator {
         return ownerTenantId.isPublic() && tlp.isNoStricterThan(maxTlp);
     }
 
-    /** I14:全來源皆 INTERNAL_ONLY 時,不得出現在非擁有租戶的任何回應中。 */
+    /**
+     * I14:全來源皆 INTERNAL_ONLY 時,不得出現在非擁有租戶的任何回應中。
+     * 擁有租戶豁免僅限非 public 租戶(§7.9 作用域修正的安全解讀):匿名綁 public tenant,
+     * 若 public 資料對「viewer == owner」豁免,再散布過濾對公開輸出將完全失效。
+     */
     public boolean canBeRedistributedTo(TenantId viewer) {
-        return ownerTenantId.equals(viewer) || hasRedistributableSource();
+        return (ownerTenantId.equals(viewer) && !ownerTenantId.isPublic()) || hasRedistributableSource();
     }
 
     /** Bloom 資格(L7):ACTIVE 且 CLEAR 且可再散布。 */

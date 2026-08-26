@@ -1,5 +1,6 @@
 package com.ctip.application.stix;
 
+import com.ctip.application.indicator.RedistributionFilter;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.indicator.IndicatorId;

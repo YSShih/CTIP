@@ -10,6 +10,7 @@ public record SourceSnapshot(
         SourceId id,
         SourceType sourceType,
         String displayName,
+        String homepageUrl,
         Tlp defaultTlp,
         RedistributionPolicy redistributionPolicy,
         Reputation reputation,

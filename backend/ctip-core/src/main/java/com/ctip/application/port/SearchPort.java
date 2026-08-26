@@ -1,5 +1,6 @@
 package com.ctip.application.port;
 
+import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.shared.Cursor;
 import com.ctip.domain.shared.CursorPage;
@@ -11,5 +12,6 @@ import com.ctip.domain.shared.Visibility;
  */
 public interface SearchPort {
 
-    CursorPage<Indicator> searchByValue(String term, Visibility visibility, Cursor after, int limit);
+    CursorPage<Indicator> searchByValue(
+            String term, IndicatorFilter filter, Visibility visibility, Cursor after, int limit);
 }

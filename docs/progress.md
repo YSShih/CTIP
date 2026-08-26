@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 8 完成,下一步 Phase 9 |
+| M1 — MVP | 1–12 | Phase 9 完成,下一步 Phase 10 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -378,3 +378,48 @@
 - **驗證**:`dod.sh full M3-24` ✅(曾抓到一個 anchor 筆誤:檢查器 slug 會丟棄底線,
   `stix_objects` 標題的 anchor 是 `#786-stixobjects-…`);純文件變更,無程式碼行為變更
 - **給下一 session 的注意事項**:規格內部連結若指向含底線的 code span 標題,anchor 要去掉底線
+
+---
+
+## Phase 9 — REST API + DTO/Mapper + 錯誤處理 + cursor 分頁
+
+- **狀態**:done(2026-08-26)
+- **執行單**:`docs/spec/phases/phase-09.md`
+- **Commit**:(見 git log,message `Phase 9: rest api + dto/mapper + error handling + cursor pagination`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='CursorPaginationIntegrationTest,IocSearchIntegrationTest,ErrorResponseTest,SecurityTest'`(逐字)✅ 28/28
+    (分頁測試連續翻頁至最後一頁、與 DB 同條件 id 集合比對無重複無遺漏;SecurityTest 含條號 1、2、3、7、9,
+    條號 3 以參數化涵蓋 M1 全部 tenant-scoped 讀取端點)
+  - `test -Dtest=ArchitectureTest`(逐字)✅ 9/9
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 135 + adapters 24 + app 84 = 256;
+    Spotless/Checkstyle/JaCoCo 全過)
+- **交付物**:
+  - Controller:System(health/version)、Ioc(list/detail/sources/search/lookup)、Stats(summary/sources)、
+    Source(list/{id}/{id}/status);StixController 改走統一錯誤
+  - core/application:IndicatorQueryService(含 lookup 正規化)、StatsQueryService、SourceQueryService、
+    IndicatorFilter、LookupResult;RedistributionFilter 定形於 application/indicator(規則 3/4/5);
+    port:StatsPort、IndicatorRepository 擴充(filter/offset/visibleByIdentity)、SearchPort 擴充、
+    SourceRepository.findAll;SourceSnapshot 補 homepageUrl(attribution 規則 4)
+  - app:CursorCodec(base64url {"ls","id"},INVALID_CURSOR)、dto/(全 record,依資源分子套件)、
+    interfaces/rest/mapper(IocDtoMapper/SourceDtoMapper)、IocResponseAssembler(輸出過濾第 4–5 步)、
+    ApiExceptionHandler + ErrorCode(16)+ ErrorResponse(traceId)、TraceIdFilter(W3C traceparent/MDC)、
+    SearchAdapter(PostgreSQL LIKE + 跳脫)、StatsAdapter(重用 TlpSpecifications 的 criteria 統計)、
+    IndicatorFilterSpecs(status 預設排除 EXPIRED)、RateLimitFilter 429 改統一錯誤結構、
+    CtipProperties.Api(匿名配額 property)
+- **偏離事項 / ADR**(`docs/architecture/decisions/0006-phase9-rest-api-decisions.md`,八項):
+  - ⚠️ **安全性缺陷修正**:§7.9「viewer == owner 免過濾」照字面會使匿名(綁 public tenant)成為
+    全部公開情資的「擁有租戶」,再散布過濾對公開輸出完全失效。修正:豁免僅限非 public 租戶,
+    domain I14 / TlpSpecifications / RedistributionFilter 三處同一規則。**建議回寫 07 §7.9**
+  - 其餘:規則 5 遮罩粒度、attribution homepage(SourceSnapshot 擴充)、匿名配額 property、
+    traceId 實作、lookup 未命中語意、offset 實作、IocListParams record 繫結
+- **給下一 session 的注意事項**(Phase 10 = OpenAPI/Swagger,治理規格 09 §9.6):
+  - springdoc-openapi **3.1.0**(3.x 才相容 Boot 4,不得 2.x);`-parameters` 旗標已在編譯設定?
+    請驗證(springdoc 參數名推導需要)
+  - 產生的 openapi.json 需 commit 至 docs/api/openapi.json + CI artifact + 破壞性變更比對(§9.6)
+  - prod 預設關 Swagger(SWAGGER_ENABLED 可開但須加保護);mvp/dev/staging 開
+  - 每個公開 API 要 summary/description/schemas/錯誤回應/認證需求/至少一個範例——
+    現有 controller 無 openapi 註解,Phase 10 補
+  - MockMvc 測試共用 default context 時注意匿名限流 bucket:各測試類用獨立 client IP
+    (setRemoteAddr)隔離;SecurityTest 條號 7 會吃滿 127.0.0.1 的 60/min
+  - 背景/新 shell 跑 maven:JAVA_HOME 可能沒設(會撿到系統 JDK 20 → `-proc:full` 炸),
+    一律 `export JAVA_HOME=/usr/local/opt/openjdk` 且 cwd 用絕對路徑

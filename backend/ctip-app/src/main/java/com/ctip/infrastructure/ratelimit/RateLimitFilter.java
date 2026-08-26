@@ -62,7 +62,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
         response.setStatus(429);
         response.setHeader("Retry-After", Long.toString(retryAfter));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write("{\"error\":\"rate_limit_exceeded\",\"retryAfterSeconds\":" + retryAfter + "}");
+        // 統一錯誤結構(09 §9.4);filter 在 MVC 之前,手工組 JSON(欄位皆無需跳脫的受控值)
+        response.getWriter()
+                .write("{\"timestamp\":\"" + clock.now() + "\",\"status\":429,\"code\":\"RATE_LIMIT_EXCEEDED\","
+                        + "\"message\":\"Rate limit exceeded\",\"path\":\"" + request.getRequestURI() + "\","
+                        + "\"traceId\":" + jsonStringOrNull(org.slf4j.MDC.get("traceId"))
+                        + ",\"details\":[]}");
+    }
+
+    private static String jsonStringOrNull(String value) {
+        return value == null ? "null" : "\"" + value + "\"";
     }
 
     /** 匿名 IP 正規化(§10.7):IPv4 取完整位址;IPv6 取 /64 前綴,避免以 /64 內位址繞過。 */

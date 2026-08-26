@@ -4,6 +4,8 @@ import static com.ctip.testing.IndicatorTestBuilder.DEMO_TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ctip.application.indicator.IndicatorFilter;
+import com.ctip.application.indicator.RedistributionFilter;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.indicator.Indicator;
@@ -104,8 +106,21 @@ class StixExportServiceTest {
             }
 
             @Override
-            public CursorPage<Indicator> findVisible(Visibility visibility, Cursor after, int limit) {
+            public CursorPage<Indicator> findVisible(
+                    Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
                 return CursorPage.lastPage(visible);
+            }
+
+            @Override
+            public Optional<Indicator> findVisibleByIdentity(
+                    IocType type, String normalizedValue, Visibility visibility) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<Indicator> findVisibleOffset(
+                    Visibility visibility, IndicatorFilter filter, int offset, int limit) {
+                return List.of();
             }
 
             @Override

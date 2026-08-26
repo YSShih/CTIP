@@ -3,6 +3,8 @@ package com.ctip.application.stix;
 import static com.ctip.testing.IndicatorTestBuilder.DEMO_TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ctip.application.indicator.IndicatorFilter;
+import com.ctip.application.indicator.RedistributionFilter;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.indicator.Indicator;
@@ -56,9 +58,9 @@ class StixQueryServiceTest {
                 IndicatorTestBuilder.activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.INTERNAL_ONLY);
         StixQueryService service = service(indicator);
 
-        // 匿名 viewer = public tenant = owner → 可見(§7.9 作用域修正)
+        // 匿名雖綁 public tenant,仍屬公開輸出,不得豁免(§7.9 作用域修正的安全解讀;ADR 0006)
         assertThat(service.findIndicatorContent("indicator--" + indicator.id().value(), Visibility.anonymous()))
-                .isPresent();
+                .isEmpty();
         // 非擁有租戶 → I14 隱藏
         assertThat(service.findIndicatorContent(
                         "indicator--" + indicator.id().value(), Visibility.authenticated(DEMO_TENANT)))
@@ -98,8 +100,19 @@ class StixQueryServiceTest {
         }
 
         @Override
-        public CursorPage<Indicator> findVisible(Visibility visibility, Cursor after, int limit) {
+        public CursorPage<Indicator> findVisible(
+                Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
             return CursorPage.lastPage(List.of());
+        }
+
+        @Override
+        public Optional<Indicator> findVisibleByIdentity(IocType type, String normalizedValue, Visibility visibility) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
+            return List.of();
         }
 
         @Override

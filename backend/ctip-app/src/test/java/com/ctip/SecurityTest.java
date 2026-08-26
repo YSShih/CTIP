@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SourceRepository;
 import com.ctip.application.port.TenantRepository;
@@ -34,6 +35,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
@@ -90,7 +93,9 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         assertThat(indicators.findVisibleById(PUBLIC_GREEN, anonymous)).isEmpty();
         assertThat(indicators.findVisibleById(B_AMBER, anonymous)).isEmpty();
 
-        List<Indicator> page = indicators.findVisible(anonymous, null, 5000).items();
+        List<Indicator> page = indicators
+                .findVisible(anonymous, IndicatorFilter.none(), null, 5000)
+                .items();
         assertThat(page).isNotEmpty();
         assertThat(page).allSatisfy(i -> {
             assertThat(i.ownerTenantId()).isEqualTo(TenantId.PUBLIC);
@@ -105,7 +110,9 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         assertThat(indicators.findVisibleById(PUBLIC_GREEN, demoView)).isPresent();
         assertThat(indicators.findVisibleById(B_AMBER, demoView)).isEmpty();
 
-        List<Indicator> page = indicators.findVisible(demoView, null, 5000).items();
+        List<Indicator> page = indicators
+                .findVisible(demoView, IndicatorFilter.none(), null, 5000)
+                .items();
         assertThat(page)
                 .allSatisfy(i -> assertThat(i.ownerTenantId().equals(DEMO)
                                 || i.ownerTenantId().isPublic())
@@ -116,7 +123,9 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     void security3_crossTenantAccessYieldsNotFound() {
         Visibility tenantBView = Visibility.authenticated(TENANT_B);
         assertThat(indicators.findVisibleById(DEMO_INTERNAL_ONLY, tenantBView)).isEmpty();
-        assertThat(indicators.findVisible(tenantBView, null, 5000).items())
+        assertThat(indicators
+                        .findVisible(tenantBView, IndicatorFilter.none(), null, 5000)
+                        .items())
                 .noneMatch(i -> i.ownerTenantId().equals(DEMO));
         // 擁有租戶自己查得到(對照組)
         assertThat(indicators.findVisibleById(B_AMBER, tenantBView)).isPresent();
@@ -167,6 +176,41 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
 
     private static IndicatorId fixedId(String suffix) {
         return new IndicatorId(UUID.fromString("00000000-0000-0000-0000-0000000000" + suffix));
+    }
+
+    /** 條號 1(端點層):匿名經 HTTP 只拿得到 public CLEAR;GREEN 一律 404。 */
+    @Test
+    void security1_anonymousEndpointServesOnlyPublicClear() throws Exception {
+        mvc.perform(asTestIp(get("/api/v1/iocs/" + PUBLIC_CLEAR.value()))).andExpect(status().isOk());
+        mvc.perform(asTestIp(get("/api/v1/iocs/" + PUBLIC_GREEN.value()))).andExpect(status().isNotFound());
+    }
+
+    /**
+     * 條號 3(端點層):跨租戶資源於 M1 全部 tenant-scoped 讀取端點一律 404,不得 403
+     * (docs/spec/14-testing.md §14.4:以參數化涵蓋端點清單,不可只測代表)。
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/v1/iocs/{id}", "/api/v1/iocs/{id}/sources", "/api/v1/stix/indicator--{id}"})
+    void security3_crossTenantEndpointsReturn404NotForbidden(String template) throws Exception {
+        String url = template.replace("{id}", B_AMBER.value().toString());
+        mvc.perform(asTestIp(get(url))).andExpect(status().isNotFound());
+    }
+
+    /** 條號 9(端點層):INTERNAL_ONLY(demo 擁有)對匿名於任何端點一律 404。 */
+    @Test
+    void security9_internalOnlyIsNotFoundOverEndpoints() throws Exception {
+        mvc.perform(asTestIp(get("/api/v1/iocs/" + DEMO_INTERNAL_ONLY.value()))).andExpect(status().isNotFound());
+        mvc.perform(asTestIp(get("/api/v1/iocs/" + DEMO_INTERNAL_ONLY.value() + "/sources")))
+                .andExpect(status().isNotFound());
+    }
+
+    /** 端點層測試用獨立 client IP,避免與條號 7 共用匿名限流 bucket。 */
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder asTestIp(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder) {
+        return builder.with(req -> {
+            req.setRemoteAddr("203.0.113.104");
+            return req;
+        });
     }
 
     /** 條號 7:超出限流回 429,且帶 X-RateLimit-* 與 Retry-After(mvp 預設匿名 60/min)。 */

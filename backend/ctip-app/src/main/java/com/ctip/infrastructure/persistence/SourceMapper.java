@@ -29,6 +29,7 @@ interface SourceMapper {
                 new SourceId(e.id),
                 SourceType.valueOf(e.sourceType),
                 e.displayName,
+                e.homepageUrl,
                 Tlp.valueOf(e.defaultTlp),
                 RedistributionPolicy.valueOf(e.redistributionPolicy),
                 new Reputation(e.reputation),

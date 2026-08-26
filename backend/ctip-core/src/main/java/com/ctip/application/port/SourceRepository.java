@@ -16,5 +16,8 @@ public interface SourceRepository {
     /** 排程掃描對象:enabled 且 syncable 的來源。 */
     List<Source> findEnabledSyncable();
 
+    /** 全部來源(sources 端點與 attribution 名稱查表;M1 來源數固定為 4)。 */
+    List<Source> findAll();
+
     Source save(Source source);
 }

@@ -1,5 +1,6 @@
 package com.ctip.testing;
 
+import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
@@ -39,12 +40,28 @@ public final class InMemoryIndicatorRepository implements IndicatorRepository {
     }
 
     @Override
-    public CursorPage<Indicator> findVisible(Visibility visibility, Cursor after, int limit) {
+    public Optional<Indicator> findVisibleByIdentity(IocType type, String normalizedValue, Visibility visibility) {
+        return store.values().stream()
+                .filter(i -> i.value().type() == type
+                        && i.value().normalized().equals(normalizedValue)
+                        && i.isVisibleTo(visibility.maxPublicTlp(), visibility.viewerTenantId()))
+                .findFirst();
+    }
+
+    @Override
+    public CursorPage<Indicator> findVisible(Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
         List<Indicator> all = store.values().stream()
                 .filter(i -> i.isVisibleTo(visibility.maxPublicTlp(), visibility.viewerTenantId()))
                 .limit(limit)
                 .toList();
         return new CursorPage<>(all, null, false);
+    }
+
+    @Override
+    public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
+        return findVisible(visibility, filter, null, offset + limit).items().stream()
+                .skip(offset)
+                .toList();
     }
 
     @Override

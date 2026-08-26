@@ -47,6 +47,12 @@ public class IngestionPipelineConfig {
         return new Repositories(indicators, sources, stixObjects);
     }
 
+    /** 查詢層(lookup 的推斷+正規化)共用;pipeline 因 bean 方法參數上限另行內聯建構(組態相同)。 */
+    @Bean
+    IocNormalizers iocNormalizers(CtipProperties properties) {
+        return new IocNormalizers(properties.normalization().stripWww());
+    }
+
     @Bean
     IngestionSettings ingestionSettings(CtipProperties properties) {
         return new IngestionSettings(

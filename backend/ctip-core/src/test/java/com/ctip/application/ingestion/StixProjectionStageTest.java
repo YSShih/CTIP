@@ -129,6 +129,7 @@ class StixProjectionStageTest {
                         id,
                         SourceType.MOCK_OPENPHISH,
                         "Mock Source " + id.value(),
+                        "https://mock.example.org",
                         Tlp.CLEAR,
                         RedistributionPolicy.PUBLIC_REDISTRIBUTABLE,
                         new Reputation(70),
@@ -148,6 +149,11 @@ class StixProjectionStageTest {
 
             @Override
             public List<Source> findEnabledSyncable() {
+                return List.of();
+            }
+
+            @Override
+            public List<Source> findAll() {
                 return List.of();
             }
 

@@ -43,6 +43,12 @@ class SourceRepositoryAdapter implements SourceRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Source> findAll() {
+        return jpa.findAll().stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public Source save(Source source) {
         SourceEntity entity = jpa.findById(source.id().value())
                 .orElseThrow(() -> new IllegalStateException("來源不存在,無法更新:" + source.id()));

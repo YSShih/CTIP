@@ -25,6 +25,7 @@ public record CtipProperties(
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
         @NotNull @Valid Normalization normalization,
+        @NotNull @Valid Api api,
         @NotNull @Valid Stix stix,
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
@@ -75,6 +76,15 @@ public record CtipProperties(
 
     /** bundle 匯出上限(07 §7.8.5);M1 property 承載,Phase 14 移入 plans 表。 */
     public record Stix(@Positive int exportMaxObjects) {}
+
+    /**
+     * API 讀取配額(09 §9.3、10 §10.6 匿名列):M1 只有匿名身分,以 property 預設承載
+     * (分頁上限 50、批次驗證上限 20);Phase 14 起依方案查 plans 表。
+     */
+    public record Api(
+            @Positive int defaultPageSize,
+            @Positive int maxPageSize,
+            @Positive int maxBatchLookup) {}
 
     /** 良性網域 allowlist(§7.3:僅 DOMAIN、exact match;預設為空)。 */
     public record DataQuality(@NotNull java.util.List<String> domainAllowlist) {}

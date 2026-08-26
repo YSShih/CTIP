@@ -1,5 +1,7 @@
 package com.ctip.application.stix;
 
+import com.ctip.application.indicator.IndicatorFilter;
+import com.ctip.application.indicator.RedistributionFilter;
 import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.StixObjectPort;
@@ -73,7 +75,7 @@ public class StixExportService {
         List<Indicator> exportable = new ArrayList<>();
         Cursor after = null;
         while (exportable.size() <= settings.maxObjects()) {
-            CursorPage<Indicator> page = indicators.findVisible(visibility, after, PAGE_SIZE);
+            CursorPage<Indicator> page = indicators.findVisible(visibility, IndicatorFilter.none(), after, PAGE_SIZE);
             page.items().stream()
                     .filter(i -> redistribution.redistributableTo(i, visibility.viewerTenantId()))
                     .forEach(exportable::add);

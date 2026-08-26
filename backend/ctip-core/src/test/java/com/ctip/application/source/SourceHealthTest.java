@@ -205,6 +205,7 @@ class SourceHealthTest {
                 new SourceId(UUID.nameUUIDFromBytes(type.name().getBytes(java.nio.charset.StandardCharsets.UTF_8))),
                 type,
                 type.name(),
+                null,
                 Tlp.CLEAR,
                 RedistributionPolicy.ATTRIBUTION_REQUIRED,
                 new Reputation(70),

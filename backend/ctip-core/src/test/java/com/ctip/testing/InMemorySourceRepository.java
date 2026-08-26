@@ -40,6 +40,11 @@ public final class InMemorySourceRepository implements SourceRepository {
     }
 
     @Override
+    public List<Source> findAll() {
+        return List.copyOf(enabledSyncable);
+    }
+
+    @Override
     public Source save(Source source) {
         saved.add(source);
         return source;

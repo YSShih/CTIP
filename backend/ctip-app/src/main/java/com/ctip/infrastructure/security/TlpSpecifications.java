@@ -48,10 +48,14 @@ public final class TlpSpecifications {
                 cb.equal(root.get("ownerTenantId"), visibility.viewerTenantId().value()), publicBranch);
     }
 
-    /** I14 / 07 §7.9 規則 3:viewer == owner 免過濾;否則須存在非 INTERNAL_ONLY 的來源記錄。 */
+    /**
+     * I14 / 07 §7.9 規則 3:viewer == owner(非 public)免過濾;否則須存在非 INTERNAL_ONLY 的來源記錄。
+     * public tenant 無成員,匿名雖綁 public 仍屬「公開輸出」,不得豁免(與 domain I14 同一規則)。
+     */
     private static Predicate ownerOrRedistributable(
             Root<IndicatorEntity> root, CriteriaQuery<?> query, CriteriaBuilder cb, TenantId viewer) {
-        Predicate viewerIsOwner = cb.equal(root.get("ownerTenantId"), viewer.value());
+        Predicate viewerIsOwner =
+                viewer.isPublic() ? cb.disjunction() : cb.equal(root.get("ownerTenantId"), viewer.value());
         Subquery<UUID> redistributable = query.subquery(UUID.class);
         Root<IndicatorSourceEntity> record = redistributable.from(IndicatorSourceEntity.class);
         redistributable

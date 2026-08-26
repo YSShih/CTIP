@@ -132,6 +132,7 @@ public final class Source {
                 identity.id(),
                 identity.sourceType(),
                 identity.displayName(),
+                identity.homepageUrl(),
                 identity.defaultTlp(),
                 identity.redistributionPolicy(),
                 reputation,
