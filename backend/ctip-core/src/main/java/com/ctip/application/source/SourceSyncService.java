@@ -1,7 +1,7 @@
 package com.ctip.application.source;
 
 import com.ctip.application.ingestion.BatchOutcome;
-import com.ctip.application.ingestion.IngestionBatchProcessor;
+import com.ctip.application.ingestion.IngestionBatchExecutor;
 import com.ctip.application.ingestion.SourceContext;
 import com.ctip.application.port.AdapterRegistryPort;
 import com.ctip.application.port.ClockPort;
@@ -38,19 +38,19 @@ public class SourceSyncService {
 
     private final SourceRepository sources;
     private final AdapterRegistryPort adapters;
-    private final IngestionBatchProcessor batchProcessor;
+    private final IngestionBatchExecutor batchExecutor;
     private final SourceSyncRecorder recorder;
     private final ClockPort clock;
 
     public SourceSyncService(
             SourceRepository sources,
             AdapterRegistryPort adapters,
-            IngestionBatchProcessor batchProcessor,
+            IngestionBatchExecutor batchExecutor,
             SourceSyncRecorder recorder,
             ClockPort clock) {
         this.sources = sources;
         this.adapters = adapters;
-        this.batchProcessor = batchProcessor;
+        this.batchExecutor = batchExecutor;
         this.recorder = recorder;
         this.clock = clock;
     }
@@ -103,8 +103,8 @@ public class SourceSyncService {
         while (true) {
             totals.fetched += page.records().size();
             buffer.addAll(page.records());
-            while (buffer.size() >= batchProcessor.batchSize()) {
-                totals.add(batchProcessor.process(sourceContext, syncId, drain(buffer, batchProcessor.batchSize())));
+            while (buffer.size() >= batchExecutor.batchSize()) {
+                totals.add(batchExecutor.execute(sourceContext, syncId, drain(buffer, batchExecutor.batchSize())));
             }
             if (!page.hasMore() || pages >= MAX_PAGES_PER_RUN) {
                 break;
@@ -114,7 +114,7 @@ public class SourceSyncService {
             pages++;
         }
         if (!buffer.isEmpty()) {
-            totals.add(batchProcessor.process(sourceContext, syncId, drain(buffer, buffer.size())));
+            totals.add(batchExecutor.execute(sourceContext, syncId, drain(buffer, buffer.size())));
         }
         return page.hasMore() ? page.nextCursor() : null;
     }

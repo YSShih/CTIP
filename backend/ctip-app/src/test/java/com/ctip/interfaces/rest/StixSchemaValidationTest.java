@@ -1,0 +1,163 @@
+package com.ctip.interfaces.rest;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.ctip.application.stix.StixBundle;
+import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
+import com.ctip.domain.indicator.Indicator;
+import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.indicator.IndicatorSource;
+import com.ctip.domain.indicator.IndicatorSourceSnapshot;
+import com.ctip.domain.indicator.IocValue;
+import com.ctip.domain.indicator.NewIndicatorCommand;
+import com.ctip.domain.indicator.SourceRecordStatus;
+import com.ctip.domain.source.Reputation;
+import com.ctip.domain.source.SourceId;
+import com.ctip.domain.stix.StixIndicatorProjector;
+import com.ctip.domain.stix.StixProjection;
+import com.ctip.domain.stix.StixTlpMarkings;
+import com.ctip.domain.tenant.TenantId;
+import com.ctip.sdk.Confidence;
+import com.ctip.sdk.IocHashType;
+import com.ctip.sdk.IocType;
+import com.ctip.sdk.RedistributionPolicy;
+import com.ctip.sdk.Severity;
+import com.ctip.sdk.Tlp;
+import com.networknt.schema.InputFormat;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SchemaLocation;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * 以 STIX 2.1 JSON Schema 驗證實際產出(M1-29;docs/spec/07-domain-intel.md §7.8.6):
+ * schema 為 vendored 的 OASIS cti-stix2-json-schemas(src/test/resources/stix-schemas,離線解析),
+ * 產出走真實路徑——domain 投影 + 與 adapter 相同的 Jackson 序列化、bundle 走 StixBundleWriter。
+ */
+@Tag("unit")
+class StixSchemaValidationTest {
+
+    private static final String SCHEMA_BASE =
+            "http://raw.githubusercontent.com/oasis-open/cti-stix2-json-schemas/stix2.1/schemas";
+    private static final Instant T0 = Instant.parse("2026-08-01T00:00:00Z");
+    private static final SourceId SOURCE_A = new SourceId(UUID.fromString("00000000-0000-0000-0000-0000000000a1"));
+    private static final SourceId SOURCE_B = new SourceId(UUID.fromString("00000000-0000-0000-0000-0000000000b2"));
+    private static final TenantId PUBLIC = TenantId.PUBLIC;
+
+    private final JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(
+            SpecVersion.VersionFlag.V202012,
+            builder -> builder.schemaMappers(mappers -> mappers.mapPrefix(SCHEMA_BASE, "classpath:stix-schemas")));
+    private final ObjectMapper objectMapper = JsonMapper.builder().build();
+
+    @Test
+    void multiSourceIndicatorProjectionValidatesAgainstIndicatorSchema() {
+        Indicator indicator = domainIndicator();
+        String json = contentJson(indicator);
+        assertThat(validate("/sdos/indicator.json", json)).isEmpty();
+    }
+
+    @Test
+    void fileHashProjectionWithoutValidUntilValidates() {
+        Indicator indicator = fileHashIndicator();
+        String json = contentJson(indicator);
+        assertThat(json).doesNotContain("valid_until");
+        assertThat(validate("/sdos/indicator.json", json)).isEmpty();
+    }
+
+    @Test
+    void revokedIndicatorProjectionValidates() {
+        Indicator indicator = domainIndicator();
+        indicator.revoke(SOURCE_B, new Reputation(90));
+        String json = contentJson(indicator);
+        assertThat(json).contains("\"revoked\":true");
+        assertThat(validate("/sdos/indicator.json", json)).isEmpty();
+    }
+
+    @Test
+    void allFiveTlpMarkingsValidateAgainstMarkingDefinitionSchema() {
+        for (Tlp tlp : Tlp.values()) {
+            String json = objectMapper.writeValueAsString(StixTlpMarkings.marking(tlp));
+            assertThat(validate("/common/marking-definition.json", json))
+                    .as("TLP %s", tlp)
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void exportedBundleValidatesAgainstBundleSchema() {
+        StixBundleWriter writer = new StixBundleWriter(objectMapper);
+        StixBundle bundle = new StixBundle(
+                "bundle--" + UUID.fromString("3c9d8e7f-6b2a-4d5e-a1b2-c3d4e5f60718"),
+                List.of(StixTlpMarkings.marking(Tlp.CLEAR), StixTlpMarkings.marking(Tlp.GREEN)),
+                List.of(contentJson(domainIndicator()), contentJson(fileHashIndicator())));
+        assertThat(validate("/common/bundle.json", writer.toJson(bundle))).isEmpty();
+    }
+
+    private Set<ValidationMessage> validate(String schemaPath, String json) {
+        JsonSchema schema = schemaFactory.getSchema(SchemaLocation.of(SCHEMA_BASE + schemaPath));
+        return schema.validate(json, InputFormat.JSON);
+    }
+
+    /** 與 StixObjectAdapter 相同的序列化路徑(writeValueAsString of projection content)。 */
+    private String contentJson(Indicator indicator) {
+        StixProjection projection = StixIndicatorProjector.project(
+                indicator.snapshot(),
+                Map.of(SOURCE_A, "OpenPhish (Mock)", SOURCE_B, "AlienVault OTX (Mock)"),
+                T0,
+                T0.plusSeconds(3600));
+        return objectMapper.writeValueAsString(projection.content());
+    }
+
+    private static Indicator domainIndicator() {
+        IocValue value = new IocValue(IocType.DOMAIN, null, "evil.example.com", "evil.example.com");
+        Indicator indicator = Indicator.create(
+                new NewIndicatorCommand(
+                        new IndicatorId(UUID.fromString("1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e")),
+                        PUBLIC,
+                        value,
+                        report(SOURCE_A, Tlp.CLEAR, Set.of("phishing", "botnet")),
+                        new Reputation(70)),
+                new Sha256FingerprintStrategy());
+        indicator.mergeFrom(new IndicatorSource(report(SOURCE_B, Tlp.GREEN, Set.of())), new Reputation(60));
+        return indicator;
+    }
+
+    private static Indicator fileHashIndicator() {
+        String sha256 = "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae";
+        IocValue value = new IocValue(IocType.FILE_HASH, IocHashType.SHA256, sha256, sha256);
+        return Indicator.create(
+                new NewIndicatorCommand(
+                        new IndicatorId(UUID.fromString("2b7e1a9c-55d4-4a3b-9f0e-6c5d4b3a2f1e")),
+                        PUBLIC,
+                        value,
+                        report(SOURCE_A, Tlp.CLEAR, Set.of()),
+                        new Reputation(70)),
+                new Sha256FingerprintStrategy());
+    }
+
+    private static IndicatorSourceSnapshot report(SourceId sourceId, Tlp tlp, Set<String> tags) {
+        return new IndicatorSourceSnapshot(
+                sourceId,
+                "evil.example.com",
+                Confidence.of(80),
+                Severity.HIGH,
+                tlp,
+                T0,
+                T0,
+                null,
+                RedistributionPolicy.PUBLIC_REDISTRIBUTABLE,
+                1,
+                SourceRecordStatus.ACTIVE,
+                tags);
+    }
+}

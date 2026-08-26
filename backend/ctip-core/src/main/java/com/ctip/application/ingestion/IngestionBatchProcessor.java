@@ -1,7 +1,9 @@
 package com.ctip.application.ingestion;
 
 import com.ctip.application.port.RejectionLogPort;
+import com.ctip.domain.stix.StixProjection;
 import com.ctip.sdk.RawThreatRecord;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -38,6 +40,7 @@ public class IngestionBatchProcessor {
     @Transactional
     public BatchOutcome process(SourceContext source, UUID sourceSyncId, List<RawThreatRecord> batch) {
         BatchState state = new BatchState(sourceSyncId, null);
+        List<StixProjection> projections = new ArrayList<>();
         int accepted = 0;
         int rejected = 0;
         int merged = 0;
@@ -63,8 +66,11 @@ public class IngestionBatchProcessor {
                 if (context.merged()) {
                     merged++;
                 }
+                if (context.stixProjection() != null) {
+                    projections.add(context.stixProjection());
+                }
             }
         }
-        return new BatchOutcome(accepted, rejected, merged);
+        return new BatchOutcome(accepted, rejected, merged, List.copyOf(projections));
     }
 }

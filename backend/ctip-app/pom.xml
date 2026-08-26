@@ -87,6 +87,13 @@
       <optional>true</optional>
     </dependency>
 
+    <!-- STIX 2.1 JSON Schema 驗證(StixSchemaValidationTest;僅測試,ADR 0005) -->
+    <dependency>
+      <groupId>com.networknt</groupId>
+      <artifactId>json-schema-validator</artifactId>
+      <version>${json-schema-validator.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

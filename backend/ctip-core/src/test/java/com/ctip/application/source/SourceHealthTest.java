@@ -2,11 +2,13 @@ package com.ctip.application.source;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ctip.application.ingestion.IngestionBatchExecutor;
 import com.ctip.application.ingestion.IngestionBatchProcessor;
 import com.ctip.application.ingestion.IngestionPipeline;
 import com.ctip.application.ingestion.IngestionSettings;
 import com.ctip.application.port.AdapterRegistryPort;
 import com.ctip.application.port.SourceSyncLogPort;
+import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.domain.event.SourceEvents.SourceDegraded;
 import com.ctip.domain.event.SourceEvents.SourceFailed;
 import com.ctip.domain.event.SourceEvents.SourceRecovered;
@@ -151,8 +153,33 @@ class SourceHealthTest {
         AdapterRegistryPort registry = type -> Optional.ofNullable(adapters.get(type));
         IngestionBatchProcessor processor = new IngestionBatchProcessor(
                 new IngestionPipeline(List.of()), r -> {}, new IngestionSettings(true, 500));
+        IngestionBatchExecutor executor =
+                new IngestionBatchExecutor(processor, new StixProjectionWriter(new NoopStixObjects()));
         SourceSyncRecorder recorder = new SourceSyncRecorder(new NoopSyncLog(), healthService, events, clock);
-        return new SourceSyncService(sources, registry, processor, recorder, clock);
+        return new SourceSyncService(sources, registry, executor, recorder, clock);
+    }
+
+    /** 測試用 no-op stix_objects port(投影行為由 IngestionEndToEndTest 驗證)。 */
+    private static final class NoopStixObjects implements com.ctip.application.port.StixObjectPort {
+        @Override
+        public Optional<java.time.Instant> findCreated(String stixId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public void upsert(com.ctip.domain.stix.StixProjection projection) {
+            // no-op
+        }
+
+        @Override
+        public Optional<String> findContent(String stixId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Map<String, String> findContents(java.util.Collection<String> stixIds) {
+            return Map.of();
+        }
     }
 
     /** 測試用 no-op source_sync log(source_sync 表的行為由 IngestionEndToEndTest 驗證)。 */

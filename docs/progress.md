@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 7 完成,下一步 Phase 8 |
+| M1 — MVP | 1–12 | Phase 8 完成,下一步 Phase 9 |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -313,3 +313,49 @@
     + sdos/indicator.json(draft 2020-12、相對 $ref);版本表無 JSON Schema 驗證器,需加 test-scope
     networknt json-schema-validator 並以 ADR 回報(比照 Phase 6 IDNA 前例)
   - `stix_objects`/`stix_relationships` entity(V7 表)已存在於 persistence 套件(package-private,尚無 repository)
+
+---
+
+## Phase 8 — STIX 2.1 正規化與匯出
+
+- **狀態**:done(2026-08-26)
+- **執行單**:`docs/spec/phases/phase-08.md`
+- **Commit**:(見 git log,message `Phase 8: stix projection + tlp markings + pattern builder + bundle export`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='StixTlpMarkingsTest,StixPatternTest,StixSchemaValidationTest'`(逐字)✅ 14/14
+    (五個 marking UUID + extension-definition ID 字面斷言;六模板 + 四 hash 對應 + 跳脫;
+    產出以 vendored OASIS STIX 2.1 JSON Schema 離線驗證,含 bundle)
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 123 + adapters 24 + app 61;
+    含 ArchitectureTest 9/9、E2E 6/6;Spotless/Checkstyle/JaCoCo 全過)
+- **交付物**:
+  - core/domain/stix:StixTlpMarkings(五常數 + 擴充定義 ID,§7.8.4 原樣輸出)、StixPatternBuilder
+    (六模板 + hashing-algorithm-ov 對應)、StixPatternEscaper、StixIndicatorProjector(§7.8.2 對照表,
+    手寫 builder 唯一例外)、StixProjection
+  - core/application:StixProjectionStage(stage 8,只建構)、IngestionBatchExecutor + StixProjectionWriter
+    (交易提交後寫出,單筆失敗隔離)、StixQueryService、StixExportService(+Settings/Bundle/例外)、
+    RedistributionFilter(§7.9 規則 2 的單點,規則 3 委派 I14);port:StixObjectPort;
+    BatchOutcome/IngestionContext 擴充(承載投影)
+  - app:StixObjectAdapter + StixObjectJpaRepository(stix_id UPSERT、content 序列化)、
+    interfaces/rest/StixController(GET /{stixId} 匿名、GET /bundle 需 AUTHENTICATED)+ StixBundleWriter、
+    StixConfig、CtipProperties.Stix(`STIX_EXPORT_MAX_OBJECTS`,預設 1000)、pipeline List.of 插入 stage 8
+  - 測試:判準三類 + StixProjectionStage/Writer/Query/Export 單元測試;E2E 新增投影物化斷言
+    (每 indicator 一列、UPSERT 冪等、created ≤ modified)與端點行為(匿名 GREEN → 404、bundle → 403)
+- **偏離事項 / ADR**:八項決策見 `docs/architecture/decisions/0005-phase8-stix-projection-decisions.md`
+  (投影建構/寫出分離、created/modified 近似、marking 常數供應不落表、bundle 匿名 403、
+  匯出上限 property 承載、networknt json-schema-validator 1.5.6 test-scope + vendored schema(規則 6/17 回報)、
+  external_references 需附 description、RedistributionFilter 位置)
+- **給下一 session 的注意事項**(Phase 9 = REST API + DTO/Mapper + 錯誤處理 + cursor 分頁,治理規格 09):
+  - **Boot 4 是 Jackson 3**:套件 `tools.jackson.*`(非 com.fasterxml)、例外 unchecked;
+    只有 jackson-annotations 還是 2.x 座標(建議回寫 06 §6.3.6)
+  - 背景/新 shell 跑 maven 一律 `./backend/mvnw -f backend/pom.xml ...`(cwd 不保證在 backend;
+    本 phase 曾因此拿到空輸出差點誤判)
+  - interfaces/rest 已建立(StixController 是第一個 controller);Phase 9 的 @RestControllerAdvice
+    (ErrorResponse + traceId,M1-32)接手後,StixController 的 ResponseStatusException 與
+    PLAN_LIMIT_EXCEEDED handler 應改走統一錯誤結構
+  - RedistributionFilter 目前只有規則 3;Phase 9 的 DTO 映射要在同一類別補規則 4(attribution 欄位)
+    與規則 5(DERIVED_ONLY 遮罩),不得散落 controller
+  - StixQueryService 對 indicator 的查詢已內建可見度 + 再散布過濾;Phase 9 IOC 端點照同一模式
+    (repository findVisible* + RedistributionFilter),「查無」一律 404
+  - bundle 匯出上限計法 = marking + indicator 合計;Phase 14 把 StixExportSettings 換成 plans 查表
+  - vendored schema 在 ctip-app/src/test/resources/stix-schemas/(BSD-3-Clause,README 記出處);
+    升級 STIX schema 時整包替換

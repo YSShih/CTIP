@@ -10,12 +10,14 @@ import com.ctip.application.ingestion.NormalizeStage;
 import com.ctip.application.ingestion.ParseStage;
 import com.ctip.application.ingestion.PersistStage;
 import com.ctip.application.ingestion.ScoreStage;
+import com.ctip.application.ingestion.StixProjectionStage;
 import com.ctip.application.ingestion.ValidateStage;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.EventPublisherPort;
 import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SourceRepository;
+import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.fingerprint.FingerprintStrategy;
 import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
 import com.ctip.domain.indicator.RuleBasedThreatScorer;
@@ -36,12 +38,13 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class IngestionPipelineConfig {
 
-    /** pipeline 用到的兩個 repository port(參數數 ≤ 5 的組合;僅本組態使用)。 */
-    record Repositories(IndicatorRepository indicators, SourceRepository sources) {}
+    /** pipeline 用到的 out-port 組合(參數數 ≤ 5 的組合;僅本組態使用)。 */
+    record Repositories(IndicatorRepository indicators, SourceRepository sources, StixObjectPort stixObjects) {}
 
     @Bean
-    Repositories ingestionRepositories(IndicatorRepository indicators, SourceRepository sources) {
-        return new Repositories(indicators, sources);
+    Repositories ingestionRepositories(
+            IndicatorRepository indicators, SourceRepository sources, StixObjectPort stixObjects) {
+        return new Repositories(indicators, sources, stixObjects);
     }
 
     @Bean
@@ -70,7 +73,8 @@ public class IngestionPipelineConfig {
                 new DeduplicateStage(repositories.indicators()),
                 new MergeStage(idGenerator, fingerprint, repositories.sources()),
                 new ScoreStage(scorer),
-                // Phase 8 在此插入 StixProjectionStage(§8.2 stage 8;其執行單明列該 stage 為交付物)
+                // stage 8(§8.2):投影建構;寫出由 IngestionBatchExecutor 於交易提交後執行(ADR 0005)
+                new StixProjectionStage(repositories.sources(), repositories.stixObjects(), clock),
                 new PersistStage(repositories.indicators()),
                 new EventPublishStage(events)));
     }

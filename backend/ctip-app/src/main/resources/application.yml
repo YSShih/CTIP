@@ -64,6 +64,9 @@ ctip:
     ingestion-retry-cron: "${INGESTION_RETRY_CRON:0 */15 * * * *}"
   normalization:
     strip-www: ${NORMALIZATION_STRIP_WWW:false}
+  stix:
+    # bundle 物件數上限(07 §7.8.5);M1 以 property 承載(預設取 FREE 方案值),Phase 14 移入 plans 表
+    export-max-objects: ${STIX_EXPORT_MAX_OBJECTS:1000}
   data-quality:
     domain-allowlist: ${DOMAIN_ALLOWLIST:}
   bloom:

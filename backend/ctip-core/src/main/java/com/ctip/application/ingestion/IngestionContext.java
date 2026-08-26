@@ -3,6 +3,7 @@ package com.ctip.application.ingestion;
 import com.ctip.domain.fingerprint.Fingerprint;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IocValue;
+import com.ctip.domain.stix.StixProjection;
 import com.ctip.sdk.IocHashType;
 import com.ctip.sdk.IocType;
 import com.ctip.sdk.RawThreatRecord;
@@ -26,6 +27,7 @@ public final class IngestionContext {
     private Fingerprint fingerprint;
     private IocValue iocValue;
     private Indicator indicator;
+    private StixProjection stixProjection;
     private boolean merged;
     private RejectionReason rejectionReason;
     private String rejectionDetail;
@@ -119,6 +121,14 @@ public final class IngestionContext {
 
     public void indicator(Indicator indicator) {
         this.indicator = indicator;
+    }
+
+    public StixProjection stixProjection() {
+        return stixProjection;
+    }
+
+    public void stixProjection(StixProjection stixProjection) {
+        this.stixProjection = stixProjection;
     }
 
     public boolean merged() {

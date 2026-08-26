@@ -25,6 +25,7 @@ public record CtipProperties(
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
         @NotNull @Valid Normalization normalization,
+        @NotNull @Valid Stix stix,
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
         @NotNull @Valid Retention retention) {
@@ -71,6 +72,9 @@ public record CtipProperties(
 
     /** `www.` 前綴去除需可設定且預設不去除(docs/spec/07-domain-intel.md §7.2)。 */
     public record Normalization(boolean stripWww) {}
+
+    /** bundle 匯出上限(07 §7.8.5);M1 property 承載,Phase 14 移入 plans 表。 */
+    public record Stix(@Positive int exportMaxObjects) {}
 
     /** 良性網域 allowlist(§7.3:僅 DOMAIN、exact match;預設為空)。 */
     public record DataQuality(@NotNull java.util.List<String> domainAllowlist) {}
