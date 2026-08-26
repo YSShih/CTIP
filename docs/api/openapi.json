@@ -139,41 +139,6 @@
         },
         "type" : "object"
       },
-      "IocListParams" : {
-        "properties" : {
-          "cursor" : {
-            "type" : "string"
-          },
-          "includeExpired" : {
-            "type" : "boolean"
-          },
-          "limit" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "offset" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "severity" : {
-            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
-            "type" : "string"
-          },
-          "status" : {
-            "enum" : [ "ACTIVE", "EXPIRED", "REVOKED", "FALSE_POSITIVE" ],
-            "type" : "string"
-          },
-          "tlp" : {
-            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
-            "type" : "string"
-          },
-          "type" : {
-            "enum" : [ "IPV4", "IPV6", "DOMAIN", "URL", "FILE_HASH", "EMAIL" ],
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "IocSourceDto" : {
         "properties" : {
           "redistributionPolicy" : {
@@ -273,11 +238,27 @@
       },
       "SearchRequest" : {
         "properties" : {
+          "confidenceMax" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "confidenceMin" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "cursor" : {
             "type" : "string"
           },
           "includeExpired" : {
             "type" : "boolean"
+          },
+          "lastSeenFrom" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSeenTo" : {
+            "format" : "date-time",
+            "type" : "string"
           },
           "limit" : {
             "format" : "int32",
@@ -288,11 +269,31 @@
             "minLength" : 0,
             "type" : "string"
           },
+          "scoreMax" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "scoreMin" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
           "severity" : {
+            "type" : "string"
+          },
+          "sourceId" : {
+            "format" : "uuid",
             "type" : "string"
           },
           "status" : {
             "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "maxLength" : 128,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array"
           },
           "tlp" : {
             "type" : "string"
@@ -497,14 +498,135 @@
     },
     "/api/v1/iocs" : {
       "get" : {
-        "description" : "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp; EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。",
+        "description" : "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp, tags (repeat the parameter; all must match), sourceId, confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。",
         "operationId" : "list_1",
         "parameters" : [ {
           "in" : "query",
-          "name" : "params",
-          "required" : true,
+          "name" : "cursor",
+          "required" : false,
           "schema" : {
-            "$ref" : "#/components/schemas/IocListParams"
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "offset",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "IPV4", "IPV6", "DOMAIN", "URL", "FILE_HASH", "EMAIL" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "severity",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "ACTIVE", "EXPIRED", "REVOKED", "FALSE_POSITIVE" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tlp",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "includeExpired",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tags",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "sourceId",
+          "required" : false,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "confidenceMin",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "confidenceMax",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scoreMin",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "scoreMax",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lastSeenFrom",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "lastSeenTo",
+          "required" : false,
+          "schema" : {
+            "format" : "date-time",
+            "type" : "string"
           }
         } ],
         "responses" : {
@@ -674,14 +796,17 @@
     },
     "/api/v1/iocs/search" : {
       "post" : {
-        "description" : "Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint. M1 backs this with PostgreSQL; M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
+        "description" : "Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
         "operationId" : "search",
         "requestBody" : {
           "content" : {
             "application/json" : {
               "example" : {
+                "lastSeenFrom" : "2026-08-01T00:00:00Z",
                 "limit" : 5,
                 "query" : "ctip-sample",
+                "scoreMin" : 20,
+                "tags" : [ "phishing" ],
                 "type" : "DOMAIN"
               },
               "schema" : {
@@ -883,7 +1008,10 @@
                   "status" : "ACTIVE"
                 } ],
                 "schema" : {
-                  "$ref" : "#/components/schemas/IocSourceDto"
+                  "items" : {
+                    "$ref" : "#/components/schemas/IocSourceDto"
+                  },
+                  "type" : "array"
                 }
               }
             },
@@ -947,7 +1075,10 @@
                   "totalRecordsIngested" : 56
                 } ],
                 "schema" : {
-                  "$ref" : "#/components/schemas/SourceDto"
+                  "items" : {
+                    "$ref" : "#/components/schemas/SourceDto"
+                  },
+                  "type" : "array"
                 }
               }
             },
@@ -1140,7 +1271,10 @@
                   "status" : "ACTIVE"
                 } ],
                 "schema" : {
-                  "$ref" : "#/components/schemas/SourceStatsDto"
+                  "items" : {
+                    "$ref" : "#/components/schemas/SourceStatsDto"
+                  },
+                  "type" : "array"
                 }
               }
             },

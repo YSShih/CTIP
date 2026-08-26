@@ -4,6 +4,7 @@ import com.ctip.interfaces.rest.dto.common.ErrorResponse;
 import com.ctip.interfaces.rest.dto.source.SourceDto;
 import com.ctip.interfaces.rest.dto.source.SourceStatusDto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,7 +33,7 @@ public interface SourceApi {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = SourceDto.class),
+                            array = @ArraySchema(schema = @Schema(implementation = SourceDto.class)),
                             examples = @ExampleObject(value = "[" + SOURCE_EXAMPLE + "]")))
     @SecurityRequirements
     List<SourceDto> list();

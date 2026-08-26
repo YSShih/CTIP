@@ -9,6 +9,7 @@ import com.ctip.interfaces.rest.dto.ioc.LookupRequest;
 import com.ctip.interfaces.rest.dto.ioc.LookupResponse;
 import com.ctip.interfaces.rest.dto.ioc.SearchRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -37,9 +38,11 @@ public interface IocApi {
     @Operation(
             summary = "List IOCs (cursor pagination)",
             description = "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, "
-                    + "severity, status, tlp; EXPIRED entries are excluded unless includeExpired=true. "
-                    + "limit above the plan maximum is clamped, not rejected. offset mode is for page-number "
-                    + "UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。")
+                    + "severity, status, tlp, tags (repeat the parameter; all must match), sourceId, "
+                    + "confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are "
+                    + "excluded unless includeExpired=true. limit above the plan maximum is clamped, not "
+                    + "rejected. offset mode is for page-number UIs only and is capped at 10000. "
+                    + "認證:匿名(僅 public TLP:CLEAR)。")
     @ApiResponse(
             responseCode = "200",
             description = "One page of indicators",
@@ -85,7 +88,7 @@ public interface IocApi {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = IocSourceDto.class),
+                            array = @ArraySchema(schema = @Schema(implementation = IocSourceDto.class)),
                             examples =
                                     @ExampleObject(
                                             value = "[{\"sourceId\":\"6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e\","
@@ -104,16 +107,19 @@ public interface IocApi {
     @Operation(
             summary = "Search IOCs",
             description = "Substring search over the canonical (normalized) value with the same filters "
-                    + "and cursor pagination as the list endpoint. M1 backs this with PostgreSQL; "
-                    + "M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
+                    + "and cursor pagination as the list endpoint (type, severity, status, tlp, tags, "
+                    + "sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL "
+                    + "(pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
             requestBody =
                     @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             content =
                                     @Content(
                                             examples =
                                                     @ExampleObject(
-                                                            value =
-                                                                    "{\"query\":\"ctip-sample\",\"type\":\"DOMAIN\",\"limit\":5}"))))
+                                                            value = "{\"query\":\"ctip-sample\",\"type\":\"DOMAIN\","
+                                                                    + "\"tags\":[\"phishing\"],\"scoreMin\":20,"
+                                                                    + "\"lastSeenFrom\":\"2026-08-01T00:00:00Z\","
+                                                                    + "\"limit\":5}"))))
     @ApiResponse(
             responseCode = "200",
             description = "One page of matches",

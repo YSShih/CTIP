@@ -38,10 +38,16 @@ if [ "$(env_get "$ENV_FILE" BACKEND_BUILD_TARGET)" = "development" ]; then
   fi
 fi
 if [ "$(env_get "$ENV_FILE" FRONTEND_BUILD_TARGET)" = "development" ]; then
+  # 守衛以 lockfile 戳記驗證相依完整性:首次啟動與「package-lock 變更後」都會觸發重新預熱
+  # (2026-08-26 Phase 12 實測:只驗 vite 存在偵測不到相依漂移,加新套件後容器必然啟動失敗;
+  #  與 Phase 10 修正 backend go-offline 守衛同類問題)
   if ! compose "$ENV_NAME" run --rm --no-deps frontend \
-       sh -c 'test -x /workspace/node_modules/.bin/vite' >/dev/null 2>&1; then
-    info "首次啟動:在容器內安裝 frontend 相依(npm ci 至 node-modules volume)……"
-    compose "$ENV_NAME" run --rm --no-deps frontend npm ci
+       sh -c 'test -x /workspace/node_modules/.bin/vite \
+              && cmp -s /workspace/package-lock.json /workspace/node_modules/.ctip-lock-stamp' \
+       >/dev/null 2>&1; then
+    info "預熱 frontend 相依(首次啟動或 package-lock 變更;npm ci 至 node-modules volume)……"
+    compose "$ENV_NAME" run --rm --no-deps frontend \
+      sh -c 'npm ci && cp /workspace/package-lock.json /workspace/node_modules/.ctip-lock-stamp'
   fi
 fi
 info "啟動 ${ENV_NAME} 環境……"

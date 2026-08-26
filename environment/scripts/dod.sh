@@ -120,6 +120,9 @@ dod_prod_no_jdwp() { # M1-13
 }
 
 dod_up_mvp_three_services() { # M1-14
+  # gate 前段(M1-01 等)在 host 重建與 dev 容器共享的 target/classes,可能使容器內
+  # DevTools 撞上半寫入 classpath 而 app 死亡(容器仍 Up);先自我修復再驗 up.sh
+  dod_ensure_backend_up || true
   ./environment/scripts/up.sh mvp || return 1
   local n
   n="$(docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml \
@@ -152,6 +155,30 @@ dod_frontend_hmr() { # M1-36:寫入標記字串、輪詢 Vite dev server 內容
   return "$found"
 }
 
+# M1-33 前的自我修復:gate 的 M1-16~32 在 host 反覆 mvnw 重建「與 dev 容器共享」的
+# target/classes,容器內 DevTools 可能撞上半寫入的 classpath 而重啟失敗、app 死亡但容器仍
+# 顯示 Up(2026-08-26 Phase 12 實測)。stack 檢查前先確保 backend 活著,死了就 restart。
+dod_ensure_backend_up() {
+  local i
+  if curl -fsS http://localhost:8080/actuator/health 2>/dev/null | grep -E '"UP"' >/dev/null; then
+    return 0
+  fi
+  # 容器不存在(全新環境)→ 交給 up.sh 正常啟動,不在這裡空等
+  [ -n "$(docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml \
+        ps -q backend 2>/dev/null)" ] || return 0
+  echo "backend 無回應(gate 的 host 端重建干擾 dev 容器 classpath),restart 後重試……"
+  docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml \
+    restart backend >/dev/null 2>&1
+  for i in $(seq 1 30); do
+    if curl -fsS http://localhost:8080/actuator/health 2>/dev/null | grep -E '"UP"' >/dev/null; then
+      return 0
+    fi
+    sleep 5
+  done
+  echo "restart 後 150 秒內仍未恢復"
+  return 1
+}
+
 dod_backend_reload() { # M1-37:修改 Java 檔 → reload.sh → 10 秒內重啟生效
   local f t0 rc i
   f="$(find backend/ctip-app/src/main/java -name '*.java' 2>/dev/null | head -n 1)"
@@ -162,8 +189,10 @@ dod_backend_reload() { # M1-37:修改 Java 檔 → reload.sh → 10 秒內重啟
   rc=1
   if ./environment/scripts/reload.sh backend mvp; then
     for i in 1 2 3 4 5 6 7 8 9 10; do
+      # 不用 grep -q:_common.sh 的 pipefail 下,-q 提早退出使 docker logs 吃 SIGPIPE 回非零,
+      # 命中也被判失敗(2026-08-26 Phase 12 實測;logs 串流大、必觸發)
       if docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml \
-          logs --since "$t0" backend 2>/dev/null | grep -qE 'restartedMain|Started .+ in .+ seconds'; then
+          logs --since "$t0" backend 2>/dev/null | grep -E 'restartedMain|Started .+ in .+ seconds' >/dev/null; then
         rc=0; break
       fi
       sleep 1
@@ -314,7 +343,7 @@ gate_mvp() {
   check M1-30 "五個 TLP marking UUID 與 OASIS 定義完全相符" "${MVNT}StixTlpMarkingsTest"
   check M1-31 "六種 IocType 的 pattern 模板與四種 hash 演算法對應正確" "${MVNT}StixPatternTest"
   check M1-32 "錯誤回應符合統一結構,含 traceId" "${MVNT}ErrorResponseTest"
-  check M1-33 "Swagger UI 可開啟" "curl -fsS http://localhost:8080/swagger-ui/index.html >/dev/null"
+  check M1-33 "Swagger UI 可開啟" "dod_ensure_backend_up && curl -fsS http://localhost:8080/swagger-ui/index.html >/dev/null"
   check M1-34 "所有端點皆有 summary、response schema 與至少一個範例" "${MVNT}OpenApiCompletenessTest"
   check M1-35 "前端 IOC 搜尋頁能查到後端資料,四種狀態皆呈現" "cd frontend && npm run test -- IocSearchPage"
   check M1-36 "前端 HMR 生效(修改 tsx 後 5 秒內更新)" dod_frontend_hmr

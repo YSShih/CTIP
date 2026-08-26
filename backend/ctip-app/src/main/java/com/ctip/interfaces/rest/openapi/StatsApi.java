@@ -3,6 +3,7 @@ package com.ctip.interfaces.rest.openapi;
 import com.ctip.interfaces.rest.dto.stats.SourceStatsDto;
 import com.ctip.interfaces.rest.dto.stats.StatsSummaryDto;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -45,7 +46,7 @@ public interface StatsApi {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = SourceStatsDto.class),
+                            array = @ArraySchema(schema = @Schema(implementation = SourceStatsDto.class)),
                             examples =
                                     @ExampleObject(
                                             value = "[{\"sourceId\":\"6f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e\","

@@ -15,20 +15,20 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * M1 的 PostgreSQL 搜尋(docs/spec/13-platform-ops.md §13.7:M2 换 Elasticsearch + 降級,
+ * M1 的 PostgreSQL 搜尋(docs/spec/13-platform-ops.md §13.7 的 PostgresSearchAdapter;M2 換 Elasticsearch + 降級,
  * 同一 port)。normalized_value 子字串比對(pg_trgm 索引輔助),可見度與過濾條件
  * 與清單查詢共用同一套 Specification。
  */
 @Component
 @Transactional(readOnly = true)
-class SearchAdapter implements SearchPort {
+class PostgresSearchAdapter implements SearchPort {
 
     private static final Sort CURSOR_SORT = Sort.by(Sort.Order.desc("lastSeen"), Sort.Order.desc("id"));
 
     private final IndicatorJpaRepository jpa;
     private final IndicatorMapper mapper;
 
-    SearchAdapter(IndicatorJpaRepository jpa, IndicatorMapper mapper) {
+    PostgresSearchAdapter(IndicatorJpaRepository jpa, IndicatorMapper mapper) {
         this.jpa = jpa;
         this.mapper = mapper;
     }

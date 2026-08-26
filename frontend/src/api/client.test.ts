@@ -9,9 +9,9 @@ afterEach(() => setAuthTokenProvider(() => null));
 describe('apiGet', () => {
   it('returns parsed JSON on 200', async () => {
     const page = await apiGet('/api/v1/iocs', {
-      query: { params: { type: 'DOMAIN', limit: 20 } },
+      query: { type: 'DOMAIN', limit: 20 },
     });
-    expect(page.items).toHaveLength(1);
+    expect(page.items).toHaveLength(2);
     expect((page.items as (typeof sampleIoc)[])[0].value).toBe(sampleIoc.value);
   });
 
@@ -23,7 +23,7 @@ describe('apiGet', () => {
         return HttpResponse.json({ items: [], hasMore: false });
       }),
     );
-    await apiGet('/api/v1/iocs', { query: { params: { type: 'DOMAIN', limit: 20 } } });
+    await apiGet('/api/v1/iocs', { query: { type: 'DOMAIN', limit: 20 } });
     const url = new URL(capturedUrl);
     expect(url.searchParams.get('type')).toBe('DOMAIN');
     expect(url.searchParams.get('limit')).toBe('20');
@@ -76,7 +76,7 @@ describe('apiGet', () => {
         return HttpResponse.json({ items: [], hasMore: false });
       }),
     );
-    await apiGet('/api/v1/iocs', { query: { params: { type: undefined, cursor: '' } } });
+    await apiGet('/api/v1/iocs', { query: { type: undefined, cursor: '' } });
     expect(new URL(capturedUrl).search).toBe('');
   });
 });

@@ -75,6 +75,53 @@ class IocSearchIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
+    void listFiltersByTagsScoreAndTimeRange() throws Exception {
+        // tags 為全部包含(@>,GIN):sample+phishing 命中 i%3==0 的樣本
+        JsonNode page = getJson("/api/v1/iocs?tags=sample&tags=phishing&scoreMin=40&scoreMax=90&limit=50");
+        assertThat(page.get("items").size()).isGreaterThan(0);
+        page.get("items").forEach(item -> {
+            List<String> tags = new ArrayList<>();
+            item.get("tags").forEach(tag -> tags.add(tag.asString()));
+            assertThat(tags).contains("sample", "phishing");
+            assertThat(item.get("score").asInt()).isBetween(40, 90);
+        });
+
+        // 不存在的 tag 組合必須查無(而非忽略條件)
+        JsonNode none = getJson("/api/v1/iocs?tags=sample&tags=no-such-tag&limit=5");
+        assertThat(none.get("items").size()).isZero();
+
+        // lastSeen 閉區間
+        java.time.Instant to = java.time.Instant.now();
+        java.time.Instant from = to.minus(java.time.Duration.ofDays(30));
+        JsonNode ranged = getJson("/api/v1/iocs?lastSeenFrom=" + from + "&lastSeenTo=" + to + "&limit=50");
+        assertThat(ranged.get("items").size()).isGreaterThan(0);
+        ranged.get("items").forEach(item -> {
+            java.time.Instant lastSeen =
+                    java.time.Instant.parse(item.get("lastSeen").asString());
+            assertThat(lastSeen).isBetween(from, to);
+        });
+    }
+
+    @Test
+    void searchFiltersBySourceIdAndConfidenceRange() throws Exception {
+        UUID openphish = jdbc.queryForObject("SELECT id FROM sources WHERE source_type = 'MOCK_OPENPHISH'", UUID.class);
+        JsonNode page = postJson(
+                "/api/v1/iocs/search",
+                "{\"query\":\"ctip-sample\",\"sourceId\":\"" + openphish
+                        + "\",\"confidenceMin\":10,\"confidenceMax\":95,\"limit\":20}");
+        assertThat(page.get("items").size()).isGreaterThan(0);
+        page.get("items").forEach(item -> {
+            assertThat(item.get("confidence").asInt()).isBetween(10, 95);
+            Integer reported = jdbc.queryForObject(
+                    "SELECT count(*) FROM indicator_sources WHERE indicator_id = ?::uuid AND source_id = ?",
+                    Integer.class,
+                    item.get("id").asString(),
+                    openphish);
+            assertThat(reported).isPositive();
+        });
+    }
+
+    @Test
     void lookupVerifiesExactValuesAfterNormalization() throws Exception {
         JsonNode response = postJson(
                 "/api/v1/iocs/lookup",

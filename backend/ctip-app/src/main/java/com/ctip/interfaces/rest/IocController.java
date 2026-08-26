@@ -2,6 +2,8 @@ package com.ctip.interfaces.rest;
 
 import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.indicator.IndicatorQueryService;
+import com.ctip.application.indicator.IntRange;
+import com.ctip.application.indicator.TimeRange;
 import com.ctip.config.CtipProperties;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
@@ -24,6 +26,7 @@ import com.ctip.sdk.Tlp;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -64,9 +67,18 @@ class IocController implements IocApi {
 
     @Override
     @GetMapping
-    public PageResponse<IocDto> list(IocListParams params) {
+    public PageResponse<IocDto> list(@ParameterObject IocListParams params) {
         IndicatorFilter filter = new IndicatorFilter(
-                params.type(), params.severity(), params.status(), params.tlp(), params.includeExpiredOrDefault());
+                params.type(),
+                params.severity(),
+                params.status(),
+                params.tlp(),
+                params.includeExpiredOrDefault(),
+                params.tags(),
+                params.sourceId(),
+                IntRange.of(params.confidenceMin(), params.confidenceMax()),
+                IntRange.of(params.scoreMin(), params.scoreMax()),
+                TimeRange.of(params.lastSeenFrom(), params.lastSeenTo()));
         int pageSize = clampLimit(params.limit());
         if (params.offset() != null) {
             if (params.offset() > MAX_OFFSET) {
@@ -102,7 +114,12 @@ class IocController implements IocApi {
                 parseEnum(Severity.class, request.severity(), "severity"),
                 parseEnum(IndicatorStatus.class, request.status(), "status"),
                 parseEnum(Tlp.class, request.tlp(), "tlp"),
-                Boolean.TRUE.equals(request.includeExpired()));
+                Boolean.TRUE.equals(request.includeExpired()),
+                request.tags(),
+                request.sourceId(),
+                IntRange.of(request.confidenceMin(), request.confidenceMax()),
+                IntRange.of(request.scoreMin(), request.scoreMax()),
+                TimeRange.of(request.lastSeenFrom(), request.lastSeenTo()));
         Cursor after = cursorCodec.decode(request.cursor());
         int pageSize = clampLimit(request.limit());
         return assembler.toPage(

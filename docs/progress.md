@@ -7,7 +7,7 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | Phase 10 完成,下一步 Phase 11 |
+| M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)**,下一步 Phase 13(M2) |
 | M2 — Platform | 13–19 | 未開始 |
 | M3 — Production | 20–23 | 未開始 |
 
@@ -521,3 +521,46 @@
     offset* 量測,getBoundingClientRect 沒用)
   - PageResponse.items 是 untyped:用 client.ts 的 `PageOf<T>` 窄化 helper
   - mvp stack 執行中,frontend 容器 HMR 服務 host 綁定掛載的原始碼;瀏覽器開 http://localhost:5173
+
+---
+
+## Phase 12 — IOC 頁面 + PostgreSQL 搜尋(M1 收官)
+
+- **狀態**:done(2026-08-26);**M1 里程碑閘門 `dod.sh mvp` 38/38 全綠**
+- **執行單**:`docs/spec/phases/phase-12.md`
+- **Commit**:(見 git log,message `Phase 12: ioc pages + postgres full-field search + dod gate fixes`)
+- **完成判準結果**:全綠 —
+  - `cd frontend && npm run test -- IocSearchPage IocDetailPage DashboardPage` ✅ 16/16(四種狀態全覆蓋)
+  - `./backend/mvnw -f backend/pom.xml clean verify -Ptest-integration` ✅ 全模組 BUILD SUCCESS
+    (app 90 tests 含新 StatsIntegrationTest 3、IocSearch 擴充至 9)
+  - `./environment/scripts/dod.sh mvp` ✅ **38/38**(含 M1-35 四狀態、M1-36 HMR、M1-37 reload)
+  - 前端另跑 coverage ✅ 70 tests、行覆蓋 90.97%(門檻 70);瀏覽器實測三頁 + 深色模式 + 響應式
+- **交付物**:
+  - 後端:`PostgresSearchAdapter`(改名自 SearchAdapter);**§13.7 搜尋欄位補齊**(使用者決策)——
+    IndicatorFilter + IntRange/TimeRange、IndicatorFilterSpecs(tags `@>` GIN、sourceId EXISTS、
+    confidence/score/lastSeen 區間)、IocListParams/SearchRequest 擴充、`PostgresFunctionContributor`
+    (text[] cast 的自訂 HQL 函式);**WebCorsConfig**(CORS 屬性從 Phase 3 起一直沒接到 MVC,
+    前端首次跨源即發現);openapi 修正(@ParameterObject 攤平、三個 List 端點 @ArraySchema)+
+    重產 openapi.json(破壞性檢查 PASS);StatsIntegrationTest(summary 匿名口徑/trend 補 0/UTC 日界/
+    sources 併表)、IocSearchIntegrationTest 補 tags/score/時間區間/sourceId/confidence 案例
+  - 前端:features/ioc(useIocSearch——條件與 cursor 存 URL、useIocDetail/useIocSources、
+    IocFilterBar(草稿走 filterDraftSlice)、IocTable(VirtualTable)、CursorPager、IocSummaryCard、
+    SourceAttributionList)、features/stix(StixJsonViewer + useStixObject)、
+    pages 三頁(Dashboard 統計卡 + Recharts 趨勢 + 型別分布 + 來源健康)、共用 hooks/useStats、
+    ui/select、MSW handlers 擴充、recharts ~3.10
+  - environment:up.sh 前端預熱守衛改 lockfile 戳記;dod.sh 兩處檢查器缺陷修正
+    (M1-37 pipefail+grep -q 假失敗;M1-14/33 前自我修復——gate 的 host 重建會撞死共享
+    target/classes 的 dev 容器 DevTools)
+- **偏離事項 / ADR**:八項見 `docs/architecture/decisions/0009-phase12-search-pages-decisions.md`;
+  規格回寫 §0.12(13 §13.7、05 §5.7/§5.10、09 §9.6),M3-24 ✅
+- **給下一 session 的注意事項**(Phase 13 = 認證/RBAC/API Key/租戶隔離,治理規格 10,M2 開始):
+  - **M2 前置**:dod.sh mvp 38/38 已過;M2-01 是「DoD-MVP 全部仍通過(回歸)」,改動後端時記得回歸
+  - AnonymousTenantFilter 是憑證解析的掛載點(Phase 4 註記);RequireAuth/RequirePermission 前端守衛
+    已完整實作待掛載(ADR 0008 §7);authSlice.sessionEstablished 已就緒
+  - dev 容器與 host 共享 backend/*/target:host 上跑 mvnw 會觸發容器 DevTools 重啟,偶發撞上
+    半寫入 classpath 而 app 死亡(容器仍顯示 Up)——dod.sh 已自我修復,手動遇到就 restart backend
+  - Hibernate `String[]`→varchar[] 綁定與 text[] 欄位的 `@>` 衝突已由 PostgresFunctionContributor
+    解決;之後對 threats.aliases(V25,也是 GIN)做包含查詢時重用同一函式模式
+  - openapi.json 為 committed 產物:後端 DTO/參數改動 → OpenApiCompletenessTest 重產 → commit →
+    前端 `npm run api:generate` 並 git add(api:check 的 diff 是對 index 比)
+  - 前端加 npm 相依後跑 `./environment/scripts/up.sh mvp` 會自動重預熱(lockfile 戳記守衛)

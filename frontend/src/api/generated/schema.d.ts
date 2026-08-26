@@ -33,7 +33,7 @@ export interface paths {
         };
         /**
          * List IOCs (cursor pagination)
-         * @description Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp; EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。
+         * @description Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp, tags (repeat the parameter; all must match), sourceId, confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。
          */
         get: operations["list_1"];
         put?: never;
@@ -75,7 +75,7 @@ export interface paths {
         put?: never;
         /**
          * Search IOCs
-         * @description Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint. M1 backs this with PostgreSQL; M2 swaps in Elasticsearch behind the same contract. 認證:匿名。
+         * @description Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。
          */
         post: operations["search"];
         delete?: never;
@@ -340,22 +340,6 @@ export interface components {
             validUntil?: string;
             value?: string;
         };
-        IocListParams: {
-            cursor?: string;
-            includeExpired?: boolean;
-            /** Format: int32 */
-            limit?: number;
-            /** Format: int32 */
-            offset?: number;
-            /** @enum {string} */
-            severity?: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-            /** @enum {string} */
-            status?: "ACTIVE" | "EXPIRED" | "REVOKED" | "FALSE_POSITIVE";
-            /** @enum {string} */
-            tlp?: "CLEAR" | "GREEN" | "AMBER" | "AMBER_STRICT" | "RED";
-            /** @enum {string} */
-            type?: "IPV4" | "IPV6" | "DOMAIN" | "URL" | "FILE_HASH" | "EMAIL";
-        };
         IocSourceDto: {
             redistributionPolicy?: string;
             /** Format: int32 */
@@ -392,13 +376,28 @@ export interface components {
             value?: string;
         };
         SearchRequest: {
+            /** Format: int32 */
+            confidenceMax?: number;
+            /** Format: int32 */
+            confidenceMin?: number;
             cursor?: string;
             includeExpired?: boolean;
+            /** Format: date-time */
+            lastSeenFrom?: string;
+            /** Format: date-time */
+            lastSeenTo?: string;
             /** Format: int32 */
             limit?: number;
             query: string;
+            /** Format: int32 */
+            scoreMax?: number;
+            /** Format: int32 */
+            scoreMin?: number;
             severity?: string;
+            /** Format: uuid */
+            sourceId?: string;
             status?: string;
+            tags?: string[];
             tlp?: string;
             type?: string;
         };
@@ -512,8 +511,23 @@ export interface operations {
     };
     list_1: {
         parameters: {
-            query: {
-                params: components["schemas"]["IocListParams"];
+            query?: {
+                cursor?: string;
+                offset?: number;
+                limit?: number;
+                type?: "IPV4" | "IPV6" | "DOMAIN" | "URL" | "FILE_HASH" | "EMAIL";
+                severity?: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+                status?: "ACTIVE" | "EXPIRED" | "REVOKED" | "FALSE_POSITIVE";
+                tlp?: "CLEAR" | "GREEN" | "AMBER" | "AMBER_STRICT" | "RED";
+                includeExpired?: boolean;
+                tags?: string[];
+                sourceId?: string;
+                confidenceMin?: number;
+                confidenceMax?: number;
+                scoreMin?: number;
+                scoreMax?: number;
+                lastSeenFrom?: string;
+                lastSeenTo?: string;
             };
             header?: never;
             path?: never;
@@ -702,8 +716,13 @@ export interface operations {
             content: {
                 /**
                  * @example {
+                 *       "lastSeenFrom": "2026-08-01T00:00:00Z",
                  *       "limit": 5,
                  *       "query": "ctip-sample",
+                 *       "scoreMin": 20,
+                 *       "tags": [
+                 *         "phishing"
+                 *       ],
                  *       "type": "DOMAIN"
                  *     }
                  */
@@ -901,7 +920,7 @@ export interface operations {
                      *       }
                      *     ]
                      */
-                    "application/json": components["schemas"]["IocSourceDto"];
+                    "application/json": components["schemas"]["IocSourceDto"][];
                 };
             };
             /** @description NOT_FOUND (missing or not visible) */
@@ -965,7 +984,7 @@ export interface operations {
                      *       }
                      *     ]
                      */
-                    "application/json": components["schemas"]["SourceDto"];
+                    "application/json": components["schemas"]["SourceDto"][];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
@@ -1141,7 +1160,7 @@ export interface operations {
                      *       }
                      *     ]
                      */
-                    "application/json": components["schemas"]["SourceStatsDto"];
+                    "application/json": components["schemas"]["SourceStatsDto"][];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
