@@ -1,0 +1,154 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
+
+/*
+ * Tailwind v4 CSS-first 設定(06 §6.3.3:@theme 區塊,無 tailwind.config.js)。
+ * 深色模式為 class 策略:ThemeApplier 依 uiSlice.theme 控制 <html class="dark">。
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* —— 「訊號台」色系(light):冷白紙面 + 深藍石墨前景 + phosphor teal 主色 —— */
+  --background: oklch(0.98 0.004 240);
+  --foreground: oklch(0.22 0.02 255);
+  --surface: oklch(1 0 0);
+  --surface-foreground: oklch(0.22 0.02 255);
+  --muted: oklch(0.94 0.006 240);
+  --muted-foreground: oklch(0.48 0.02 250);
+  --border: oklch(0.88 0.008 245);
+  --primary: oklch(0.5 0.1 205);
+  --primary-foreground: oklch(0.99 0.002 240);
+  --accent: oklch(0.93 0.03 200);
+  --accent-foreground: oklch(0.32 0.06 210);
+  --destructive: oklch(0.5 0.18 27);
+  --destructive-foreground: oklch(0.99 0.002 240);
+  --ring: oklch(0.6 0.09 205);
+  --grid-line: oklch(0.22 0.02 255 / 3.5%);
+
+  /* —— TLP 徽章(§7.7 五級;顏色恆搭配文字,不作唯一資訊載體) —— */
+  --tlp-clear: oklch(1 0 0);
+  --tlp-clear-foreground: oklch(0.35 0.015 250);
+  --tlp-clear-border: oklch(0.8 0.01 245);
+  --tlp-green: oklch(0.52 0.14 152);
+  --tlp-green-foreground: oklch(0.99 0.002 240);
+  --tlp-amber: oklch(0.6 0.13 70);
+  --tlp-amber-foreground: oklch(0.99 0.002 240);
+  --tlp-red: oklch(0.52 0.19 27);
+  --tlp-red-foreground: oklch(0.99 0.002 240);
+
+  /* 狀態/嚴重度(表格、統計卡用) */
+  --ok: oklch(0.55 0.13 152);
+  --warn: oklch(0.62 0.13 70);
+  --danger: oklch(0.55 0.19 27);
+}
+
+.dark {
+  /* —— 深色為本平台的主舞台:近黑藍石墨 + 亮 teal —— */
+  --background: oklch(0.155 0.014 255);
+  --foreground: oklch(0.92 0.008 240);
+  --surface: oklch(0.195 0.016 253);
+  --surface-foreground: oklch(0.92 0.008 240);
+  --muted: oklch(0.24 0.018 252);
+  --muted-foreground: oklch(0.66 0.015 245);
+  --border: oklch(0.29 0.02 250);
+  --primary: oklch(0.8 0.12 195);
+  --primary-foreground: oklch(0.17 0.02 250);
+  --accent: oklch(0.27 0.035 210);
+  --accent-foreground: oklch(0.85 0.09 195);
+  --destructive: oklch(0.68 0.17 25);
+  --destructive-foreground: oklch(0.15 0.02 250);
+  --ring: oklch(0.75 0.1 195);
+  --grid-line: oklch(0.92 0.008 240 / 3%);
+
+  --tlp-clear: oklch(0.24 0.018 252);
+  --tlp-clear-foreground: oklch(0.85 0.01 240);
+  --tlp-clear-border: oklch(0.42 0.02 248);
+  --tlp-green: oklch(0.78 0.16 155);
+  --tlp-green-foreground: oklch(0.2 0.04 155);
+  --tlp-amber: oklch(0.82 0.14 80);
+  --tlp-amber-foreground: oklch(0.25 0.05 75);
+  --tlp-red: oklch(0.7 0.18 25);
+  --tlp-red-foreground: oklch(0.16 0.04 25);
+
+  --ok: oklch(0.78 0.15 155);
+  --warn: oklch(0.82 0.14 80);
+  --danger: oklch(0.7 0.18 25);
+}
+
+@theme inline {
+  --font-sans: 'Archivo Variable', 'Archivo', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
+
+  --color-tlp-clear: var(--tlp-clear);
+  --color-tlp-clear-foreground: var(--tlp-clear-foreground);
+  --color-tlp-clear-border: var(--tlp-clear-border);
+  --color-tlp-green: var(--tlp-green);
+  --color-tlp-green-foreground: var(--tlp-green-foreground);
+  --color-tlp-amber: var(--tlp-amber);
+  --color-tlp-amber-foreground: var(--tlp-amber-foreground);
+  --color-tlp-red: var(--tlp-red);
+  --color-tlp-red-foreground: var(--tlp-red-foreground);
+
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: 'ss01';
+    /* 細網格紋理:訊號台的座標紙質感,兩主題共用同一結構 */
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}

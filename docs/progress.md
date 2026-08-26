@@ -479,3 +479,45 @@
   - mvp stack 目前在本機執行中(swagger UI 可直接開);down.sh mvp 可停
   - openapi.json 是 committed 產物:改了任何端點/DTO 註解後要重跑 OpenApiCompletenessTest
     再 commit,否則 CI drift check 會 fail
+
+---
+
+## Phase 11 — React 前端骨架 + 型別產生 + 版面
+
+- **狀態**:done(2026-08-26)
+- **執行單**:`docs/spec/phases/phase-11.md`
+- **Commit**:(見 git log,message `Phase 11: react frontend skeleton + type generation + layout`)
+- **完成判準結果**:全綠 —
+  - `npx tsc --noEmit` ✅、`npx eslint . --max-warnings 0` ✅(F1/F2/F4 zones 生效範圍內)
+  - `npm run api:check` ✅(generated 與 openapi.json 一致、已 tracked)
+  - `npm run build` ✅;`npm run test -- --coverage` ✅ 54/54,components 行覆蓋 100%(門檻 70)
+  - `npm run format:check` ✅;瀏覽器實測亮/深主題與 mvp 容器 HMR ✅
+- **交付物**:
+  - deps 依 06 §6.2.3 一次裝齊:react-router 8.3.0(v7 血統單一套件,非 react-router-dom)、
+    TanStack Query 5.101.4 / Virtual 3.13、RTK 2.12 + react-redux 9、Tailwind 4.3.3 +
+    @tailwindcss/vite(CSS-first,無 tailwind.config.js)、RHF 7 + Zod 4.4.3 + resolvers 5、
+    lucide-react 1.34、MSW 2.15、openapi-typescript 7.13、RTL 16 + jsdom + coverage-v8
+  - `src/api/generated/schema.d.ts`(api:generate 產生、進版控)+ `client.ts`(手寫 typed
+    fetch wrapper:ApiError/token provider/物件 query 攤平)+ `api:generate`/`api:check` scripts
+  - stores/ 四 slice(auth/ui/toast/filterDraft)+ makeStore + uiSlice→localStorage(zod 驗證載回)
+  - components/:ui 六件(手寫 shadcn 等價)、StateViews 四態、TlpBadge(五級+unknown fallback)、
+    VirtualTable(TanStack Virtual)、Toaster;layouts/AppLayout(響應式+主題切換);
+    routes/(data router、RequireAuth/RequirePermission 完整行為、RootErrorBoundary);
+    app/(providers、queryClient、ThemeApplier);pages/ 三頁殼 + NotFound
+  - Tailwind v4 @theme:「訊號台」色系(oklch、TLP 五色 token、座標紙紋理、
+    Archivo + IBM Plex Mono 自託管);index.html 防 FOUC inline script
+  - MSW(src/test/,handlers 以 satisfies 由 generated 型別驅動)
+- **偏離事項 / ADR**:八項決策見 `docs/architecture/decisions/0008-phase11-frontend-skeleton-decisions.md`
+  (shadcn 手寫等價不跑 CLI、版本表未列必要配套(規則 6/17 回報)、手寫 client 不加 openapi-fetch、
+  springdoc `params` 包裝缺陷+client 攤平因應、co-located 測試慣例、dark class 策略+FOUC script、
+  守衛不掛載但行為完整、不引入 @/ alias)
+- **給下一 session 的注意事項**(Phase 12 = IOC 三頁 + PostgreSQL 搜尋):
+  - **springdoc 缺 @ParameterObject**:openapi 的 GET /iocs query 被包成單一 params 物件,
+    Phase 12 後端修正後要重跑 OpenApiCompletenessTest、commit openapi.json、前端重 api:generate
+  - **up.sh 前端預熱守衛只驗 vite 存在**,偵測不到相依漂移(同 Phase 10 backend 守衛問題);
+    本次已手動 `compose run frontend npm ci` 重預熱。Phase 12 動 package.json(recharts)後同樣要重預熱,
+    建議順手把守衛改為 lockfile 比對
+  - VirtualTable 在 jsdom 測試需 stub HTMLElement offsetWidth/offsetHeight(TanStack Virtual 以
+    offset* 量測,getBoundingClientRect 沒用)
+  - PageResponse.items 是 untyped:用 client.ts 的 `PageOf<T>` 窄化 helper
+  - mvp stack 執行中,frontend 容器 HMR 服務 host 綁定掛載的原始碼;瀏覽器開 http://localhost:5173

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CTIP — Cyber Threat Intelligence Platform</title>
+    <script>
+      // 防 FOUC:在 React 掛載前依 uiSlice 持久化狀態決定 dark class。
+      (function () {
+        try {
+          var raw = localStorage.getItem('ctip.ui.v1');
+          var theme = raw ? JSON.parse(raw).theme : 'system';
+          var dark =
+            theme === 'dark' ||
+            (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {
+          /* 壞資料 → 跟隨系統預設(不加 class) */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
