@@ -32,6 +32,6 @@ docker compose --env-file environment/.env.mvp.example -f environment/docker-com
 ## 不得做的事
 - 不得建立 `docker-compose.<env>.yml` 或 `Dockerfile.<env>`
 - 不得在 `.env.prod.example` / `.env.staging.example` 放 `*_MOUNT_*` 變數
-- 不得在任何 `.example` 放真實 secret（值必須是明顯假值，如 `CHANGE_ME_MIN_32_BYTES`）
+- 不得在任何 `.example` 放真實 secret（值必須是明顯假值，如 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`）
 - 不得讓 `dev` 使用 `COMPOSE_PROFILES=full`（應為 `standard`）
 - 不得讓 dev 的 `FRONTEND_BIND` 與 `FRONTEND_CONTAINER_PORT` 不一致

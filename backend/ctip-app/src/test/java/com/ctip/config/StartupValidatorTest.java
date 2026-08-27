@@ -25,7 +25,7 @@ class StartupValidatorTest {
     void prodRejectsTemplateJwtSecret() {
         StartupValidator validator = validator(
                 Environment.PROD,
-                "CHANGE_ME_MIN_32_BYTES",
+                "CHANGE_ME_MIN_32_BYTES_REPLACE_THIS",
                 "https://ctip.example.com",
                 RateLimit.Backend.REDIS,
                 validateEnv());
@@ -74,7 +74,7 @@ class StartupValidatorTest {
     void mvpAllowsTemplateSecretAndMemoryRateLimit() {
         StartupValidator validator = validator(
                 Environment.MVP,
-                "CHANGE_ME_MIN_32_BYTES",
+                "CHANGE_ME_MIN_32_BYTES_REPLACE_THIS",
                 "http://localhost:5173",
                 RateLimit.Backend.MEMORY,
                 new MockEnvironment());

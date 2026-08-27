@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${ENV_DIR}/.." && pwd)"
 COMPOSE_FILE="${ENV_DIR}/docker-compose.yml"
 
 # JWT_SECRET 的樣板值:up.sh 與 StartupValidator 皆以此判定「未設定真實 secret」
-JWT_SECRET_TEMPLATE="CHANGE_ME_MIN_32_BYTES"
+JWT_SECRET_TEMPLATE="CHANGE_ME_MIN_32_BYTES_REPLACE_THIS"
 
 if [ -t 1 ]; then
   C_RED=$'\033[31m'; C_GREEN=$'\033[32m'; C_YELLOW=$'\033[33m'; C_RESET=$'\033[0m'

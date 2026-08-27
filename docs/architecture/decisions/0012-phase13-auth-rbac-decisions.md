@@ -145,6 +145,25 @@ ArchUnit 規則 9 的實作(`01 §1.9`)以「呼叫目標方法名為 `now`」�
 組合方式下未生效。`RefreshTokenRotationCommand` 的時間欄位因此命名為 `at` 而非 `now`。
 規則維持原樣(它比規格描述更保守,方向上安全),此處只記錄命名約束。
 
+### 決策 15:`.env.*.example` 的 JWT_SECRET 樣板值必須自己就 ≥ 32 bytes
+
+Phase 13 之前沒有任何程式碼消費 `JWT_SECRET`,因此沒人發現規格與樣板沿用的假值
+`CHANGE_ME_MIN_32_BYTES` **自己只有 22 bytes**——比它名字宣稱的下限還短。
+HS256 要求 256-bit 金鑰,`JwtAccessTokenAdapter` 在所有環境的建構期強制此下限,
+於是「照 README 快速開始複製 `.env.mvp.example`」的全新環境會**直接啟動失敗**
+(實測:`ctip-backend-1` unhealthy,bean 建立期丟 `JWT_SECRET 長度必須 >= 32 bytes`)。
+
+**決策**:樣板值改為 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`(35 bytes)。它仍含 `CHANGE_ME`,
+所以 `StartupValidator`(prod 拒絕啟動)與 `_common.sh`(`up.sh` 守衛)的判定完全不受影響;
+放寬程式端的長度檢查則是錯的方向——那是密碼學要求,不是可調參數。
+同步更新五份 `.env*.example`、`_common.sh`、13 §與 phase-02 的引用。
+`EnvTemplateSecretTest` 逐檔驗「含 CHANGE_ME 且 ≥ 32 bytes」,鎖住這個回歸。
+
+> **維運注意**:dev 容器的 `spring-boot:run` 在啟動時就算好 classpath,DevTools restart 只換
+> app classes。**新增 Maven 相依後必須重建容器**(`docker compose up -d --force-recreate backend`),
+> 只跑 `reload.sh` 會得到 `NoClassDefFoundError`。且 `up.sh` 對「已在執行但 unhealthy」的容器
+> 不會重建,只會等 healthcheck 逾時。
+
 ---
 
 ## 不變事項

@@ -115,7 +115,7 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 ### Secrets
 
 正式環境 secret 絕不進 Git。來源限：環境變數、secret manager、部署平台 secret。
-`.env.*.example` 僅為樣板，其中的值必須是**明顯的假值**（例如 `CHANGE_ME_MIN_32_BYTES`）。
+`.env.*.example` 僅為樣板，其中的值必須是**明顯的假值**（例如 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`）。
 `.gitignore` 必須包含 `environment/.env*` 並以 `!environment/.env*.example` 例外放行。
 
 ---

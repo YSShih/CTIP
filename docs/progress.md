@@ -62,6 +62,8 @@
     `StartupValidator` 守衛、`ddl-auto: validate`)——這些是 Phase 3 的範圍
   - `migrate.sh` 呼叫 `mvnw -pl ctip-app flyway:migrate`,需要 Phase 3 在 ctip-app 加 Flyway maven plugin 才可用
   - JWT_SECRET 樣板值的 canonical 字串是 `CHANGE_ME_MIN_32_BYTES`(`_common.sh` 與未來 StartupValidator 應一致)
+    — ⚠️ **已於 Phase 13 更正為 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`**:原值本身只有 22 bytes,
+    HS256 上線後會使照 README 快速開始的全新環境啟動失敗(見 Phase 13 段落)
   - `dod.sh` 中依賴執行中 stack 的項目(M1-14/15/33/36/37、M2-25、M3-17)使用**真實** `.env.<env>`
     (由 up.sh 引導從 .example 複製);其餘 compose 檢查用 `.example`
   - `dod.sh` M1-15 需要 `jq`、M3-24 需要 `python3`(缺少時該項會 FAIL 並說明)
@@ -636,7 +638,7 @@
   - `verify -Ptest-integration -Dtest='AuthFlowIntegrationTest,RefreshTokenRotationTest,RbacMatrixTest,ApiKeyTest,CrossTenantIsolationTest,SecurityTest'`(逐字)✅ 138/138
     (RbacMatrix 101 = **95 格矩陣參數化** + 6;SecurityTest 15,條號 1–9 全數具名;
      CrossTenantIsolation 以參數化涵蓋每一個 tenant-scoped 端點,全部 404)
-  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 203 + adapters 24 + app 227 = 467;
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 203 + adapters 24 + app 240 = 480;
     Spotless/Checkstyle/JaCoCo 全過,含 domain.user / domain.identity ≥ 0.85)
   - frontend ✅ `tsc --noEmit`、`eslint --max-warnings 0`、`api:check`、`build`、`test`(97 tests,行覆蓋 90%)、`format:check`
   - `dod.sh mvp` **38/38 回歸**(M2-01)
@@ -666,6 +668,17 @@
      family 全撤(U5)因此完全失效。改為失敗以回傳值交出、交易在協作者內提交、例外在交易外丟。
      **Phase 14 的配額扣減若也要在拒絕時留下紀錄,適用同一規則。**
   2. **API key prefix 規格自相矛盾**:`ctip_<env>_` 前 8 碼是常數,唯一約束必撞。改取隨機段前 8 碼。
+  3. **`.env.*.example` 的 `JWT_SECRET=CHANGE_ME_MIN_32_BYTES` 自己只有 22 bytes**——M1 沒有任何東西
+     消費它所以一直沒事;HS256 上線後,照 README 快速開始複製樣板的全新環境**直接啟動失敗**。
+     樣板改為 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`(35 bytes,仍含 `CHANGE_ME` 故 prod 守衛不受影響),
+     並加 `EnvTemplateSecretTest` 逐檔鎖住(ADR 0012 決策 15)
+- **環境維運(實測踩到)**:
+  - **新增 Maven 相依後 dev 容器必須重建**:`spring-boot:run` 的 classpath 在啟動時算好,
+    DevTools restart 只換 app classes → `NoClassDefFoundError`。用
+    `docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml up -d --force-recreate backend`
+  - `up.sh` 對「已在執行但 unhealthy」的容器不會重建,只會等 healthcheck 逾時 300s 後報錯
+  - host 端 `mvnw clean` 會刪掉與 dev 容器共用的 `target/classes`,執行中的 app 隨即死亡
+    (ADR 0010 只擋掉「重啟」,擋不掉 class 被刪);跑完 gate 前後都要確認容器 healthy
 - **給下一 session 的注意事項(Phase 14 = Plan/Subscription/配額 + IOC 寫入端點)**:
   - 配額值一律讀 `plans` 表;現有四處硬綁 `CtipProperties` 要改:`IocController.clampLimit()`、
     `api.maxBatchLookup()`、`StixExportSettings`、`RateLimitConfig` 的匿名 60/1000
