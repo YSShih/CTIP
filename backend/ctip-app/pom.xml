@@ -45,6 +45,19 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
+    <!-- 認證與授權(docs/spec/06-tech-stack.md §6.2.2:Spring Security 7.1.x,版本由 BOM 決定) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+    <!--
+      JWT(HS256)簽發與驗證。版本表未列 JWT 函式庫;採 Spring Security 自帶的 JOSE 支援
+      (Nimbus,同樣由 Boot BOM 納管),不新增任何版本 property(ADR 0012 決策 7)。
+    -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-oauth2-jose</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
@@ -103,6 +116,11 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- Boot 4 模組化(06 §6.3.6 同型態):MockMvc 測試支援移至 per-tech 模組 -->

@@ -315,6 +315,15 @@ AND tlp <= :maxVisibleTlp
 
 Phase 13 只是在此之上加入使用者認證與 RBAC，**不需重寫任何 query**。
 
+> **實作回饋修訂（2026-08-27，Phase 13；ADR 0012 決策 3）**
+> `phases/phase-13.md` 寫「`AuthState` 擴充為完整身分」,但 `AuthState` 正是上表的軸,
+> 改動它就等於改動 TLP 過濾邏輯(同一份執行單明令不得改)。實作因此**保留 `AuthState` 兩態**,
+> 另以 `application/identity/AuthenticatedIdentity`(`userId`、`tenantId`、`role`、`permissions`、
+> `apiKeyId`)承載完整身分,由 `TenantContext.bindAuthenticated` 綁定。
+> `TlpSpecifications` 與 `Visibility` 零修改;可見度與角色、方案仍完全解耦。
+> 同時 `AnonymousTenantFilter` 併入 Spring Security filter chain,更名為
+> `CtipAuthenticationFilter`(Bearer JWT / `X-API-Key` / 無標頭匿名三路經同一條 chain,§9.2)。
+
 > 為什麼不延到 M2：安全過濾的 retrofit 失敗模式是「漏掉某個端點」，而這是全 AI 實作最不擅長的收尾工作——沒有人類會逐一點過三十個端點。
 
 ---

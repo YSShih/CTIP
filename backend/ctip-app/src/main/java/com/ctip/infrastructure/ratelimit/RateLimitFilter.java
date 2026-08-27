@@ -4,6 +4,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.infrastructure.web.FilterErrorWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,7 +14,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.HexFormat;
-import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -28,11 +28,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimiterPort limiter;
     private final boolean enabled;
     private final ClockPort clock;
+    private final FilterErrorWriter errorWriter;
 
     public RateLimitFilter(RateLimiterPort limiter, boolean enabled, ClockPort clock) {
         this.limiter = limiter;
         this.enabled = enabled;
         this.clock = clock;
+        this.errorWriter = new FilterErrorWriter(clock);
     }
 
     @Override
@@ -74,39 +76,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             throws IOException {
         long retryAfter =
                 Math.max(1, Duration.between(clock.now(), rejecting.resetAt()).getSeconds());
-        response.setStatus(429);
         response.setHeader("Retry-After", Long.toString(retryAfter));
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        // 統一錯誤結構(09 §9.4);filter 在 MVC 之前,手工組 JSON;path 為 client 可控值,必須跳脫
-        response.getWriter()
-                .write("{\"timestamp\":\"" + clock.now() + "\",\"status\":429,\"code\":\"RATE_LIMIT_EXCEEDED\","
-                        + "\"message\":\"Rate limit exceeded\",\"path\":\"" + escapeJson(request.getRequestURI())
-                        + "\",\"traceId\":" + jsonStringOrNull(org.slf4j.MDC.get("traceId"))
-                        + ",\"details\":[]}");
-    }
-
-    private static String jsonStringOrNull(String value) {
-        return value == null ? "null" : "\"" + escapeJson(value) + "\"";
-    }
-
-    /** 最小 JSON 字串跳脫(引號、反斜線、控制字元)——不押注 servlet 容器對 request line 的過濾。 */
-    static String escapeJson(String value) {
-        StringBuilder sb = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"' -> sb.append("\\\"");
-                case '\\' -> sb.append("\\\\");
-                default -> {
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-                }
-            }
-        }
-        return sb.toString();
+        errorWriter.write(request, response, 429, "RATE_LIMIT_EXCEEDED", "Rate limit exceeded");
     }
 
     /** 匿名 IP 正規化(§10.7):IPv4 取完整位址;IPv6 取 /64 前綴,避免以 /64 內位址繞過。 */

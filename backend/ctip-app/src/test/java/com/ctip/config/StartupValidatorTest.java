@@ -108,6 +108,7 @@ class StartupValidatorTest {
                 environment,
                 new Cors(corsOrigins),
                 new Jwt(jwtSecret, 900, 2592000),
+                new CtipProperties.Security(10, 15),
                 new RateLimit(true, backend, 60, 1000),
                 new Ingestion(true, 500),
                 new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),

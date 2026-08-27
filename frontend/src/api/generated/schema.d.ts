@@ -4,6 +4,130 @@
  */
 
 export interface paths {
+    "/api/v1/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's API keys
+         * @description Returns every key issued for the caller's tenant, including revoked ones. The key material itself is never returned. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:create。
+         */
+        get: operations["listApiKeys"];
+        put?: never;
+        /**
+         * Create an API key
+         * @description Issues a key for the caller's tenant. The full key is returned exactly once and only its SHA-256 hash is stored; scopes may not exceed the creator's own permissions. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:create。
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/api-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an API key
+         * @description Revocation is irreversible. Keys belonging to another tenant are reported as not found rather than forbidden. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:revoke。
+         */
+        delete: operations["revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log in with email and password
+         * @description Returns an access token (15 minutes by default) and a single-use refresh token. Ten consecutive failures lock the account for fifteen minutes. 認證:匿名(本端點用於取得憑證)。
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Log out
+         * @description Revokes every refresh token in the presented token's family. Access tokens are short-lived and are not blacklisted. 認證:以請求主體中的 refresh token 認證,不需 Authorization 標頭。
+         */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate a refresh token
+         * @description Exchanges a refresh token for a new pair. The presented token is consumed; replaying an already-used token revokes the whole token family. 認證:以請求主體中的 refresh token 認證,不需 Authorization 標頭。
+         */
+        post: operations["refresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a new account
+         * @description Creates a user together with a new INDIVIDUAL tenant and enrols the user as its TENANT_ADMIN, then returns a session. Passwords are stored as BCrypt hashes only. 認證:匿名(本端點用於取得憑證)。
+         */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -288,9 +412,62 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ApiKeyCreateRequest: {
+            /**
+             * Format: date-time
+             * @example 2027-01-01T00:00:00Z
+             */
+            expiresAt?: string;
+            /** @example ci-pipeline */
+            name: string;
+            scopes: string[];
+        };
+        ApiKeyDto: {
+            /**
+             * Format: date-time
+             * @example 2026-08-27T07:00:00Z
+             */
+            createdAt?: string;
+            /**
+             * Format: date-time
+             * @example 2027-01-01T00:00:00Z
+             */
+            expiresAt?: string;
+            /** @example 9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d */
+            id?: string;
+            /** @example aB3xY9kQ */
+            keyPrefix?: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-27T08:00:00Z
+             */
+            lastUsedAt?: string;
+            /** @example ci-pipeline */
+            name?: string;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            revokedAt?: string;
+            scopes?: string[];
+        };
         AttributionDto: {
             homepage?: string;
             sourceName?: string;
+        };
+        AuthResponse: {
+            /** @example eyJhbGciOiJIUzI1NiJ9... */
+            accessToken?: string;
+            /**
+             * Format: int64
+             * @example 900
+             */
+            expiresIn?: number;
+            /** @example 0G2f... */
+            refreshToken?: string;
+            /** @example Bearer */
+            tokenType?: string;
+            user?: components["schemas"]["SessionUserDto"];
         };
         DailyCountDto: {
             /** Format: int64 */
@@ -359,6 +536,17 @@ export interface components {
             sourceValidUntil?: string;
             status?: string;
         };
+        IssuedApiKeyDto: {
+            apiKey?: components["schemas"]["ApiKeyDto"];
+            /** @example ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e */
+            key?: string;
+        };
+        LoginRequest: {
+            /** @example analyst@example.org */
+            email: string;
+            /** @example correct-horse-battery */
+            password: string;
+        };
         LookupRequest: {
             values: string[];
         };
@@ -369,6 +557,23 @@ export interface components {
             hasMore?: boolean;
             items?: unknown[];
             nextCursor?: string;
+        };
+        RefreshRequest: {
+            /** @example 0G2f... */
+            refreshToken: string;
+        };
+        RegisterRequest: {
+            /** @example Alice Analyst */
+            displayName?: string;
+            /**
+             * Format: email
+             * @example analyst@example.org
+             */
+            email: string;
+            /** @example correct-horse-battery */
+            password: string;
+            /** @example Example Org */
+            tenantName?: string;
         };
         Result: {
             found?: boolean;
@@ -400,6 +605,23 @@ export interface components {
             tags?: string[];
             tlp?: string;
             type?: string;
+        };
+        SessionUserDto: {
+            /** @example Alice Analyst */
+            displayName?: string;
+            /**
+             * @example [
+             *       "ioc:read",
+             *       "ioc:submit"
+             *     ]
+             */
+            permissions?: string[];
+            /** @example TENANT_ADMIN */
+            role?: string;
+            /** @example 8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b */
+            tenantId?: string;
+            /** @example 3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10 */
+            userId?: string;
         };
         SourceDto: {
             defaultTlp?: string;
@@ -466,6 +688,465 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listApiKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API keys of the caller's tenant */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "createdAt": "2026-08-27T07:00:00Z",
+                     *         "expiresAt": null,
+                     *         "id": "9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d",
+                     *         "keyPrefix": "aB3xY9kQ",
+                     *         "lastUsedAt": null,
+                     *         "name": "ci-pipeline",
+                     *         "revokedAt": null,
+                     *         "scopes": [
+                     *           "ioc:read"
+                     *         ]
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["ApiKeyDto"][];
+                };
+            };
+            /** @description Missing apikey:create permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiKeyDto"][];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Key created; full key returned once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "apiKey": {
+                     *         "createdAt": "2026-08-27T07:00:00Z",
+                     *         "expiresAt": null,
+                     *         "id": "9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d",
+                     *         "keyPrefix": "aB3xY9kQ",
+                     *         "lastUsedAt": null,
+                     *         "name": "ci-pipeline",
+                     *         "revokedAt": null,
+                     *         "scopes": [
+                     *           "ioc:read"
+                     *         ]
+                     *       },
+                     *       "key": "ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IssuedApiKeyDto"];
+                };
+            };
+            /** @description Scope exceeds creator permissions (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IssuedApiKeyDto"];
+                };
+            };
+            /** @description Missing apikey:create permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IssuedApiKeyDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing apikey:revoke permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown key or another tenant's key (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Session issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "accessToken": "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                     *       "expiresIn": 900,
+                     *       "refreshToken": "0G2f8xQ...",
+                     *       "tokenType": "Bearer",
+                     *       "user": {
+                     *         "displayName": "Alice Analyst",
+                     *         "permissions": [
+                     *           "ioc:read",
+                     *           "ioc:submit"
+                     *         ],
+                     *         "role": "TENANT_ADMIN",
+                     *         "tenantId": "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                     *         "userId": "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Invalid credentials or locked account (UNAUTHENTICATED) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Session revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Unknown refresh token (UNAUTHENTICATED) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description New session issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "accessToken": "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                     *       "expiresIn": 900,
+                     *       "refreshToken": "0G2f8xQ...",
+                     *       "tokenType": "Bearer",
+                     *       "user": {
+                     *         "displayName": "Alice Analyst",
+                     *         "permissions": [
+                     *           "ioc:read",
+                     *           "ioc:submit"
+                     *         ],
+                     *         "role": "TENANT_ADMIN",
+                     *         "tenantId": "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                     *         "userId": "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Unknown, revoked, expired or reused token (UNAUTHENTICATED) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and session issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "accessToken": "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                     *       "expiresIn": 900,
+                     *       "refreshToken": "0G2f8xQ...",
+                     *       "tokenType": "Bearer",
+                     *       "user": {
+                     *         "displayName": "Alice Analyst",
+                     *         "permissions": [
+                     *           "ioc:read",
+                     *           "ioc:submit"
+                     *         ],
+                     *         "role": "TENANT_ADMIN",
+                     *         "tenantId": "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                     *         "userId": "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Validation failed (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Email already registered (CONFLICT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     health: {
         parameters: {
             query?: never;

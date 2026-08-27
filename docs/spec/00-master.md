@@ -373,4 +373,36 @@ M1 閘門後、Phase 13 前，以四個獨立視角（安全/TLP、攝取/合併
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27 實作回饋修訂，見 §0.7–§0.13）。*
+## 0.14 實作回饋修訂（2026-08-27，Phase 13 實測後回寫）
+
+Phase 13（認證、RBAC、API Key、租戶隔離）發現兩項規格自身衝突，已註記進對應主題檔；
+完整決策記錄（共 14 項，其餘為規格未定義而必須決定的實作選擇）見
+`docs/architecture/decisions/0012-phase13-auth-rbac-decisions.md`。
+
+### 規格自身衝突（2 項）
+
+| # | 衝突 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | §10.3 標題與 04 表 12 皆寫「權限 18 項」，但兩處列出的 code 實際有 **19 個** | 以清單為準種入 19 個（清單是矩陣與 `@PreAuthorize` 的實際依據）；計數改為 19 | [10 §10.3](10-identity-plans.md#103-使用者與-rbac-phase-13--m2)、[04 表 12、§4.7](04-data-dictionary.md) |
+| 2 | key 格式 `ctip_<env>_<32 base62>` 的前 8 碼恆為環境常數，與 `key_prefix CHAR(8)` + `ux_api_keys_prefix` UNIQUE 直接衝突——同環境第二把 key 必撞，且 §10.5「以前綴定位單一列」永不成立 | 前綴改取**隨機段**前 8 碼（唯一自洽讀法，仍可公開顯示） | [10 §10.5](10-identity-plans.md#105-api-key-phase-13--m2)、[04 表 16](04-data-dictionary.md) |
+
+### 規格未定義而補齊的契約（2 項寫入主題檔）
+
+| # | 缺口 | 解決 | 修訂處 |
+|---|---|---|---|
+| 3 | phase-13 要求「`AuthState` 擴充為完整身分」，但同一執行單又禁止改動 TLP 過濾邏輯——而 `AuthState` 正是該邏輯的軸 | `AuthState` 保留兩態；完整身分改由 `AuthenticatedIdentity` 承載，`TlpSpecifications`／`Visibility` 零修改 | [01 §1.11](01-architecture.md#111-最小安全層m1-即建立) |
+| 4 | §9.1 的 `/auth/*` 與 `/api-keys` 只有路徑與權限，無 DTO、無匿名標註、無狀態碼 | `/auth/*` 標為匿名（refresh／logout 以主體 token 自我認證）；DTO 依 §9.5 慣例由實作定義，契約以 `docs/api/openapi.json` 為準；狀態碼明列 | [09 §9.1](09-api.md#91-端點清單) |
+
+> ⚠️ **實作期發現的實質缺陷（非規格問題，但足以使不變量失效）**：
+> `@Transactional` 方法內「寫入失敗紀錄 → 丟例外」會使該寫入隨交易 rollback——
+> 登入失敗計數（U7 鎖定）與重用偵測的 family 全撤（U5）因此完全失效。
+> 修正：失敗以回傳值交出，交易在協作者內提交，例外只在交易之外丟出（ADR 0012 決策 9）。
+> 任何「失敗仍需留下副作用」的流程（Phase 14 的配額扣減亦同）都適用此規則。
+
+> **依規則 17 回報**：`06 §6.2.2` 版本表**沒有列任何 JWT 函式庫**。本 phase 採 Spring Security
+> 自帶的 `spring-security-oauth2-jose`（Nimbus，同由 Boot BOM 納管），未新增任何版本 property，
+> 因此不觸犯規則 6；建議版本表補列一列「JWT — 隨 Spring Security（Nimbus JOSE+JWT）」。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27 實作回饋修訂，見 §0.7–§0.14）。*

@@ -1,0 +1,160 @@
+package com.ctip.application.identity;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.ctip.application.rbac.RoleCode;
+import com.ctip.domain.event.ApiKeyEvents;
+import com.ctip.domain.identity.ApiKeyFormat;
+import com.ctip.domain.identity.IssuedApiKey;
+import com.ctip.domain.identity.ScopeSet;
+import com.ctip.domain.tenant.TenantId;
+import com.ctip.domain.user.UserId;
+import com.ctip.testing.FixedClockPort;
+import com.ctip.testing.InMemoryApiKeyRepository;
+import com.ctip.testing.InMemoryTenantMemberships;
+import com.ctip.testing.RecordingEventPublisher;
+import com.ctip.testing.SequentialIdGenerator;
+import com.ctip.testing.SequentialTokenGenerator;
+import com.ctip.testing.StubRolePermissions;
+import java.time.Duration;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+
+/** API key 的建立、撤銷與驗證(docs/spec/10-identity-plans.md §10.5;不變量 K1–K7 的服務層)。 */
+@Tag("unit")
+class ApiKeyServiceTest {
+
+    private static final TenantId TENANT = new TenantId(new UUID(0, 11));
+    private static final TenantId OTHER_TENANT = new TenantId(new UUID(0, 12));
+    private static final UserId USER = new UserId(new UUID(0, 21));
+
+    private final InMemoryApiKeyRepository apiKeyRepository = new InMemoryApiKeyRepository();
+    private final StubRolePermissions rolePermissions = new StubRolePermissions();
+    private final InMemoryTenantMemberships memberships = new InMemoryTenantMemberships();
+    private final RecordingEventPublisher events = new RecordingEventPublisher();
+    private final FixedClockPort clock = FixedClockPort.at(FixedClockPort.DEFAULT_NOW);
+
+    private ApiKeyService service;
+    private ApiKeyAuthenticator authenticator;
+
+    @BeforeEach
+    void setUp() {
+        ApiKeyFactory factory = new ApiKeyFactory(
+                new SequentialTokenGenerator(), new SequentialIdGenerator(), clock, new ApiKeySettings("mvp"));
+        service = new ApiKeyService(apiKeyRepository, rolePermissions, factory, events, clock);
+        authenticator = new ApiKeyAuthenticator(apiKeyRepository, memberships, rolePermissions, clock);
+        memberships.assign(TENANT, USER, RoleCode.TENANT_ADMIN);
+    }
+
+    private AuthenticatedIdentity creator(RoleCode role) {
+        return AuthenticatedIdentity.ofUser(USER, TENANT, role, rolePermissions.permissionsOf(role));
+    }
+
+    private IssuedApiKey issue(String name, Set<String> scopes, RoleCode role) {
+        return service.issue(new ApiKeyIssueRequest(TENANT, USER, name, new ScopeSet(scopes), null), creator(role));
+    }
+
+    @Test
+    void issuedKeyFollowsTheDocumentedFormatAndPublishesAnEvent() {
+        IssuedApiKey issued = issue("ci", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        assertThat(issued.plaintext()).matches("^ctip_mvp_[0-9A-Za-z]{32}$");
+        assertThat(issued.apiKey().keyPrefix()).isEqualTo(ApiKeyFormat.prefixOf(issued.plaintext()));
+        assertThat(events.published()).hasAtLeastOneElementOfType(ApiKeyEvents.ApiKeyCreated.class);
+        assertThat(apiKeyRepository.countActive(TENANT)).isEqualTo(1);
+    }
+
+    @Test
+    void scopeMayNotExceedTheCreatorPermissions() {
+        assertThatThrownBy(() -> issue("escalate", Set.of("ioc:publish"), RoleCode.USER))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void issuingForAnotherTenantIsRejected() {
+        AuthenticatedIdentity foreign =
+                AuthenticatedIdentity.ofUser(USER, OTHER_TENANT, RoleCode.TENANT_ADMIN, Set.of("ioc:read"));
+        assertThatThrownBy(() -> service.issue(
+                        new ApiKeyIssueRequest(TENANT, USER, "x", new ScopeSet(Set.of("ioc:read")), null), foreign))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void revocationIsScopedToTheOwningTenant() {
+        IssuedApiKey issued = issue("ci", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        assertThatThrownBy(() -> service.revoke(issued.apiKey().id(), OTHER_TENANT))
+                .isInstanceOf(ApiKeyNotFoundException.class);
+
+        service.revoke(issued.apiKey().id(), TENANT);
+        assertThat(apiKeyRepository.findById(issued.apiKey().id()).orElseThrow().revokedAt())
+                .isNotNull();
+        assertThat(events.published()).hasAtLeastOneElementOfType(ApiKeyEvents.ApiKeyRevoked.class);
+        assertThat(service.countActive(TENANT)).isZero();
+    }
+
+    @Test
+    void listingReturnsTheTenantsKeys() {
+        issue("one", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        issue("two", Set.of("ioc:export"), RoleCode.TENANT_ADMIN);
+        assertThat(service.list(TENANT)).hasSize(2);
+        assertThat(service.list(OTHER_TENANT)).isEmpty();
+    }
+
+    @Test
+    void authenticationResolvesEffectivePermissionsAsScopesIntersectRolePermissions() {
+        IssuedApiKey issued = issue("ci", Set.of("ioc:read", "ioc:export"), RoleCode.TENANT_ADMIN);
+        AuthenticatedIdentity identity =
+                authenticator.authenticate(issued.plaintext()).orElseThrow();
+
+        assertThat(identity.isApiKey()).isTrue();
+        assertThat(identity.apiKeyId()).isEqualTo(issued.apiKey().id());
+        assertThat(identity.permissions()).containsExactlyInAnyOrder("ioc:read", "ioc:export");
+
+        // 建立者被降級後,金鑰的有效權限同步縮小
+        memberships.assign(TENANT, USER, RoleCode.ANONYMOUS);
+        assertThat(authenticator.authenticate(issued.plaintext()).orElseThrow().permissions())
+                .containsExactly("ioc:read");
+    }
+
+    @Test
+    void malformedRevokedAndExpiredKeysDoNotAuthenticate() {
+        assertThat(authenticator.authenticate("not-a-key")).isEmpty();
+        assertThat(authenticator.authenticate(null)).isEmpty();
+
+        IssuedApiKey issued = issue("ci", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        assertThat(authenticator.authenticate("ctip_mvp_" + "z".repeat(32))).isEmpty();
+
+        service.revoke(issued.apiKey().id(), TENANT);
+        assertThat(authenticator.authenticate(issued.plaintext())).isEmpty();
+    }
+
+    @Test
+    void lastUsedIsUpdatedAtMostOncePerThrottleWindow() {
+        IssuedApiKey issued = issue("ci", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        authenticator.authenticate(issued.plaintext());
+        var afterFirst =
+                apiKeyRepository.findById(issued.apiKey().id()).orElseThrow().lastUsedAt();
+        assertThat(afterFirst).isEqualTo(FixedClockPort.DEFAULT_NOW);
+
+        authenticator.authenticate(issued.plaintext());
+        assertThat(apiKeyRepository.findById(issued.apiKey().id()).orElseThrow().lastUsedAt())
+                .isEqualTo(afterFirst);
+    }
+
+    @Test
+    void environmentSegmentIsValidated() {
+        assertThatThrownBy(() -> new ApiKeySettings("production")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new ApiKeySettings("prod").environment()).isEqualTo("prod");
+    }
+
+    @Test
+    void refreshTokenSettingsRejectNonPositiveTtl() {
+        assertThatThrownBy(() -> new RefreshTokenSettings(Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LoginPolicy(0, Duration.ofMinutes(1)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new LoginPolicy(10, Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+    }
+}

@@ -1,5 +1,9 @@
 package com.ctip.interfaces.rest.error;
 
+import com.ctip.application.identity.ApiKeyNotFoundException;
+import com.ctip.application.identity.AuthenticationFailedException;
+import com.ctip.application.identity.EmailAlreadyRegisteredException;
+import com.ctip.application.identity.InvalidRefreshTokenException;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.stix.StixExportLimitExceededException;
 import com.ctip.interfaces.rest.dto.common.ErrorResponse;
@@ -11,6 +15,7 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -44,6 +49,38 @@ public class ApiExceptionHandler {
     @ExceptionHandler(StixExportLimitExceededException.class)
     ResponseEntity<ErrorResponse> planLimitExceeded(StixExportLimitExceededException e, HttpServletRequest request) {
         return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, "Bundle exceeds plan object limit", List.of(), request);
+    }
+
+    /** 認證失敗、無效／重用的 refresh token:一律 401,不揭露細節(避免帳號列舉)。 */
+    @ExceptionHandler({AuthenticationFailedException.class, InvalidRefreshTokenException.class})
+    ResponseEntity<ErrorResponse> unauthenticated(RuntimeException e, HttpServletRequest request) {
+        return respond(ErrorCode.UNAUTHENTICATED, e.getMessage(), List.of(), request);
+    }
+
+    @ExceptionHandler(EmailAlreadyRegisteredException.class)
+    ResponseEntity<ErrorResponse> emailTaken(EmailAlreadyRegisteredException e, HttpServletRequest request) {
+        return respond(ErrorCode.CONFLICT, "Email already registered", List.of(), request);
+    }
+
+    @ExceptionHandler(ApiKeyNotFoundException.class)
+    ResponseEntity<ErrorResponse> apiKeyNotFound(ApiKeyNotFoundException e, HttpServletRequest request) {
+        return respond(ErrorCode.NOT_FOUND, "Resource not found", List.of(), request);
+    }
+
+    /** {@code @PreAuthorize} 未通過:已認證但權限不足,或匿名身分不具該權限(§10.2)。 */
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ErrorResponse> accessDenied(AccessDeniedException e, HttpServletRequest request) {
+        return respond(ErrorCode.FORBIDDEN, "Insufficient permission", List.of(), request);
+    }
+
+    /**
+     * domain / 值物件的不變量違反(使用者輸入導致)。訊息為中文且屬內部細節,
+     * 一律代換為固定英文訊息(§9.4:message 為英文、不洩漏內部資訊),詳情只記伺服器端。
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    ResponseEntity<ErrorResponse> invalidDomainInput(IllegalArgumentException e, HttpServletRequest request) {
+        log.debug("請求違反 domain 不變量:{} {}", request.getMethod(), request.getRequestURI(), e);
+        return respond(ErrorCode.INVALID_REQUEST, "Invalid request", List.of(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

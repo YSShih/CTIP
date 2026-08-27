@@ -14,7 +14,7 @@ export type ErrorResponse = ApiSchemas['ErrorResponse'];
  */
 export type PageOf<T> = Omit<ApiSchemas['PageResponse'], 'items'> & { items: T[] };
 
-type OpsOf<M extends 'get' | 'post'> = {
+type OpsOf<M extends 'get' | 'post' | 'delete'> = {
   [P in keyof paths]: paths[P][M] extends { responses: unknown } ? P : never;
 }[keyof paths];
 
@@ -54,11 +54,34 @@ export class ApiError extends Error {
 
 type TokenProvider = () => string | null;
 
+/** 回傳新的 access token;無法續期時回 null(呼叫端隨即被登出)。 */
+type SessionRefresher = () => Promise<string | null>;
+
 let tokenProvider: TokenProvider = () => null;
+let sessionRefresher: SessionRefresher | null = null;
+let refreshInFlight: Promise<string | null> | null = null;
 
 /** 由 app 層注入(讀 authSlice);api 層不得 import stores(§12.2 分層)。 */
 export function setAuthTokenProvider(provider: TokenProvider): void {
   tokenProvider = provider;
+}
+
+/**
+ * 由 app 層注入 refresh token 輪替流程(§10.4:access token 15 分鐘)。
+ * 未注入時 401 直接向上拋,行為與 M1 相同。
+ */
+export function setSessionRefresher(refresher: SessionRefresher | null): void {
+  sessionRefresher = refresher;
+  refreshInFlight = null;
+}
+
+/** 同時間只允許一次輪替:refresh token 單次使用,並行輪替會觸發重用偵測(不變量 U5)。 */
+async function refreshOnce(): Promise<string | null> {
+  if (!sessionRefresher) return null;
+  refreshInFlight ??= sessionRefresher().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
 }
 
 function baseUrl(): string {
@@ -117,20 +140,35 @@ async function toApiError(response: Response): Promise<ApiError> {
   );
 }
 
-async function request<T>(url: string, init: RequestInit): Promise<T> {
+async function send(url: string, init: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
-  const token = tokenProvider();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-
-  let response: Response;
   try {
-    response = await fetch(url, { ...init, headers });
+    return await fetch(url, { ...init, headers });
   } catch (cause) {
     throw new ApiError(0, 'NETWORK_ERROR', cause instanceof Error ? cause.message : '連線失敗');
   }
-  if (!response.ok) throw await toApiError(response);
+}
+
+async function readBody<T>(response: Response): Promise<T> {
+  // 204(如撤銷 API key)無 body;JSON 解析會炸,直接回 undefined
+  if (response.status === 204 || response.headers.get('Content-Length') === '0') {
+    return undefined as T;
+  }
   return (await response.json()) as T;
+}
+
+async function request<T>(url: string, init: RequestInit, autoRefresh = true): Promise<T> {
+  let response = await send(url, init, tokenProvider());
+  if (response.status === 401 && autoRefresh && tokenProvider() !== null) {
+    const refreshed = await refreshOnce();
+    if (refreshed) {
+      response = await send(url, init, refreshed);
+    }
+  }
+  if (!response.ok) throw await toApiError(response);
+  return readBody<T>(response);
 }
 
 interface GetOptions<O> {
@@ -150,6 +188,11 @@ export async function apiGet<P extends OpsOf<'get'>>(
 interface PostOptions {
   path?: Record<string, string>;
   signal?: AbortSignal;
+  /**
+   * 關閉 401 自動輪替。輪替端點本身必須關閉——否則它回 401 時會等待自己的輪替而死鎖。
+   * 一般呼叫端不需要設定。
+   */
+  autoRefresh?: boolean;
 }
 
 export async function apiPost<P extends OpsOf<'post'>>(
@@ -158,10 +201,27 @@ export async function apiPost<P extends OpsOf<'post'>>(
   options: PostOptions = {},
 ): Promise<OkJson<Op<P, 'post'>>> {
   const url = buildUrl(path, options.path, undefined);
-  return request(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: options.signal ?? null,
-  });
+  return request(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: options.signal ?? null,
+    },
+    options.autoRefresh ?? true,
+  );
+}
+
+interface DeleteOptions {
+  path?: Record<string, string>;
+  signal?: AbortSignal;
+}
+
+export async function apiDelete<P extends OpsOf<'delete'>>(
+  path: P,
+  options: DeleteOptions = {},
+): Promise<void> {
+  const url = buildUrl(path, options.path, undefined);
+  await request<void>(url, { method: 'DELETE', signal: options.signal ?? null });
 }

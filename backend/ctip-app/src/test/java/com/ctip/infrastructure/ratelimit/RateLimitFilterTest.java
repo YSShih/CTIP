@@ -6,6 +6,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.infrastructure.web.FilterErrorWriter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,8 +67,8 @@ class RateLimitFilterTest {
 
     @Test
     void escapeJsonHandlesQuotesBackslashesAndControlCharacters() {
-        assertThat(RateLimitFilter.escapeJson("a\"b\\c\nd")).isEqualTo("a\\\"b\\\\c\\u000ad");
-        assertThat(RateLimitFilter.escapeJson("/plain/path")).isEqualTo("/plain/path");
+        assertThat(FilterErrorWriter.escapeJson("a\"b\\c\nd")).isEqualTo("a\\\"b\\\\c\\u000ad");
+        assertThat(FilterErrorWriter.escapeJson("/plain/path")).isEqualTo("/plain/path");
     }
 
     @Test

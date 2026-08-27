@@ -18,7 +18,10 @@ function renderGuarded(store: AppStore, guarded: RouteObject) {
 
 const session = {
   accessToken: 'token',
+  refreshToken: 'refresh',
   user: { id: 'u1', name: 'Analyst' },
+  tenantId: 't1',
+  role: 'USER',
   permissions: ['ioc:write'],
 };
 

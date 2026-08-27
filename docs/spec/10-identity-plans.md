@@ -63,7 +63,7 @@ status: ACTIVE
 ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN
 ```
 
-### 權限（18 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
+### 權限（19 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
 
 ```text
 ioc:read       ioc:export      ioc:submit    ioc:import    ioc:report-fp   ioc:publish
@@ -142,10 +142,20 @@ Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms
 
 - 完整 key 格式：`ctip_<env>_<32 random base62>`，`env ∈ {mvp, dev, stg, prod}`
 - **完整 key 僅在建立當下回傳一次**，之後永不可查
-- 只儲存 `SHA-256(fullKey)` 與前 8 碼明碼前綴
-- 驗證流程：取請求中的前 8 碼 → 以 `ux_api_keys_prefix` 定位單一列 → 比對雜湊（**避免全表雜湊比對**）
+- 只儲存 `SHA-256(fullKey)` 與**隨機段**前 8 碼的明碼前綴
+- 驗證流程：取請求中的隨機段前 8 碼 → 以 `ux_api_keys_prefix` 定位單一列 → 比對雜湊（**避免全表雜湊比對**）
 - `last_used_at` 非同步更新，容許最多 60 秒延遲（避免每次請求一次 UPDATE）
 - 數量上限 `plans.max_api_keys`
+
+> **實作回饋修訂（2026-08-27，Phase 13；ADR 0012 決策 1、2）**
+>
+> 1. 上一節標題原寫「權限（18 項）」，但其程式碼區塊列出的 code 實際有 **19 個**。
+>    清單是矩陣與 `@PreAuthorize` 的實際依據，計數只是敘述，故以清單為準改為 19；
+>    `V24__seed_rbac.sql` 種入 19 個。
+> 2. 前綴原寫「完整 key 的前 8 碼」，但完整格式為 `ctip_<env>_<32 base62>`，其前 8 碼恆為
+>    `ctip_mvp` / `ctip_dev` / `ctip_stg` / `ctip_pro`（prod 被截斷）——同一環境**第二把 key 就會撞
+>    `ux_api_keys_prefix` 唯一約束**，且「定位單一列」永不成立。改為取**隨機段**前 8 碼，
+>    這是唯一同時滿足 `CHAR(8)` + UNIQUE 與定位語意的讀法（前綴仍可公開顯示於 UI）。
 
 ---
 

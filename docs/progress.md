@@ -7,8 +7,8 @@
 
 | Milestone | Phase | 狀態 |
 |---|---|---|
-| M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)**,下一步 Phase 13(M2) |
-| M2 — Platform | 13–19 | 未開始 |
+| M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
+| M2 — Platform | 13–19 | 進行中:Phase 13 完成,下一步 Phase 14 |
 | M3 — Production | 20–23 | 未開始 |
 
 ---
@@ -624,3 +624,57 @@
   - **Phase 17 Redis 限流時**:`InMemoryRateLimiter` bucket map 無逐出一併處理
   - 低風險已知縫隙(不修的理由見 ADR 0011 延後表):filter 例外回 Boot 預設錯誤結構、
     STIX name 截斷 surrogate pair、FilterBar back/forward 草稿不同步、IDNA2003 ß→ss 合併風險
+
+---
+
+## Phase 13 — 認證 · RBAC · API Key · 租戶隔離強制(M2 開始)
+
+- **狀態**:done(2026-08-27)
+- **執行單**:`docs/spec/phases/phase-13.md`
+- **Commit**:(見 git log,message `Phase 13: authentication + rbac + api key + tenant isolation`)
+- **完成判準結果**:全綠 —
+  - `verify -Ptest-integration -Dtest='AuthFlowIntegrationTest,RefreshTokenRotationTest,RbacMatrixTest,ApiKeyTest,CrossTenantIsolationTest,SecurityTest'`(逐字)✅ 138/138
+    (RbacMatrix 101 = **95 格矩陣參數化** + 6;SecurityTest 15,條號 1–9 全數具名;
+     CrossTenantIsolation 以參數化涵蓋每一個 tenant-scoped 端點,全部 404)
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 203 + adapters 24 + app 227 = 467;
+    Spotless/Checkstyle/JaCoCo 全過,含 domain.user / domain.identity ≥ 0.85)
+  - frontend ✅ `tsc --noEmit`、`eslint --max-warnings 0`、`api:check`、`build`、`test`(97 tests,行覆蓋 90%)、`format:check`
+  - `dod.sh mvp` **38/38 回歸**(M2-01)
+- **交付物**:
+  - migration:`V20`(users/roles/permissions/role_permissions/tenant_users)、`V21`(refresh_tokens/api_keys)、
+    `V24`(5 角色 + **19** 權限 + 矩陣展開,冪等)。**版本號依 04 §4.7 區段設計,V8–V19 保留給 M1,跳號是刻意的**
+  - core/domain:`user/`(User U1–U7、RefreshToken、EmailAddress/PasswordHash/RawPassword/TokenHash/
+    TokenFamilyId、輪替命令與結果)、`identity/`(ApiKey K1–K7、KeyPrefix/KeyHash/ScopeSet/ApiKeyFormat)、
+    `shared/Sha256Digest`;事件 `UserRegistered`/`TokenReuseDetected`/`ApiKeyCreated`/`ApiKeyRevoked`/`TenantCreated`
+  - core/application:`identity/`(AuthService 門面 + UserRegistrar/LoginAuthenticator/RefreshTokenRotator/
+    SessionIssuer/IdentityResolver/TenantProvisioner/RefreshTokenFactory/ApiKeyService/ApiKeyFactory/
+    ApiKeyAuthenticator)、`rbac/RoleCode`;port:UserRepository、RefreshTokenRepository、ApiKeyRepository、
+    RolePermissionRepository、TenantMembershipRepository、PasswordHasherPort、AccessTokenPort、SecureTokenGeneratorPort
+  - app/infrastructure:7 個 entity + adapter + 手寫 MapStruct mapper;security:`AuthenticatedIdentity` 綁定、
+    `CtipAuthenticationFilter`(Bearer / X-API-Key / 匿名同一條 chain)、`CtipPermissionEvaluator`、
+    `JwtAccessTokenAdapter`(HS256,claims 僅 sub/tid/roles/perms/iat/exp/jti)、`BCryptPasswordHasher`(cost 12)、
+    `SecureRandomTokenGenerator`;`web/FilterErrorWriter`(filter 內統一錯誤結構,RateLimitFilter 一併改用)
+  - app/interfaces:`AuthController`、`ApiKeyController`(全部 `@PreAuthorize`)、dto、`AuthApi`/`ApiKeyApi` 文件介面;
+    `SecurityConfig`(`@EnableMethodSecurity`、stateless、CORS 加 DELETE);openapi.json 重產(破壞性檢查 PASS)
+  - frontend:`features/auth`(登入/註冊 + CredentialsForm)、`features/apikey`(建立表單/清單/一次性金鑰提示)、
+    `pages/{Login,Register,ApiKeys}Page`、`hooks/useSession`(登出;layouts 不得 import features)、
+    路由掛 `RequireAuth`/`RequirePermission`、`client.ts` 401 自動輪替(並行共用單次輪替)+ `apiDelete`
+- **偏離事項 / ADR**:14 項見 `docs/architecture/decisions/0012-phase13-auth-rbac-decisions.md`;
+  規格回寫 §0.14(10 §10.3/§10.5、04 表 12/16/§4.7、09 §9.1、01 §1.11)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **`@Transactional` 內「寫入失敗紀錄 → 丟例外」會被 rollback**——登入失敗計數(U7)與重用偵測的
+     family 全撤(U5)因此完全失效。改為失敗以回傳值交出、交易在協作者內提交、例外在交易外丟。
+     **Phase 14 的配額扣減若也要在拒絕時留下紀錄,適用同一規則。**
+  2. **API key prefix 規格自相矛盾**:`ctip_<env>_` 前 8 碼是常數,唯一約束必撞。改取隨機段前 8 碼。
+- **給下一 session 的注意事項(Phase 14 = Plan/Subscription/配額 + IOC 寫入端點)**:
+  - 配額值一律讀 `plans` 表;現有四處硬綁 `CtipProperties` 要改:`IocController.clampLimit()`、
+    `api.maxBatchLookup()`、`StixExportSettings`、`RateLimitConfig` 的匿名 60/1000
+  - `ApiKeyService.countActive(tenantId)` 已備妥,供 `plans.max_api_keys` 檢查
+  - `AuthenticatedIdentity` 帶 `apiKeyId`,Phase 14 的限流維度 1–3 直接取用;`RateLimitKey.scope` 是自由字串
+  - `@PreAuthorize("hasAuthority('ioc:submit')")` 即可;**不得在 controller 寫 role 判斷**
+  - 匿名是「具 ANONYMOUS 角色權限的正當身分」,權限不足回 **403**(非 401);過期 token 才是 401 TOKEN_EXPIRED
+  - ArchUnit 規則 9 實際禁止 domain 出現**任何名為 `now` 的方法**(不只 Instant.now);命名避開
+  - openapi operationId 由方法名決定,重名會產生 `list_1`/`list_2` 之類的不穩定編號——新端點方法名取唯一名
+  - 整合測試身分建立用 `com.ctip.support.TestIdentities`(走真實 register/login);
+    fixture 用 `IndicatorFixtures` / `SecurityFixtures`;`SecurityTest` 已達 300 行上限,新條號請先瘦身
+  - 前端加新 feature 前確認 `eslint.config.js` 的 feature 名單已含該名稱(auth/apikey/subscription 皆已列)

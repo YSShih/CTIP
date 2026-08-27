@@ -30,7 +30,10 @@ describe('authSlice', () => {
       undefined,
       sessionEstablished({
         accessToken: 'token',
+        refreshToken: 'refresh',
         user: { id: 'u1', name: 'Analyst' },
+        tenantId: 't1',
+        role: 'USER',
         permissions: ['ioc:read'],
       }),
     );

@@ -110,6 +110,46 @@ export const notFoundError = {
   traceId: '00000000000000000000000000000abc',
 } satisfies ApiSchemas['ErrorResponse'];
 
+export const sampleSession = {
+  accessToken: 'access-token-1',
+  refreshToken: 'refresh-token-1',
+  tokenType: 'Bearer',
+  expiresIn: 900,
+  user: {
+    userId: '3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10',
+    tenantId: '8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b',
+    role: 'TENANT_ADMIN',
+    permissions: ['ioc:read', 'ioc:export', 'stix:export', 'apikey:create', 'apikey:revoke'],
+    displayName: 'Alice Analyst',
+  },
+} satisfies ApiSchemas['AuthResponse'];
+
+export const sampleApiKey = {
+  id: '9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d',
+  name: 'ci-pipeline',
+  keyPrefix: 'aB3xY9kQ',
+  scopes: ['ioc:read'],
+  expiresAt: undefined,
+  lastUsedAt: undefined,
+  revokedAt: undefined,
+  createdAt: '2026-08-27T07:00:00Z',
+} satisfies ApiSchemas['ApiKeyDto'];
+
+export const issuedApiKey = {
+  key: 'ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e',
+  apiKey: sampleApiKey,
+} satisfies ApiSchemas['IssuedApiKeyDto'];
+
+const unauthenticatedError = {
+  timestamp: '2026-08-27T08:00:00Z',
+  status: 401,
+  code: 'UNAUTHENTICATED',
+  message: 'Invalid credentials',
+  path: '/api/v1/auth/login',
+  traceId: 'trace-401',
+  details: [],
+} satisfies ApiSchemas['ErrorResponse'];
+
 export const handlers = [
   http.get('*/api/v1/health', () =>
     HttpResponse.json({ status: 'UP' } satisfies ApiSchemas['HealthDto']),
@@ -133,4 +173,17 @@ export const handlers = [
     if (params.stixId === sampleStixObject.id) return HttpResponse.json(sampleStixObject);
     return HttpResponse.json(notFoundError, { status: 404 });
   }),
+  http.post('*/api/v1/auth/register', () => HttpResponse.json(sampleSession, { status: 201 })),
+  http.post('*/api/v1/auth/login', async ({ request }) => {
+    const body = (await request.json()) as ApiSchemas['LoginRequest'];
+    if (body.password === 'wrong-password') {
+      return HttpResponse.json(unauthenticatedError, { status: 401 });
+    }
+    return HttpResponse.json(sampleSession);
+  }),
+  http.post('*/api/v1/auth/refresh', () => HttpResponse.json(sampleSession)),
+  http.post('*/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })),
+  http.get('*/api/v1/api-keys', () => HttpResponse.json([sampleApiKey])),
+  http.post('*/api/v1/api-keys', () => HttpResponse.json(issuedApiKey, { status: 201 })),
+  http.delete('*/api/v1/api-keys/:id', () => new HttpResponse(null, { status: 204 })),
 ];

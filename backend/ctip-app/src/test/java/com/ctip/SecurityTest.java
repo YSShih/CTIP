@@ -1,34 +1,45 @@
 package com.ctip;
 
+import static com.ctip.support.SecurityFixtures.B_AMBER;
+import static com.ctip.support.SecurityFixtures.DEMO;
+import static com.ctip.support.SecurityFixtures.DEMO_INTERNAL_ONLY;
+import static com.ctip.support.SecurityFixtures.PUBLIC_CLEAR;
+import static com.ctip.support.SecurityFixtures.PUBLIC_CLEAR_INTERNAL;
+import static com.ctip.support.SecurityFixtures.PUBLIC_GREEN;
+import static com.ctip.support.SecurityFixtures.TENANT_B;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ctip.application.identity.ApiKeyIssueRequest;
+import com.ctip.application.identity.ApiKeyService;
+import com.ctip.application.identity.AuthCommands;
+import com.ctip.application.identity.AuthService;
+import com.ctip.application.identity.AuthSession;
+import com.ctip.application.identity.AuthenticatedIdentity;
+import com.ctip.application.identity.InvalidRefreshTokenException;
 import com.ctip.application.indicator.IndicatorFilter;
+import com.ctip.application.port.AccessTokenClaims;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SourceRepository;
+import com.ctip.application.port.TenantMembershipRepository;
 import com.ctip.application.port.TenantRepository;
-import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
+import com.ctip.application.rbac.RoleCode;
+import com.ctip.config.CtipProperties;
+import com.ctip.domain.identity.IssuedApiKey;
+import com.ctip.domain.identity.ScopeSet;
 import com.ctip.domain.indicator.Indicator;
-import com.ctip.domain.indicator.IndicatorId;
-import com.ctip.domain.indicator.IndicatorSourceSnapshot;
-import com.ctip.domain.indicator.IocValue;
-import com.ctip.domain.indicator.NewIndicatorCommand;
-import com.ctip.domain.indicator.SourceRecordStatus;
 import com.ctip.domain.shared.Visibility;
-import com.ctip.domain.source.Reputation;
-import com.ctip.domain.source.SourceId;
-import com.ctip.domain.tenant.Tenant;
 import com.ctip.domain.tenant.TenantId;
-import com.ctip.domain.tenant.TenantSlug;
-import com.ctip.domain.tenant.TenantType;
-import com.ctip.sdk.Confidence;
-import com.ctip.sdk.IocType;
-import com.ctip.sdk.RedistributionPolicy;
-import com.ctip.sdk.Severity;
-import com.ctip.sdk.SourceType;
+import com.ctip.infrastructure.security.JwtAccessTokenAdapter;
 import com.ctip.sdk.Tlp;
+import com.ctip.support.LogCapture;
+import com.ctip.support.SecurityFixtures;
+import com.ctip.support.TestIdentities;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -40,26 +51,14 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 安全測試 1、2、3、7、9(docs/spec/14-testing.md §14.4):1、2、3、9 於 repository/Specification 層
- * 驗證(Phase 4);7(限流 429)於 filter 層驗證(Phase 6)。Phase 9 起同一批條號在 REST 端點層
- * (404 語意)再驗一次。方法名含條號以便追溯。
+ * 安全測試條號 1–9(docs/spec/14-testing.md §14.4;DoD M2-07)。1、2、3、9 於 repository 層與 REST
+ * 端點層雙重驗證;4、5、6 為認證與 API key;7 為限流;8 檢查日誌不含 secret。方法名含條號以便追溯。
  */
 @AutoConfigureMockMvc
 class SecurityTest extends AbstractPostgresIntegrationTest {
-
-    private static final Instant SEEN = Instant.parse("2026-08-10T00:00:00Z");
-    private static final TenantId DEMO = new TenantId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
-    private static final TenantId TENANT_B = new TenantId(UUID.fromString("00000000-0000-0000-0000-00000000000b"));
-
-    private SourceId mockSourceId;
-
-    private static final IndicatorId PUBLIC_GREEN = fixedId("41");
-    private static final IndicatorId PUBLIC_CLEAR = fixedId("42");
-    private static final IndicatorId B_AMBER = fixedId("43");
-    private static final IndicatorId DEMO_INTERNAL_ONLY = fixedId("44");
-    private static final IndicatorId PUBLIC_CLEAR_INTERNAL = fixedId("45");
 
     @Autowired
     private MockMvc mvc;
@@ -73,19 +72,21 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private SourceRepository sources;
 
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
+    private ApiKeyService apiKeys;
+
+    @Autowired
+    private TenantMembershipRepository memberships;
+
+    @Autowired
+    private CtipProperties properties;
+
     @BeforeEach
     void seedSecurityFixtures() {
-        mockSourceId = sources.findBySourceType(SourceType.MOCK_OPENPHISH)
-                .orElseThrow()
-                .id();
-        if (tenants.findById(TENANT_B).isEmpty()) {
-            tenants.save(Tenant.create(TENANT_B, new TenantSlug("sec-test-b"), "Tenant B", TenantType.ORGANIZATION));
-        }
-        upsert(PUBLIC_CLEAR, TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE, "sec-clear");
-        upsert(PUBLIC_GREEN, TenantId.PUBLIC, Tlp.GREEN, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE, "sec-green");
-        upsert(B_AMBER, TENANT_B, Tlp.AMBER, RedistributionPolicy.ATTRIBUTION_REQUIRED, "sec-b-amber");
-        upsert(DEMO_INTERNAL_ONLY, DEMO, Tlp.AMBER, RedistributionPolicy.INTERNAL_ONLY, "sec-internal");
-        upsert(PUBLIC_CLEAR_INTERNAL, TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.INTERNAL_ONLY, "sec-pub-int");
+        SecurityFixtures.seed(tenants, sources, indicators);
     }
 
     /**
@@ -98,10 +99,7 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     void security9_publicInternalOnlyIndicatorIsInvisibleToAnonymous() throws Exception {
         Visibility anonymous = Visibility.anonymous();
         assertThat(indicators.findVisibleById(PUBLIC_CLEAR_INTERNAL, anonymous)).isEmpty();
-        assertThat(indicators
-                        .findVisible(anonymous, IndicatorFilter.none(), null, 5000)
-                        .items())
-                .noneMatch(i -> i.id().equals(PUBLIC_CLEAR_INTERNAL));
+        assertThat(page(anonymous)).noneMatch(i -> i.id().equals(PUBLIC_CLEAR_INTERNAL));
         // 端點層:404,不洩漏存在性
         mvc.perform(asTestIp(get("/api/v1/iocs/" + PUBLIC_CLEAR_INTERNAL.value())))
                 .andExpect(status().isNotFound());
@@ -114,11 +112,7 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         assertThat(indicators.findVisibleById(PUBLIC_GREEN, anonymous)).isEmpty();
         assertThat(indicators.findVisibleById(B_AMBER, anonymous)).isEmpty();
 
-        List<Indicator> page = indicators
-                .findVisible(anonymous, IndicatorFilter.none(), null, 5000)
-                .items();
-        assertThat(page).isNotEmpty();
-        assertThat(page).allSatisfy(i -> {
+        assertThat(page(anonymous)).isNotEmpty().allSatisfy(i -> {
             assertThat(i.ownerTenantId()).isEqualTo(TenantId.PUBLIC);
             assertThat(i.tlp()).isEqualTo(Tlp.CLEAR);
         });
@@ -131,10 +125,7 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         assertThat(indicators.findVisibleById(PUBLIC_GREEN, demoView)).isPresent();
         assertThat(indicators.findVisibleById(B_AMBER, demoView)).isEmpty();
 
-        List<Indicator> page = indicators
-                .findVisible(demoView, IndicatorFilter.none(), null, 5000)
-                .items();
-        assertThat(page)
+        assertThat(page(demoView))
                 .allSatisfy(i -> assertThat(i.ownerTenantId().equals(DEMO)
                                 || i.ownerTenantId().isPublic())
                         .isTrue());
@@ -144,10 +135,7 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     void security3_crossTenantAccessYieldsNotFound() {
         Visibility tenantBView = Visibility.authenticated(TENANT_B);
         assertThat(indicators.findVisibleById(DEMO_INTERNAL_ONLY, tenantBView)).isEmpty();
-        assertThat(indicators
-                        .findVisible(tenantBView, IndicatorFilter.none(), null, 5000)
-                        .items())
-                .noneMatch(i -> i.ownerTenantId().equals(DEMO));
+        assertThat(page(tenantBView)).noneMatch(i -> i.ownerTenantId().equals(DEMO));
         // 擁有租戶自己查得到(對照組)
         assertThat(indicators.findVisibleById(B_AMBER, tenantBView)).isPresent();
     }
@@ -165,38 +153,6 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         Indicator internalOnly = indicators.findById(DEMO_INTERNAL_ONLY).orElseThrow();
         assertThat(internalOnly.canBeRedistributedTo(TENANT_B)).isFalse();
         assertThat(internalOnly.eligibleForBloom()).isFalse();
-    }
-
-    private void upsert(IndicatorId id, TenantId owner, Tlp tlp, RedistributionPolicy policy, String name) {
-        if (indicators.findById(id).isPresent()) {
-            return;
-        }
-        String normalized = name + ".security.ctip-sample.net";
-        IndicatorSourceSnapshot report = new IndicatorSourceSnapshot(
-                mockSourceId,
-                normalized,
-                Confidence.of(60),
-                Severity.MEDIUM,
-                tlp,
-                SEEN,
-                SEEN,
-                null,
-                policy,
-                1,
-                SourceRecordStatus.ACTIVE,
-                Set.of("security-test"));
-        indicators.save(Indicator.create(
-                new NewIndicatorCommand(
-                        id,
-                        owner,
-                        new IocValue(IocType.DOMAIN, null, normalized, normalized),
-                        report,
-                        new Reputation(70)),
-                new Sha256FingerprintStrategy()));
-    }
-
-    private static IndicatorId fixedId(String suffix) {
-        return new IndicatorId(UUID.fromString("00000000-0000-0000-0000-0000000000" + suffix));
     }
 
     /** 條號 1(端點層):匿名經 HTTP 只拿得到 public CLEAR;GREEN 一律 404。 */
@@ -225,9 +181,14 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    private List<Indicator> page(Visibility visibility) {
+        return indicators
+                .findVisible(visibility, IndicatorFilter.none(), null, 5000)
+                .items();
+    }
+
     /** 端點層測試用獨立 client IP,避免與條號 7 共用匿名限流 bucket。 */
-    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder asTestIp(
-            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder) {
+    private static MockHttpServletRequestBuilder asTestIp(MockHttpServletRequestBuilder builder) {
         return builder.with(req -> {
             req.setRemoteAddr("203.0.113.104");
             return req;
@@ -244,5 +205,96 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("X-RateLimit-Remaining", "0"))
                 .andExpect(header().exists("Retry-After"));
+    }
+
+    /**
+     * 條號 4:過期 token 被拒,且與「無效 token」可區分(§9.4:TOKEN_EXPIRED vs UNAUTHENTICATED)。
+     * 以相同 secret、過去時鐘簽出一枚必然過期的 token。
+     */
+    @Test
+    void security4ExpiredAccessTokenIsRejected() throws Exception {
+        AuthSession session = identities().register("sec4@example.org", RoleCode.USER);
+        AuthenticatedIdentity identity = session.identity();
+        String expired = new JwtAccessTokenAdapter(
+                        properties.jwt().secret(),
+                        Duration.ofSeconds(60),
+                        () -> Instant.now().minusSeconds(3600))
+                .issue(new AccessTokenClaims(
+                        identity.userId(),
+                        identity.tenantId(),
+                        Set.of(identity.role().name()),
+                        identity.permissions(),
+                        UUID.randomUUID()));
+
+        mvc.perform(asTestIp(get("/api/v1/api-keys")).header("Authorization", "Bearer " + expired))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("TOKEN_EXPIRED"));
+        mvc.perform(asTestIp(get("/api/v1/api-keys")).header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+        mvc.perform(asTestIp(get("/api/v1/api-keys")).header("Authorization", TestIdentities.bearer(session)))
+                .andExpect(status().isOk());
+    }
+
+    /** 條號 5:撤銷的 refresh token 被拒,且重用觸發該 family 全面撤銷(不變量 U4–U6)。 */
+    @Test
+    void security5RefreshTokenReuseRevokesTheWholeFamily() {
+        AuthSession first = identities().register("sec5@example.org", RoleCode.USER);
+        AuthSession second = refresh(first.refreshToken());
+
+        assertThatThrownBy(() -> refresh(first.refreshToken())).isInstanceOf(InvalidRefreshTokenException.class);
+        // family 全撤:當時仍有效的最新一枚也失效
+        assertThatThrownBy(() -> refresh(second.refreshToken())).isInstanceOf(InvalidRefreshTokenException.class);
+    }
+
+    /** 條號 6:撤銷的 API key 被拒;API key 的 scope 無法超出建立者權限(不變量 K4)。 */
+    @Test
+    void security6RevokedApiKeyIsRejectedAndScopeCannotEscalate() throws Exception {
+        AuthSession user = identities().register("sec6@example.org", RoleCode.USER);
+        assertThatThrownBy(() -> issueKey(user, "escalation", "ioc:submit"))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        IssuedApiKey issued = issueKey(user, "readonly", "stix:export");
+        mvc.perform(asTestIp(get("/api/v1/stix/bundle")).header("X-API-Key", issued.plaintext()))
+                .andExpect(status().isOk());
+
+        apiKeys.revoke(issued.apiKey().id(), user.identity().tenantId());
+        mvc.perform(asTestIp(get("/api/v1/stix/bundle")).header("X-API-Key", issued.plaintext()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /** 條號 8:日誌不得出現密碼、JWT secret、API key 原文、refresh token 原文、access token。 */
+    @Test
+    void security8SecretsNeverReachTheLogs() throws Exception {
+        try (LogCapture logs = LogCapture.start()) {
+            AuthSession session = identities().register("sec8@example.org", RoleCode.TENANT_ADMIN);
+            IssuedApiKey issued = issueKey(session, "log-probe", "ioc:read");
+            mvc.perform(asTestIp(get("/api/v1/iocs?limit=1")).header("X-API-Key", issued.plaintext()))
+                    .andExpect(status().isOk());
+            mvc.perform(asTestIp(get("/api/v1/api-keys")).header("Authorization", TestIdentities.bearer(session)))
+                    .andExpect(status().isOk());
+
+            assertThat(logs.text())
+                    .doesNotContain(TestIdentities.PASSWORD)
+                    .doesNotContain(properties.jwt().secret())
+                    .doesNotContain(issued.plaintext())
+                    .doesNotContain(session.refreshToken())
+                    .doesNotContain(session.accessToken());
+        }
+    }
+
+    private AuthSession refresh(String refreshToken) {
+        return authService.refresh(new AuthCommands.Refresh(refreshToken, "junit", "127.0.0.1"));
+    }
+
+    private IssuedApiKey issueKey(AuthSession session, String name, String scope) {
+        AuthenticatedIdentity identity = session.identity();
+        return apiKeys.issue(
+                new ApiKeyIssueRequest(identity.tenantId(), identity.userId(), name, new ScopeSet(Set.of(scope)), null),
+                identity);
+    }
+
+    private TestIdentities identities() {
+        return new TestIdentities(authService, memberships);
     }
 }

@@ -21,6 +21,7 @@ public record CtipProperties(
         @NotNull Environment environment,
         @NotNull @Valid Cors cors,
         @NotNull @Valid Jwt jwt,
+        @NotNull @Valid Security security,
         @NotNull @Valid RateLimit rateLimit,
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
@@ -45,6 +46,10 @@ public record CtipProperties(
             @NotBlank String secret,
             @Positive long accessTokenExpiration,
             @Positive long refreshTokenExpiration) {}
+
+    /** 登入鎖定門檻(docs/spec/10-identity-plans.md §10.4:連續失敗 10 次 → 鎖定 15 分鐘)。 */
+    public record Security(
+            @Positive int loginMaxFailedAttempts, @Positive int loginLockMinutes) {}
 
     /**
      * 匿名限流數值依 10-identity-plans.md §10.6(60/min、1000/day);

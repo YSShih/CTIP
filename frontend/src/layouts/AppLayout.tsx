@@ -1,7 +1,13 @@
-import { Menu, Monitor, Moon, Radar, Sun } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router';
+import { KeyRound, LogIn, LogOut, Menu, Monitor, Moon, Radar, Sun } from 'lucide-react';
+import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Toaster } from '../components/Toaster/Toaster';
 import { Button } from '../components/ui/button';
+import {
+  useCurrentUser,
+  useHasPermission,
+  useIsAuthenticated,
+  useLogout,
+} from '../hooks/useSession';
 import { useAppDispatch, useAppSelector } from '../stores/hooks';
 import {
   selectSidebarCollapsed,
@@ -44,12 +50,22 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
   );
 }
 
-/** §12.2:所有頁面共用的外框(header/nav/theme/toast/Outlet),響應式。 */
+/** §12.2:所有頁面共用的外框(header/nav/theme/session/toast/Outlet),響應式。 */
 export function AppLayout() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const theme = useAppSelector(selectTheme);
   const menuCollapsed = useAppSelector(selectSidebarCollapsed);
   const ThemeIcon = THEME_ICON[theme];
+  const authenticated = useIsAuthenticated();
+  const user = useCurrentUser();
+  const canManageApiKeys = useHasPermission('apikey:create');
+  const logout = useLogout();
+
+  async function handleLogout() {
+    await logout();
+    void navigate('/');
+  }
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -72,6 +88,34 @@ export function AppLayout() {
           </nav>
 
           <div className="ml-auto flex items-center gap-1">
+            {authenticated ? (
+              <>
+                {canManageApiKeys ? (
+                  <NavLink
+                    to="/settings/api-keys"
+                    className="hidden items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
+                  >
+                    <KeyRound aria-hidden className="size-4" />
+                    API Key
+                  </NavLink>
+                ) : null}
+                <span className="hidden max-w-[12rem] truncate font-mono text-xs text-muted-foreground md:inline">
+                  {user?.name}
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => void handleLogout()}>
+                  <LogOut aria-hidden className="size-4" />
+                  登出
+                </Button>
+              </>
+            ) : (
+              <NavLink
+                to="/login"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <LogIn aria-hidden className="size-4" />
+                登入
+              </NavLink>
+            )}
             <Button
               variant="ghost"
               size="icon"

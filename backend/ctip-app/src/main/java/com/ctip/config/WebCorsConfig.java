@@ -8,7 +8,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * CORS(05 §5.7:CORS_ALLOWED_ORIGINS → ctip.cors.allowed-origins;逗號分隔多來源)。
- * 只開放 /api/**;M1 全讀取 + 少量 POST 查詢端點,無憑證(cookie)需求故不開 allowCredentials。
+ * 只開放 /api/**;憑證走 Authorization / X-API-Key 標頭而非 cookie,故不開 allowCredentials。
+ * DELETE 自 Phase 13 起需要(撤銷 API key)。Spring Security filter chain 以
+ * {@code http.cors(...)} 沿用本設定(無 CorsConfigurationSource bean 時回退到 MVC 的對應)。
  * StartupValidator 已擋 prod 萬用字元來源。
  */
 @Configuration
@@ -24,7 +26,7 @@ class WebCorsConfig implements WebMvcConfigurer {
     public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOrigins(parseOrigins(cors.allowedOrigins()))
-                .allowedMethods("GET", "POST")
+                .allowedMethods("GET", "POST", "DELETE")
                 .allowedHeaders("*")
                 .exposedHeaders("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After")
                 .maxAge(3600);

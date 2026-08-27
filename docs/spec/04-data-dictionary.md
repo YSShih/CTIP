@@ -492,7 +492,7 @@ CONSTRAINT ux_permissions_code UNIQUE (code)
 CONSTRAINT ck_permissions_fmt  CHECK (code ~ '^[a-z]+:[a-z-]+$')
 ```
 
-完整權限清單（種子資料，共 18 項）：
+完整權限清單（種子資料，共 19 項）：
 
 ```text
 ioc:read      ioc:export     ioc:submit      ioc:import      ioc:report-fp
@@ -587,7 +587,7 @@ CREATE INDEX ix_rt_gc          ON refresh_tokens (expires_at);
 | `tenant_id` | UUID | NO | — | FK → `tenants.id` |
 | `user_id` | UUID | NO | — | FK → `users.id`，建立者 |
 | `name` | VARCHAR(128) | NO | — | 使用者自訂標籤 |
-| `key_prefix` | CHAR(8) | NO | — | 前 8 碼明碼，供 UI 辨識 |
+| `key_prefix` | CHAR(8) | NO | — | **隨機段**前 8 碼明碼，供 UI 辨識與定位（見 [10 §10.5](10-identity-plans.md#105-api-key-phase-13--m2)） |
 | `key_hash` | CHAR(64) | NO | — | `SHA-256(full key)` |
 | `scopes` | TEXT[] | NO | `'{}'` | 必為 `permissions.code` 的子集 |
 | `expires_at` | TIMESTAMPTZ | YES | — | null = 不過期 |
@@ -1094,7 +1094,7 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V21__create_auth_tokens.sql` | `refresh_tokens`、`api_keys` | 15, 16 |
 | `V22__create_plans.sql` | `plans`、`subscriptions` | 17, 18 |
 | `V23__seed_plans.sql` | 四個方案（冪等） | — |
-| `V24__seed_rbac.sql` | 五個角色、18 個權限、角色權限對應（冪等） | — |
+| `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
 | `V25__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
 | `V26__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
 | `V30__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |

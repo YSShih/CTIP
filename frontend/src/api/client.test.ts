@@ -2,7 +2,14 @@ import { http, HttpResponse } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
 import { server } from '../test/server';
 import { notFoundError, sampleIoc } from '../test/handlers';
-import { ApiError, apiGet, apiPost, setAuthTokenProvider } from './client';
+import {
+  ApiError,
+  apiDelete,
+  apiGet,
+  apiPost,
+  setAuthTokenProvider,
+  setSessionRefresher,
+} from './client';
 
 afterEach(() => setAuthTokenProvider(() => null));
 
@@ -93,5 +100,107 @@ describe('apiPost', () => {
     );
     const response = await apiPost('/api/v1/iocs/lookup', { values: ['203.0.113.7'] });
     expect(response.results).toHaveLength(1);
+  });
+});
+
+describe('401 自動輪替', () => {
+  afterEach(() => {
+    setAuthTokenProvider(() => null);
+    setSessionRefresher(null);
+  });
+
+  it('refreshes once and retries the original request', async () => {
+    let calls = 0;
+    const seenTokens: (string | null)[] = [];
+    server.use(
+      http.get('*/api/v1/health', ({ request }) => {
+        calls += 1;
+        seenTokens.push(request.headers.get('Authorization'));
+        if (calls === 1) {
+          return HttpResponse.json({ code: 'TOKEN_EXPIRED', message: 'expired' }, { status: 401 });
+        }
+        return HttpResponse.json({ status: 'UP' });
+      }),
+    );
+    let current = 'stale-token';
+    setAuthTokenProvider(() => current);
+    setSessionRefresher(async () => {
+      current = 'fresh-token';
+      return current;
+    });
+
+    await expect(apiGet('/api/v1/health')).resolves.toEqual({ status: 'UP' });
+    expect(seenTokens).toEqual(['Bearer stale-token', 'Bearer fresh-token']);
+  });
+
+  it('propagates the 401 when the refresher gives up', async () => {
+    server.use(
+      http.get('*/api/v1/health', () =>
+        HttpResponse.json({ code: 'UNAUTHENTICATED', message: 'nope' }, { status: 401 }),
+      ),
+    );
+    setAuthTokenProvider(() => 'stale-token');
+    setSessionRefresher(async () => null);
+
+    await expect(apiGet('/api/v1/health')).rejects.toMatchObject({
+      status: 401,
+      code: 'UNAUTHENTICATED',
+    });
+  });
+
+  /** refresh token 單次使用:並行請求必須共用同一次輪替,否則會觸發重用偵測(不變量 U5)。 */
+  it('coalesces concurrent refreshes into a single rotation', async () => {
+    let refreshes = 0;
+    let served = 0;
+    server.use(
+      http.get('*/api/v1/health', () => {
+        served += 1;
+        if (served <= 2) {
+          return HttpResponse.json({ code: 'TOKEN_EXPIRED', message: 'expired' }, { status: 401 });
+        }
+        return HttpResponse.json({ status: 'UP' });
+      }),
+    );
+    setAuthTokenProvider(() => 'stale-token');
+    setSessionRefresher(async () => {
+      refreshes += 1;
+      return 'fresh-token';
+    });
+
+    await Promise.all([apiGet('/api/v1/health'), apiGet('/api/v1/health')]);
+    expect(refreshes).toBe(1);
+  });
+
+  it('does not attempt a refresh for anonymous requests', async () => {
+    let refreshes = 0;
+    server.use(
+      http.get('*/api/v1/health', () =>
+        HttpResponse.json({ code: 'UNAUTHENTICATED', message: 'nope' }, { status: 401 }),
+      ),
+    );
+    setAuthTokenProvider(() => null);
+    setSessionRefresher(async () => {
+      refreshes += 1;
+      return 'fresh-token';
+    });
+
+    await expect(apiGet('/api/v1/health')).rejects.toMatchObject({ status: 401 });
+    expect(refreshes).toBe(0);
+  });
+});
+
+describe('apiDelete', () => {
+  it('sends DELETE and tolerates an empty 204 body', async () => {
+    let method = '';
+    server.use(
+      http.delete('*/api/v1/api-keys/:id', ({ request }) => {
+        method = request.method;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    await expect(
+      apiDelete('/api/v1/api-keys/{id}', { path: { id: 'abc' } }),
+    ).resolves.toBeUndefined();
+    expect(method).toBe('DELETE');
   });
 });

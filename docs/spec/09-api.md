@@ -82,11 +82,20 @@ GET    /api/v1/sources/{id}/status                 匿名
 ### 認證 `[M2]`
 
 ```text
-POST   /api/v1/auth/register
-POST   /api/v1/auth/login
-POST   /api/v1/auth/refresh
-POST   /api/v1/auth/logout
+POST   /api/v1/auth/register                       （匿名）
+POST   /api/v1/auth/login                          （匿名）
+POST   /api/v1/auth/refresh                        （以請求主體的 refresh token 認證）
+POST   /api/v1/auth/logout                         （以請求主體的 refresh token 認證）
 ```
+
+> **實作回饋修訂（2026-08-27,Phase 13;ADR 0012 決策 13)**
+> 本節與 API Key 各端點原本只有路徑與所需權限,沒有 request/response schema。
+> 四個 `/auth/*` 端點為取得憑證的入口,一律匿名可存取(`refresh`/`logout` 以主體中的
+> refresh token 自我認證,不需 `Authorization` 標頭)。DTO 依 §9.5 慣例(全部為 record、
+> 置於 `interfaces/rest/dto/{auth,apikey}/`、經 `interfaces/rest/openapi/*Api` 標註)由實作定義,
+> 對外契約以 `docs/api/openapi.json` 為單一來源。
+> `POST /auth/register` 回 `201`,`login`/`refresh` 回 `200`,`logout` 回 `204`;
+> `POST /api-keys` 回 `201` 且**完整金鑰只在此回傳一次**(不變量 K1)。
 
 ### 訂閱與 API Key `[M2]`
 

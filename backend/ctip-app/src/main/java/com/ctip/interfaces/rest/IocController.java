@@ -27,6 +27,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -67,6 +68,7 @@ class IocController implements IocApi {
 
     @Override
     @GetMapping
+    @PreAuthorize("hasAuthority('ioc:read')")
     public PageResponse<IocDto> list(@ParameterObject IocListParams params) {
         IndicatorFilter filter = new IndicatorFilter(
                 params.type(),
@@ -96,18 +98,21 @@ class IocController implements IocApi {
 
     @Override
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('ioc:read')")
     public IocDto byId(@PathVariable UUID id) {
         return assembler.toDto(visibleIndicator(id), tenantContext.tenantId());
     }
 
     @Override
     @GetMapping("/{id}/sources")
+    @PreAuthorize("hasAuthority('ioc:read')")
     public List<IocSourceDto> sources(@PathVariable UUID id) {
         return assembler.toSourceDtos(visibleIndicator(id), tenantContext.tenantId());
     }
 
     @Override
     @PostMapping("/search")
+    @PreAuthorize("hasAuthority('ioc:read')")
     public PageResponse<IocDto> search(@Valid @RequestBody SearchRequest request) {
         IndicatorFilter filter = new IndicatorFilter(
                 parseEnum(IocType.class, request.type(), "type"),
@@ -129,6 +134,7 @@ class IocController implements IocApi {
 
     @Override
     @PostMapping("/lookup")
+    @PreAuthorize("hasAuthority('ioc:read')")
     public LookupResponse lookup(@Valid @RequestBody LookupRequest request) {
         if (request.values().size() > api.maxBatchLookup()) {
             throw new ApiException(

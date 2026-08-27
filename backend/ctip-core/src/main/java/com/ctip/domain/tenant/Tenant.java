@@ -1,5 +1,9 @@
 package com.ctip.domain.tenant;
 
+import com.ctip.domain.event.DomainEvent;
+import com.ctip.domain.event.PendingEvents;
+import com.ctip.domain.event.TenantEvents;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -8,6 +12,8 @@ import java.util.Objects;
  * T4 以「type = SYSTEM ⟺ id = public」在建構時強制(id 唯一 ⇒ SYSTEM 唯一)。
  */
 public final class Tenant {
+
+    private final PendingEvents pendingEvents = new PendingEvents();
 
     private final TenantId id;
     private TenantSlug slug;
@@ -27,7 +33,9 @@ public final class Tenant {
     }
 
     public static Tenant create(TenantId id, TenantSlug slug, String name, TenantType type) {
-        return new Tenant(id, slug, name, type, TenantStatus.ACTIVE);
+        Tenant tenant = new Tenant(id, slug, name, type, TenantStatus.ACTIVE);
+        tenant.pendingEvents.record(new TenantEvents.TenantCreated(id, slug.value()));
+        return tenant;
     }
 
     /** 由持久化狀態重建(不重放事件,僅重新驗證不變量)。 */
@@ -49,6 +57,10 @@ public final class Tenant {
 
     public boolean isPublic() {
         return id.isPublic();
+    }
+
+    public List<DomainEvent> pullEvents() {
+        return pendingEvents.pull();
     }
 
     private void rejectIfPublic(String operation) {

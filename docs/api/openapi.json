@@ -1,6 +1,76 @@
 {
   "components" : {
     "schemas" : {
+      "ApiKeyCreateRequest" : {
+        "properties" : {
+          "expiresAt" : {
+            "example" : "2027-01-01T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "example" : "ci-pipeline",
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "scopes" : {
+            "items" : {
+              "example" : "ioc:read",
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          }
+        },
+        "required" : [ "name", "scopes" ],
+        "type" : "object"
+      },
+      "ApiKeyDto" : {
+        "properties" : {
+          "createdAt" : {
+            "example" : "2026-08-27T07:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "expiresAt" : {
+            "example" : "2027-01-01T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "example" : "9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d",
+            "type" : "string"
+          },
+          "keyPrefix" : {
+            "example" : "aB3xY9kQ",
+            "type" : "string"
+          },
+          "lastUsedAt" : {
+            "example" : "2026-08-27T08:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "example" : "ci-pipeline",
+            "type" : "string"
+          },
+          "revokedAt" : {
+            "example" : "null",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "scopes" : {
+            "items" : {
+              "example" : "ioc:read",
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          }
+        },
+        "type" : "object"
+      },
       "AttributionDto" : {
         "properties" : {
           "homepage" : {
@@ -8,6 +78,31 @@
           },
           "sourceName" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "AuthResponse" : {
+        "properties" : {
+          "accessToken" : {
+            "example" : "eyJhbGciOiJIUzI1NiJ9...",
+            "type" : "string"
+          },
+          "expiresIn" : {
+            "example" : 900,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "refreshToken" : {
+            "example" : "0G2f...",
+            "type" : "string"
+          },
+          "tokenType" : {
+            "example" : "Bearer",
+            "type" : "string"
+          },
+          "user" : {
+            "$ref" : "#/components/schemas/SessionUserDto"
           }
         },
         "type" : "object"
@@ -183,6 +278,36 @@
         },
         "type" : "object"
       },
+      "IssuedApiKeyDto" : {
+        "properties" : {
+          "apiKey" : {
+            "$ref" : "#/components/schemas/ApiKeyDto"
+          },
+          "key" : {
+            "example" : "ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "LoginRequest" : {
+        "properties" : {
+          "email" : {
+            "example" : "analyst@example.org",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "example" : "correct-horse-battery",
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "password" ],
+        "type" : "object"
+      },
       "LookupRequest" : {
         "properties" : {
           "values" : {
@@ -220,6 +345,49 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "RefreshRequest" : {
+        "properties" : {
+          "refreshToken" : {
+            "example" : "0G2f...",
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "refreshToken" ],
+        "type" : "object"
+      },
+      "RegisterRequest" : {
+        "properties" : {
+          "displayName" : {
+            "example" : "Alice Analyst",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "email" : {
+            "example" : "analyst@example.org",
+            "format" : "email",
+            "maxLength" : 320,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "password" : {
+            "example" : "correct-horse-battery",
+            "maxLength" : 256,
+            "minLength" : 12,
+            "type" : "string"
+          },
+          "tenantName" : {
+            "example" : "Example Org",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "email", "password" ],
         "type" : "object"
       },
       "Result" : {
@@ -303,6 +471,35 @@
           }
         },
         "required" : [ "query" ],
+        "type" : "object"
+      },
+      "SessionUserDto" : {
+        "properties" : {
+          "displayName" : {
+            "example" : "Alice Analyst",
+            "type" : "string"
+          },
+          "permissions" : {
+            "example" : [ "ioc:read", "ioc:submit" ],
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "role" : {
+            "example" : "TENANT_ADMIN",
+            "type" : "string"
+          },
+          "tenantId" : {
+            "example" : "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+            "type" : "string"
+          },
+          "userId" : {
+            "example" : "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10",
+            "type" : "string"
+          }
+        },
         "type" : "object"
       },
       "SourceDto" : {
@@ -443,6 +640,20 @@
         },
         "type" : "object"
       }
+    },
+    "securitySchemes" : {
+      "apiKeyAuth" : {
+        "description" : "Machine-to-machine key: ctip_<env>_<32 base62>",
+        "in" : "header",
+        "name" : "X-API-Key",
+        "type" : "apiKey"
+      },
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "description" : "Access token from POST /api/v1/auth/login",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
     }
   },
   "info" : {
@@ -452,6 +663,515 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/api-keys" : {
+      "get" : {
+        "description" : "Returns every key issued for the caller's tenant, including revoked ones. The key material itself is never returned. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:create。",
+        "operationId" : "listApiKeys",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "createdAt" : "2026-08-27T07:00:00Z",
+                  "expiresAt" : null,
+                  "id" : "9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d",
+                  "keyPrefix" : "aB3xY9kQ",
+                  "lastUsedAt" : null,
+                  "name" : "ci-pipeline",
+                  "revokedAt" : null,
+                  "scopes" : [ "ioc:read" ]
+                } ],
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ApiKeyDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "API keys of the caller's tenant"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ApiKeyDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Missing apikey:create permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "List the tenant's API keys",
+        "tags" : [ "API Keys" ]
+      },
+      "post" : {
+        "description" : "Issues a key for the caller's tenant. The full key is returned exactly once and only its SHA-256 hash is stored; scopes may not exceed the creator's own permissions. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:create。",
+        "operationId" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ApiKeyCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "apiKey" : {
+                    "createdAt" : "2026-08-27T07:00:00Z",
+                    "expiresAt" : null,
+                    "id" : "9c7a1e42-5f3b-4a10-9d2c-7e8f0a1b2c3d",
+                    "keyPrefix" : "aB3xY9kQ",
+                    "lastUsedAt" : null,
+                    "name" : "ci-pipeline",
+                    "revokedAt" : null,
+                    "scopes" : [ "ioc:read" ]
+                  },
+                  "key" : "ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedApiKeyDto"
+                }
+              }
+            },
+            "description" : "Key created; full key returned once"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedApiKeyDto"
+                }
+              }
+            },
+            "description" : "Scope exceeds creator permissions (INVALID_REQUEST)"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedApiKeyDto"
+                }
+              }
+            },
+            "description" : "Missing apikey:create permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Create an API key",
+        "tags" : [ "API Keys" ]
+      }
+    },
+    "/api/v1/api-keys/{id}" : {
+      "delete" : {
+        "description" : "Revocation is irreversible. Keys belonging to another tenant are reported as not found rather than forbidden. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:revoke。",
+        "operationId" : "revoke",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "content" : {
+              "application/json" : {
+                "examples" : {
+                  "empty" : {
+                    "description" : "empty",
+                    "value" : null
+                  }
+                }
+              }
+            },
+            "description" : "Key revoked"
+          },
+          "403" : {
+            "description" : "Missing apikey:revoke permission (FORBIDDEN)"
+          },
+          "404" : {
+            "description" : "Unknown key or another tenant's key (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Revoke an API key",
+        "tags" : [ "API Keys" ]
+      }
+    },
+    "/api/v1/auth/login" : {
+      "post" : {
+        "description" : "Returns an access token (15 minutes by default) and a single-use refresh token. Ten consecutive failures lock the account for fifteen minutes. 認證:匿名(本端點用於取得憑證)。",
+        "operationId" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "accessToken" : "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                  "expiresIn" : 900,
+                  "refreshToken" : "0G2f8xQ...",
+                  "tokenType" : "Bearer",
+                  "user" : {
+                    "displayName" : "Alice Analyst",
+                    "permissions" : [ "ioc:read", "ioc:submit" ],
+                    "role" : "TENANT_ADMIN",
+                    "tenantId" : "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                    "userId" : "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                  }
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Session issued"
+          },
+          "401" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Invalid credentials or locked account (UNAUTHENTICATED)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Log in with email and password",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/logout" : {
+      "post" : {
+        "description" : "Revokes every refresh token in the presented token's family. Access tokens are short-lived and are not blacklisted. 認證:以請求主體中的 refresh token 認證,不需 Authorization 標頭。",
+        "operationId" : "logout",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "content" : {
+              "application/json" : {
+                "examples" : {
+                  "empty" : {
+                    "description" : "empty",
+                    "value" : null
+                  }
+                }
+              }
+            },
+            "description" : "Session revoked"
+          },
+          "401" : {
+            "description" : "Unknown refresh token (UNAUTHENTICATED)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Log out",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/refresh" : {
+      "post" : {
+        "description" : "Exchanges a refresh token for a new pair. The presented token is consumed; replaying an already-used token revokes the whole token family. 認證:以請求主體中的 refresh token 認證,不需 Authorization 標頭。",
+        "operationId" : "refresh",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "accessToken" : "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                  "expiresIn" : 900,
+                  "refreshToken" : "0G2f8xQ...",
+                  "tokenType" : "Bearer",
+                  "user" : {
+                    "displayName" : "Alice Analyst",
+                    "permissions" : [ "ioc:read", "ioc:submit" ],
+                    "role" : "TENANT_ADMIN",
+                    "tenantId" : "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                    "userId" : "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                  }
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "New session issued"
+          },
+          "401" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Unknown, revoked, expired or reused token (UNAUTHENTICATED)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Rotate a refresh token",
+        "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/auth/register" : {
+      "post" : {
+        "description" : "Creates a user together with a new INDIVIDUAL tenant and enrols the user as its TENANT_ADMIN, then returns a session. Passwords are stored as BCrypt hashes only. 認證:匿名(本端點用於取得憑證)。",
+        "operationId" : "register",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "accessToken" : "eyJhbGciOiJIUzI1NiJ9.e30.sig",
+                  "expiresIn" : 900,
+                  "refreshToken" : "0G2f8xQ...",
+                  "tokenType" : "Bearer",
+                  "user" : {
+                    "displayName" : "Alice Analyst",
+                    "permissions" : [ "ioc:read", "ioc:submit" ],
+                    "role" : "TENANT_ADMIN",
+                    "tenantId" : "8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b",
+                    "userId" : "3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10"
+                  }
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Account created and session issued"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Validation failed (INVALID_REQUEST)"
+          },
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/AuthResponse"
+                }
+              }
+            },
+            "description" : "Email already registered (CONFLICT)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Register a new account",
+        "tags" : [ "Auth" ]
+      }
+    },
     "/api/v1/health" : {
       "get" : {
         "description" : "Returns UP when the API is able to serve requests. Dependency health (database, etc.) is exposed separately at /actuator/health. 認證:匿名。",
@@ -1536,6 +2256,9 @@
     "description" : "Public dashboard statistics. Authentication: anonymous.",
     "name" : "Stats"
   }, {
+    "description" : "Registration, login, refresh-token rotation and logout.",
+    "name" : "Auth"
+  }, {
     "description" : "Threat source catalog and health. Authentication: anonymous.",
     "name" : "Source"
   }, {
@@ -1544,6 +2267,9 @@
   }, {
     "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
     "name" : "IOC"
+  }, {
+    "description" : "Machine-to-machine credentials scoped to the caller's tenant.",
+    "name" : "API Keys"
   }, {
     "description" : "STIX 2.1 objects and bundle export (07 §7.8).",
     "name" : "STIX"
