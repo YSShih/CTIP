@@ -52,6 +52,7 @@ cp environment/.env.mvp.example environment/.env.mvp
 | `migrate.sh` | `migrate.sh <env>` | 手動觸發 `mvn flyway:migrate`(migration 檔自 Phase 3 起提供) |
 | `reload.sh` | `reload.sh <service> <env>` | 後端熱替換,見下節 |
 | `dod.sh` | `dod.sh <mvp\|phase2\|full> [id] [--only id] [--skip id]` | 執行 DoD Gate(`docs/spec/15-dod-gates.md`);逐項 PASS/FAIL、不因單項失敗中止、結尾列出失敗與需人工確認清單 |
+| `openapi-breaking-check.py` | `openapi-breaking-check.py <base.json> <new.json>` | OpenAPI 破壞性變更比對(移除端點、移除必填欄位、變更型別即 exit 1);由 `.github/workflows/openapi-check.yml` 呼叫 |
 
 共用邏輯在 `_common.sh`(被其他腳本 source,不直接執行)。
 
@@ -66,7 +67,11 @@ cp environment/.env.mvp.example environment/.env.mvp
   ```
 
   內部在容器裡跑 `./mvnw -o -q -pl ctip-app -am compile`,寫入被掛載的
-  `target/classes`,Spring DevTools 偵測 classpath 變更後重啟 application context。
+  `target/classes`;編譯成功後 touch `backend/ctip-app/.devtools/.reloadtrigger`,
+  Spring DevTools **只在 trigger file 變更時**重啟 application context
+  (`spring.devtools.restart.trigger-file`,ADR 0010)。因此 host 上跑
+  `mvnw verify`/`clean` 或容器內手動 `mvn compile` 都**不會**觸發重啟——
+  要熱替換一律走 `reload.sh`。
 
 ## Secrets
 
@@ -78,6 +83,9 @@ cp environment/.env.mvp.example environment/.env.mvp
 
 ## CI
 
-`.github/workflows/compose-validate.yml` 對每次 push / PR 驗證:
-四種環境的 `docker compose config`、prod 無原始碼掛載、prod 無 JDWP、
-staging/prod 樣板無 `*_MOUNT_*` 變數。
+- `.github/workflows/compose-validate.yml` 對每次 push / PR 驗證:
+  四種環境的 `docker compose config`、prod 無原始碼掛載、prod 無 JDWP、
+  staging/prod 樣板無 `*_MOUNT_*` 變數。
+- `.github/workflows/openapi-check.yml` 驗證 `docs/api/openapi.json`
+  與後端程式碼無 drift(重新產生後比對),並以
+  `environment/scripts/openapi-breaking-check.py` 擋破壞性變更。

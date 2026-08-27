@@ -557,8 +557,8 @@
   - **M2 前置**:dod.sh mvp 38/38 已過;M2-01 是「DoD-MVP 全部仍通過(回歸)」,改動後端時記得回歸
   - AnonymousTenantFilter 是憑證解析的掛載點(Phase 4 註記);RequireAuth/RequirePermission 前端守衛
     已完整實作待掛載(ADR 0008 §7);authSlice.sessionEstablished 已就緒
-  - dev 容器與 host 共享 backend/*/target:host 上跑 mvnw 會觸發容器 DevTools 重啟,偶發撞上
-    半寫入 classpath 而 app 死亡(容器仍顯示 Up)——dod.sh 已自我修復,手動遇到就 restart backend
+  - dev 容器與 host 共享 backend/*/target:host 建置打死容器 app 的問題**已於 ADR 0010 根治**
+    (DevTools 改 trigger file 觸發,見文末「環境維護」段);熱替換一律走 reload.sh
   - Hibernate `String[]`→varchar[] 綁定與 text[] 欄位的 `@>` 衝突已由 PostgresFunctionContributor
     解決;之後對 threats.aliases(V25,也是 GIN)做包含查詢時重用同一函式模式
   - openapi.json 為 committed 產物:後端 DTO/參數改動 → OpenApiCompletenessTest 重產 → commit →
@@ -581,3 +581,46 @@
   舊名**靜默無效**(已回寫 06 §6.3.6 第 7 條);ADR 0010、05 §5.11 引用區塊、§0.12 第 7 列
 - **給下一 session 的注意事項**:reload 契約 = reload.sh(編譯 + touch trigger);
   直接在容器內手動 mvn compile 不會再觸發重啟,要生效請一律走 reload.sh
+
+---
+
+## M1 總複查(2026-08-27,M1 閘門之後、Phase 13 之前)
+
+- **狀態**:done(使用者指示:重新 review Phase 1–12,確認實作與 README)
+- **Commit**:(見 git log,message `M1 review: ...` 與 `Spec+README+docs: ...`)
+- **方法**:四個獨立視角平行複查(安全/TLP、攝取/合併、STIX/API、前端/環境),
+  每項發現由主 session 讀碼驗證後才修;修正與測試同時產生(規則 15)
+- **修正**(細節與取捨見 `docs/architecture/decisions/0011-m1-review-fixes.md`、規格索引 §0.13):
+  1. **[高] `IndicatorSource.mergeReport` 沖掉撤回**:同來源 UPSERT 無條件設回 ACTIVE,
+     重同步會使 RETRACTED 復活、REVOKED 翻回 ACTIVE(違反 §7.5 規則 1)。已定形 UPSERT
+     status 規則並回寫 07 §7.5;E2E Order 5 補撤回持續斷言
+  2. **[中] §7.7 TLP:RED 攝取拒收守門缺漏**(規格明文要求):補在 ValidateStage + 行為測試
+  3. **[中] ADR 0006 query 層規則無整合測試鎖**:SecurityTest 補 public+CLEAR+INTERNAL_ONLY
+     fixture(唯一能判別 `ownerOrRedistributable` 的樣本)
+  4. **[中] cursor 內部編碼毫秒截斷**:微秒級 last_seen 會使 keyset 翻頁漏列;改 `epochSecond.nano:id`
+  5. **[中] up.sh 印 127.0.0.1:5173 但 CORS 白名單只有 localhost**:mvp/dev 樣板與本機 .env.mvp
+     補列兩個 origin;`WebCorsConfig` 解析補 trim
+  6. **[中] trend 統計時區錯位**:`date_trunc` 依 session TimeZone 切日、Java 端以 UTC 對桶,
+     非 UTC 環境(本機 Asia/Taipei)會漏計——CI(UTC)測不到的時刻依賴 flake;改
+     `to_char(timezone('UTC', …))` 分組(全量驗證時實際踩中而確認)
+  7. 其餘:raw/normalized 超過 VARCHAR(2048) 的 flush 期整批 rollback 守門、限流三項
+     hardening(minute 超限不扣 day、429 path 跳脫、/actuator 豁免防 `..`)、空 bundle 省略
+     objects、allowlist 項目正規化、前端 homepage scheme 白名單、詳情頁 sources 錯誤呈現、
+     StatsIntegrationTest 期望值 SQL 補再散布條件(新 SecurityTest fixture 暴露其缺漏)
+- **文件同步**:root README(§0.7–§0.13/七輪、ADR 0001–0011、deployment 文件標注 M3 產出)、
+  docs/spec/README(移除「尚未實作」、補 M1 完成狀態、行數表更新)、environment/README
+  (hot reload 改 ADR 0010 trigger-file 敘述、補 openapi-breaking-check.py 與 openapi-check.yml)、
+  ADR 0001 標題三項→五項、07 §7.8.4 TLP 1.0 誤述修正、本檔 DevTools 過時注意事項消除
+- **驗證**:backend `clean verify -Ptest-integration` 全綠、frontend 五項全綠、`dod.sh mvp` 38/38
+  (結果見本節 commit 當下輸出)
+- **給下一 session 的注意事項(M2 前置,依風險排序)**:
+  - **M2-25 前必修**:staging/prod 前端 `VITE_API_URL` 進不了 bundle(Vite 是 build 期變數,
+    compose 只在執行期塞給 nginx;§5.6 規格層缺陷)——需規格決策(build args 或 runtime
+    env.js + nginx `/api` 反代)並回寫 05;M1 的 mvp/dev 不受影響(Vite dev server 執行期讀 env)
+  - **Phase 14 手動提交前**:`/stats/sources` 筆數不經可見度過濾(INTERNAL_ONLY 提交量會即時
+    公開);`sourceId` 查詢參數側信道(可探測被遮罩來源與 IOC 的關聯,需釐清 §7.9×§13.7)
+  - **M2 真實 adapter 前**:`MAX_PAGES_PER_RUN` 截斷後 cursor/since 語意矛盾(截斷後剩餘記錄
+    永久漏收)——需定義 FetchContext 的 cursor/since 優先序契約
+  - **Phase 17 Redis 限流時**:`InMemoryRateLimiter` bucket map 無逐出一併處理
+  - 低風險已知縫隙(不修的理由見 ADR 0011 延後表):filter 例外回 Boot 預設錯誤結構、
+    STIX name 截斷 surrogate pair、FilterBar back/forward 草稿不同步、IDNA2003 ß→ss 合併風險

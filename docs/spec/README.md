@@ -1,8 +1,8 @@
 # CTIP 規格書導覽
 
-**CTIP Master Specification v2.0** — 2026-08-21
+**CTIP Master Specification v2.0** — 2026-08-21（含 §0.7–§0.13 七輪實作回饋修訂，至 2026-08-27）
 
-這是一份**供 AI 直接消費**的軟體規格書。它描述一個尚未實作的 Cyber Threat Intelligence Platform，設計目標是讓任何具備程式能力的 AI agent 能依此獨立完成開發，且不同 agent 在不同時間讀同一份規格會產出相容的結果。
+這是一份**供 AI 直接消費**的軟體規格書。它描述一個 Cyber Threat Intelligence Platform，設計目標是讓任何具備程式能力的 AI agent 能依此獨立完成開發，且不同 agent 在不同時間讀同一份規格會產出相容的結果。目前 **M1（Phase 1–12）已依本規格實作完成**（`dod.sh mvp` 38/38），實作進度與偏離事項見 [../progress.md](../progress.md)。
 
 ---
 
@@ -26,22 +26,24 @@
 
 ## 檔案職責
 
+行數為約值（隨實作回饋修訂增長，以檔案實際內容為準）：
+
 | 檔案 | 行數 | 職責 |
 |---|---|---|
-| [00-master.md](00-master.md) | ~220 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更 |
+| [00-master.md](00-master.md) | ~380 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.13 實作回饋修訂索引 |
 | [01-architecture.md](01-architecture.md) | ~320 | 分層與依賴方向、4 個 Maven module、抽象判準、9 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
 | [02-ddd-model.md](02-ddd-model.md) | ~360 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、19 個 domain event、Shared Kernel、18 個值物件 |
-| [03-diagrams.md](03-diagrams.md) | ~710 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
+| [03-diagrams.md](03-diagrams.md) | ~740 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
 | [04-data-dictionary.md](04-data-dictionary.md) | ~1100 | **27 張表完整 schema**、約束、索引、列舉、TTL 三步規則、Flyway 對應 |
-| [05-environment.md](05-environment.md) | ~660 | 單一 compose、Dockerfile 契約、四種 profile、全部環境變數、Spring 設定對應、腳本契約、hot reload |
-| [06-tech-stack.md](06-tech-stack.md) | ~260 | 版本表（含支援終止日與複查日）、分級支援窗口政策、linter、8 個編譯地雷 |
-| [07-domain-intel.md](07-domain-intel.md) | ~400 | IOC 模型、正規化與拒絕規則、去重、合併政策、評分、TLP 2.0 可見度、**STIX 2.1 完整映射** |
-| [08-ingestion-sdk.md](08-ingestion-sdk.md) | ~270 | SDK 契約、10 個 pipeline stage、mock adapter、韌性、來源健康、12 個排程任務 |
-| [09-api.md](09-api.md) | ~330 | 47 個端點、認證、cursor 分頁、16 個錯誤碼、DTO 規則、輸出過濾五步、OpenAPI |
-| [10-identity-plans.md](10-identity-plans.md) | ~260 | 租戶隔離、RBAC 權限矩陣、JWT、API key、4 個方案 × 15 個配額維度、限流 |
+| [05-environment.md](05-environment.md) | ~730 | 單一 compose、Dockerfile 契約、四種 profile、全部環境變數、Spring 設定對應、腳本契約、hot reload |
+| [06-tech-stack.md](06-tech-stack.md) | ~310 | 版本表（含支援終止日與複查日）、分級支援窗口政策、linter、編譯地雷 |
+| [07-domain-intel.md](07-domain-intel.md) | ~440 | IOC 模型、正規化與拒絕規則、去重、合併政策、評分、TLP 2.0 可見度、**STIX 2.1 完整映射** |
+| [08-ingestion-sdk.md](08-ingestion-sdk.md) | ~310 | SDK 契約、10 個 pipeline stage、mock adapter、韌性、來源健康、12 個排程任務 |
+| [09-api.md](09-api.md) | ~340 | 47 個端點、認證、cursor 分頁、16 個錯誤碼、DTO 規則、輸出過濾五步、OpenAPI |
+| [10-identity-plans.md](10-identity-plans.md) | ~270 | 租戶隔離、RBAC 權限矩陣、JWT、API key、4 個方案 × 15 個配額維度、限流 |
 | [11-sync-bloom.md](11-sync-bloom.md) | ~240 | 兩層 Bloom、**位元陣列格式**、delta 編碼、client 同步流程與 6 條契約 |
 | [12-frontend.md](12-frontend.md) | ~220 | 結構、4 條 feature 依賴規則、狀態歸屬表、型別產生流程、15 個頁面、UI 要求 |
-| [13-platform-ops.md](13-platform-ops.md) | ~290 | Kafka、通知、安全、隱私與 6 項保留政策、稽核、可觀測性、搜尋與降級、11 支 CI workflow |
+| [13-platform-ops.md](13-platform-ops.md) | ~340 | Kafka、通知、安全、隱私與 6 項保留政策、稽核、可觀測性、搜尋與降級、11 支 CI workflow |
 | [14-testing.md](14-testing.md) | ~140 | L1–L4 分層、覆蓋率門檻、9 條安全測試、測試資料 |
 | [15-dod-gates.md](15-dod-gates.md) | ~180 | **90 項可執行 DoD** + 6 項明確標為需人工確認 |
 | `phases/phase-01..23.md` | 各 ~70 | 23 份執行單（薄，指向主題檔，不重複內容） |
@@ -74,6 +76,8 @@ GPT 產生初稿（v1.0）
 v1.1 → v2.0 的實質改動：修正 **4 項建置阻斷缺陷**、**3 項版本錯誤**（含兩個已 EOL／已退役的元件）、**10 項規格內部衝突**（其中 2 項會導致編譯失敗）、補完 **19 張缺失的表定義**、新增 DDD 章與關聯圖章、把 DoD 從散文改為 90 項可執行檢查。
 
 完整變更清單見 [00-master.md §0.6](00-master.md#06-相對-v11-的變更摘要)。
+
+v2.0 定稿後，M1 實作期間（Phase 2–12）與 M1 總複查陸續發現的規格衝突與缺口以**實作回饋修訂**回寫：修正直接寫進主題檔對應章節，並在 [00-master.md](00-master.md) 的 **§0.7–§0.13** 建立索引、於 `docs/architecture/decisions/` 留下 ADR。照字面實作會踩的坑集中在 [05 §5.8.1](05-environment.md) 與 [06 §6.3.6](06-tech-stack.md)。
 
 ---
 

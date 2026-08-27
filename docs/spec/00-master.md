@@ -350,4 +350,27 @@ Phase 12 的修訂**已註記進對應主題檔**；完整決策記錄見
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26 實作回饋修訂，見 §0.7–§0.12）。*
+## 0.13 實作回饋修訂（2026-08-27，M1 總複查後回寫）
+
+M1 閘門後、Phase 13 前，以四個獨立視角（安全/TLP、攝取/合併、STIX/API、前端/環境）
+對 Phase 1–12 全部產出重新複查。修正**已註記進對應主題檔**；完整決策與延後清單見
+`docs/architecture/decisions/0011-m1-review-fixes.md`。
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | 同來源 UPSERT 無條件把來源記錄設回 `ACTIVE`——全量重同步/失敗重試會沖掉撤回，使 §7.5 規則 1 的 `REVOKED` 失效 | UPSERT status 規則定形：`RETRACTED` 一律生效且不被 `ACTIVE` 復活、`FALSE_POSITIVE` 不被例行同步清除、`EXPIRED` 因新觀測復活 | [07 §7.5](07-domain-intel.md#75-多來源合併indicatormergepolicy) |
+| 2 | §7.7「RED 不進入平台」的 ingestion 拒收守門**實作缺漏**（只有 DB 無 RED 的狀態測試） | `ValidateStage` 補守門（`MALFORMED_VALUE`／"TLP:RED not accepted"）+ 行為測試（規格原文未變） | — |
+| 3 | cleaned 通過驗證但 raw／normalized 超過 VARCHAR(2048)——JPA flush 期炸掉整批交易（含拒絕記錄） | raw、normalized 各補一道 `LENGTH_EXCEEDED` 守門 | — |
+| 4 | cursor 內部編碼截到毫秒，微秒級 `last_seen` 會使 keyset 翻頁漏列（M2 真實 feed 必踩） | 內部格式改 `epochSecond.nano:id`（對外 ISO 格式不變） | — |
+| 5 | 限流：minute 超限仍扣 day 配額；429 body 的 path 未跳脫；`/actuator` 豁免可被 `..` 前綴繞過 | 依 §10.7 順序短路、最小 JSON 跳脫、含 `..` 不豁免 | — |
+| 6 | §7.8.4 註記誤稱 GREEN/AMBER/RED UUID 與 TLP 1.0 相同（表格值本身正確） | 註記改寫（五個 UUID 皆為 TLP 2.0 官方值） | [07 §7.8.4](07-domain-intel.md) |
+| 7 | trend 統計時區錯位：`date_trunc` 依 session TimeZone 切日、Java 端以 UTC 對桶——非 UTC 環境會漏計（CI 測不到的時刻依賴 flake） | 改 `to_char(timezone('UTC', last_seen), 'YYYY-MM-DD')` 分組 | — |
+| 8 | 其餘防禦性修正：CORS origins trim + mvp/dev 樣板補 127.0.0.1、空 bundle 省略 `objects`（OASIS minItems）、allowlist 項目正規化、前端 homepage scheme 白名單與 sources 錯誤呈現 | 見 ADR 0011 | — |
+
+> ⚠️ **延後至 M2 的已知缺陷**（詳見 ADR 0011 延後表與 `docs/progress.md`）：staging/prod 前端
+> `VITE_API_URL` 進不了 bundle（§5.6 規格層缺陷，M2-25 前必修）、`sourceId` 查詢側信道、
+> `/stats/sources` 統計口徑、`MAX_PAGES_PER_RUN` 截斷後的 cursor/since 語意。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27 實作回饋修訂，見 §0.7–§0.13）。*

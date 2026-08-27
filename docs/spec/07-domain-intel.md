@@ -145,6 +145,14 @@ result   = min(100, round(weighted) + bonus)
 4. 其他                                                   → ACTIVE
 ```
 
+### 同來源再次回報(UPSERT)的 status 規則
+
+> **實作回饋修訂(2026-08-27,M1 總複查;ADR 0011)**:同來源 UPSERT 的來源記錄 status——
+> 新回報為 `RETRACTED` 一律生效;既有 `RETRACTED` 與 `FALSE_POSITIVE` **不因後續 `ACTIVE`
+> 回報復活**(前者對齊 STIX 2.1 `revoked` 的單向性,後者為使用者斷言);`EXPIRED` 因新觀測
+> 回到 `ACTIVE`。原實作無條件將 UPSERT 後的記錄設回 `ACTIVE`,任何一次全量重同步或失敗重試
+> 都會沖掉撤回,使上方規則 1 的 `REVOKED` 判定失效。
+
 ### 來源信譽
 
 `sources.reputation`（0–100，預設 50）由管理員設定。M1 使用種子值即可。
@@ -345,7 +353,11 @@ extension-definition--60a3c5c5-0d10-413e-aab3-9e08dde9e88d   ← TLP 2.0 擴充�
 }
 ```
 
-> ⚠️ **`GREEN`、`AMBER`、`RED` 的 UUID 與核心 STIX 2.1 的 TLP 1.0 marking 相同**；`CLEAR` 與 `AMBER+STRICT` 是 TLP 2.0 擴充新增的。差別在於 TLP 2.0 版本額外帶 `extensions` 區塊。本專案一律輸出 TLP 2.0 形式。
+> ⚠️ 上表五個 UUID 皆為 **OASIS TLP 2.0 擴充的官方值**,與核心 STIX 2.1 規格內建的 TLP 1.0
+> marking(`marking_ref` 靜態定義,如 TLP:GREEN 的 `34098fce-…`)**是不同的 UUID**;
+> TLP 2.0 版本另帶 `extensions` 區塊。本專案一律輸出 TLP 2.0 形式。
+> (2026-08-27 M1 總複查修正:本註記原誤稱 GREEN/AMBER/RED 與 TLP 1.0 相同——說法不實,
+> 但表格內的 UUID 本身正確,程式碼與表格逐字一致,無實害;ADR 0011。)
 >
 > 實作為 `StixTlpMarkings`（`ctip-core/domain/stix/`）中的五個 `static final` 常數。**任何以 `UUID.randomUUID()` 產生 marking-definition 的程式碼皆為違規**，且必須有一條測試驗證這五個字串完全相符。
 >

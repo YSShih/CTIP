@@ -144,7 +144,7 @@ CTIP 的核心能力與所屬里程碑：
 
 **如果你是 AI agent**：從 [`docs/spec/README.md`](docs/spec/README.md) 開始，它會告訴你讀取順序。不要一次讀完全部檔案。
 
-**如果你是人類**：先讀上面的系統摘要與模組表，再讀 [`docs/spec/00-master.md`](docs/spec/00-master.md) 的 §0.6 變更摘要（那裡列出 v1.1 的 4 項建置阻斷缺陷、3 項版本錯誤、10 項內部衝突及其解法），以及 **§0.7–§0.11 實作回饋修訂**（Phase 2–10 實測發現的規格衝突與修正索引；照字面實作會踩的坑集中在 [05 §5.8.1](docs/spec/05-environment.md#581-實作回饋修正2026-08-21phase-23-實測發現詳見-adr-0001) 與 [06 §6.3.6](docs/spec/06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)）。
+**如果你是人類**：先讀上面的系統摘要與模組表，再讀 [`docs/spec/00-master.md`](docs/spec/00-master.md) 的 §0.6 變更摘要（那裡列出 v1.1 的 4 項建置阻斷缺陷、3 項版本錯誤、10 項內部衝突及其解法），以及 **§0.7–§0.13 實作回饋修訂**（Phase 2–12 實測與 M1 總複查發現的規格衝突與修正索引；照字面實作會踩的坑集中在 [05 §5.8.1](docs/spec/05-environment.md#581-實作回饋修正2026-08-21phase-23-實測發現詳見-adr-0001) 與 [06 §6.3.6](docs/spec/06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)）。
 
 ---
 
@@ -152,14 +152,14 @@ CTIP 的核心能力與所屬里程碑：
 
 | 項目 | 狀態 |
 |---|---|
-| 規格書 | ✅ v2.0 完成（含 2026-08-21 / 2026-08-25 / 2026-08-26 五輪實作回饋修訂，見 [00 §0.7–§0.11](docs/spec/00-master.md)） |
+| 規格書 | ✅ v2.0 完成（含 2026-08-21 / 2026-08-25 / 2026-08-26 / 2026-08-27 七輪實作回饋修訂，見 [00 §0.7–§0.13](docs/spec/00-master.md)） |
 | `environment/` | ✅ Phase 2 完成：唯一 compose 檔、雙 Dockerfile、四環境樣板、8 支腳本（含 90 項 DoD gate 的 `dod.sh`）、CI compose 驗證 |
 | `backend/` | ✅ **M1（Phase 1–12）完成**：四模組骨架與 Spring Boot 4 啟動、Flyway V1–V7 + 1,020 筆種子資料、Indicator/Tenant/Source 聚合與最小安全層（tenant + TLP + 再散布統一過濾）、SDK + 三個確定性 mock adapter + Resilience4j 韌性、10-stage ingestion pipeline（正規化、八種拒絕規則、去重合併、評分、STIX 投影）、排程與記憶體限流、STIX 2.1 匯出（TLP 2.0 marking、pattern、bundle）、匿名讀取 REST API 全套（IOC 清單／明細／搜尋／批次驗證、統計、來源、cursor 分頁、16 錯誤碼統一錯誤結構 + traceId）、OpenAPI/Swagger（springdoc 3.1.0、逐端點完整性測試、`docs/api/openapi.json` 產出 + CI drift／破壞性變更檢查）、PostgresSearchAdapter 全欄位搜尋（tags GIN `@>`、來源、confidence/score/時間區間、pg_trgm 子字串）與 CORS 接線（262 tests，Testcontainers 整合驗證） |
 | `frontend/` | ✅ **M1（Phase 11–12）完成**：React 19 + Vite 8 + Tailwind CSS v4（CSS-first）、OpenAPI 型別產生鏈（`api:generate`/`api:check`，手寫 typed fetch client）、Redux Toolkit 四 slice + TanStack Query（狀態歸屬依規格：server 資料進 Query、搜尋條件進 URL）、shadcn 風格元件 + 四態 StateViews + TlpBadge + TanStack Virtual 虛擬化表格、IOC 檢索／詳情（含來源歸屬與 STIX JSON）與公開統計儀表板（Recharts）、深色模式與響應式、MSW 型別驅動測試（70 tests，coverage ≥ 70% 門檻實測 90%+） |
 | 進度與交接 | [`docs/progress.md`](docs/progress.md)（逐 phase 判準結果、偏離事項、給下一 session 的注意事項） |
-| 架構決策 | [`docs/architecture/decisions/`](docs/architecture/decisions/)（ADR 0001–0009：各 phase 的規格衝突處置與實作決策） |
+| 架構決策 | [`docs/architecture/decisions/`](docs/architecture/decisions/)（ADR 0001–0011：各 phase 的規格衝突處置、實作決策、環境維護與 M1 總複查決策） |
 
-實作進行中，本檔會隨里程碑**擴充**——Phase 23 再補 API 概覽、Swagger 位置等段落。
+實作進行中，本檔會隨里程碑**擴充**——M2/M3 再補認證與寫入 API、部署與維運等段落。
 **既有段落（這是什麼／系統摘要／模組功能摘要）不得被覆寫。**
 
 ---
@@ -219,7 +219,7 @@ docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml
 
 - 授權：見 `LICENSE`（實作階段建立）
 - 安全政策與漏洞回報：見 `SECURITY.md`（實作階段建立）
-- 第三方元件授權說明（Redis / Elasticsearch 的 copyleft 考量與替代方案）：`docs/deployment/licensing.md`
-- 個資與資料保留：`docs/deployment/privacy.md`
+- 第三方元件授權說明（Redis / Elasticsearch 的 copyleft 考量與替代方案）：`docs/deployment/licensing.md`（M3 Phase 23 產出；規格要求見 [06 §6.5](docs/spec/06-tech-stack.md#65-授權注意事項)）
+- 個資與資料保留：`docs/deployment/privacy.md`（M3 Phase 23 產出；規格要求見 [13 §13.4](docs/spec/13-platform-ops.md#134-隱私與資料保留)）
 
 ⚠️ 本平台處理的 IP 位址在 GDPR 下**可能構成個人資料**。規格已納入資料保留政策、資料主體查詢與刪除程序，以及情資再散布的法遵限制（多數商業情資來源的 ToS 禁止再散布原始資料）。詳見 [07 §7.9](docs/spec/07-domain-intel.md#79-再散布政策法遵強制) 與 [13 §13.4](docs/spec/13-platform-ops.md#134-隱私與資料保留)。
