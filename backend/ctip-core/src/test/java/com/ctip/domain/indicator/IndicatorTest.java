@@ -224,4 +224,35 @@ class IndicatorTest {
         assertThat(s.sources().getFirst().reportCount()).isEqualTo(2);
         assertThat(s.lastSeen()).isEqualTo(T0.plus(Duration.ofHours(6)));
     }
+
+    @Test
+    void sameSourceRetractionAppliesOnUpsertAndSurvivesSubsequentActiveReport() {
+        Indicator indicator = activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
+        // 同來源再次回報且帶 RETRACTED:UPSERT 必須採納撤回(§7.5 依賴 RETRACTED 存續)
+        indicator.mergeFrom(
+                new IndicatorSource(
+                        report(SOURCE_A).status(SourceRecordStatus.RETRACTED).build()),
+                new Reputation(70));
+        assertThat(indicator.snapshot().sources().getFirst().status()).isEqualTo(SourceRecordStatus.RETRACTED);
+
+        // 例行重同步的 ACTIVE 回報不得復活撤回(對齊 STIX 2.1 revoked 的單向性)
+        indicator.mergeFrom(new IndicatorSource(report(SOURCE_A).build()), new Reputation(70));
+        IndicatorSnapshot s = indicator.snapshot();
+        assertThat(s.sources()).hasSize(1);
+        assertThat(s.sources().getFirst().status()).isEqualTo(SourceRecordStatus.RETRACTED);
+    }
+
+    @Test
+    void expiredSourceRecordRevivesOnFreshReportButFalsePositiveDoesNot() {
+        IndicatorSource expired = new IndicatorSource(
+                report(SOURCE_A).status(SourceRecordStatus.EXPIRED).build());
+        expired.mergeReport(new IndicatorSource(
+                report(SOURCE_A).seen(T0, T0.plus(Duration.ofDays(1))).build()));
+        assertThat(expired.status()).isEqualTo(SourceRecordStatus.ACTIVE);
+
+        IndicatorSource falsePositive = new IndicatorSource(
+                report(SOURCE_A).status(SourceRecordStatus.FALSE_POSITIVE).build());
+        falsePositive.mergeReport(new IndicatorSource(report(SOURCE_A).build()));
+        assertThat(falsePositive.status()).isEqualTo(SourceRecordStatus.FALSE_POSITIVE);
+    }
 }

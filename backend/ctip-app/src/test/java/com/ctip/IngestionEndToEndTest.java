@@ -198,6 +198,17 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
                         Integer.class))
                 .isEqualTo(2);
 
+        // 撤回不得被重同步沖掉:同來源 UPSERT 再收到 revoked=true → 來源記錄維持 RETRACTED
+        // (mergeReport 若無條件翻回 ACTIVE,撤回會被撤回它的同一筆資料復活,違反 §7.5)
+        assertThat(jdbc.queryForObject(
+                        "SELECT s.status FROM indicator_sources s"
+                                + " JOIN indicators i ON i.id = s.indicator_id"
+                                + " JOIN sources src ON src.id = s.source_id"
+                                + " WHERE i.normalized_value = 'shared-phish-2.example.com'"
+                                + " AND src.source_type = 'MOCK_ALIENVAULT' AND s.report_count >= 2",
+                        String.class))
+                .isEqualTo("RETRACTED");
+
         // 重同步不得重複物化 hash_records(reconcile 依 (algorithm, digest) 冪等)
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM hash_records h WHERE h.indicator_id NOT IN"

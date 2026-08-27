@@ -42,9 +42,13 @@ class StatsIntegrationTest extends AbstractPostgresIntegrationTest {
     @Test
     void summaryCountsOnlyAnonymouslyVisibleActiveIndicators() throws Exception {
         JsonNode summary = getJson("/api/v1/stats/summary");
+        // 期望值 SQL 必須與可見度規則完整同步(含再散布條件),否則 public+CLEAR+INTERNAL_ONLY
+        // 的樣本(SecurityTest fixture)會使期望值虛高
         Long expected = jdbc.queryForObject(
-                "SELECT count(*) FROM indicators WHERE owner_tenant_id = '00000000-0000-0000-0000-000000000000'"
-                        + " AND tlp = 'CLEAR' AND status = 'ACTIVE'",
+                "SELECT count(*) FROM indicators i WHERE i.owner_tenant_id = '00000000-0000-0000-0000-000000000000'"
+                        + " AND i.tlp = 'CLEAR' AND i.status = 'ACTIVE'"
+                        + " AND EXISTS (SELECT 1 FROM indicator_sources r WHERE r.indicator_id = i.id"
+                        + " AND r.redistribution_policy <> 'INTERNAL_ONLY')",
                 Long.class);
         assertThat(summary.get("totalActive").asLong()).isEqualTo(expected);
 
@@ -76,8 +80,10 @@ class StatsIntegrationTest extends AbstractPostgresIntegrationTest {
 
         Instant windowStart = Instant.now().minus(Duration.ofDays(6)).truncatedTo(ChronoUnit.DAYS);
         Long expected = jdbc.queryForObject(
-                "SELECT count(*) FROM indicators WHERE owner_tenant_id = '00000000-0000-0000-0000-000000000000'"
-                        + " AND tlp = 'CLEAR' AND status = 'ACTIVE' AND last_seen >= ?",
+                "SELECT count(*) FROM indicators i WHERE i.owner_tenant_id = '00000000-0000-0000-0000-000000000000'"
+                        + " AND i.tlp = 'CLEAR' AND i.status = 'ACTIVE' AND i.last_seen >= ?"
+                        + " AND EXISTS (SELECT 1 FROM indicator_sources r WHERE r.indicator_id = i.id"
+                        + " AND r.redistribution_policy <> 'INTERNAL_ONLY')",
                 Long.class,
                 java.sql.Timestamp.from(windowStart));
         assertThat(trendSum).isEqualTo(expected);

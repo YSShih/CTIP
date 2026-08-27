@@ -59,6 +59,7 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
     private static final IndicatorId PUBLIC_CLEAR = fixedId("42");
     private static final IndicatorId B_AMBER = fixedId("43");
     private static final IndicatorId DEMO_INTERNAL_ONLY = fixedId("44");
+    private static final IndicatorId PUBLIC_CLEAR_INTERNAL = fixedId("45");
 
     @Autowired
     private MockMvc mvc;
@@ -84,6 +85,26 @@ class SecurityTest extends AbstractPostgresIntegrationTest {
         upsert(PUBLIC_GREEN, TenantId.PUBLIC, Tlp.GREEN, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE, "sec-green");
         upsert(B_AMBER, TENANT_B, Tlp.AMBER, RedistributionPolicy.ATTRIBUTION_REQUIRED, "sec-b-amber");
         upsert(DEMO_INTERNAL_ONLY, DEMO, Tlp.AMBER, RedistributionPolicy.INTERNAL_ONLY, "sec-internal");
+        upsert(PUBLIC_CLEAR_INTERNAL, TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.INTERNAL_ONLY, "sec-pub-int");
+    }
+
+    /**
+     * ADR 0006 回歸鎖(query 層):public 租戶不得因 viewer == owner 而豁免再散布過濾。
+     * 此 fixture(public + CLEAR + 全來源 INTERNAL_ONLY)是唯一能判別
+     * TlpSpecifications.ownerOrRedistributable 的樣本——tenant scope 與 TLP 條件都擋不住它;
+     * 若豁免條件退化回「viewer == owner 即豁免」,本測試立即失敗。
+     */
+    @Test
+    void security9_publicInternalOnlyIndicatorIsInvisibleToAnonymous() throws Exception {
+        Visibility anonymous = Visibility.anonymous();
+        assertThat(indicators.findVisibleById(PUBLIC_CLEAR_INTERNAL, anonymous)).isEmpty();
+        assertThat(indicators
+                        .findVisible(anonymous, IndicatorFilter.none(), null, 5000)
+                        .items())
+                .noneMatch(i -> i.id().equals(PUBLIC_CLEAR_INTERNAL));
+        // 端點層:404,不洩漏存在性
+        mvc.perform(asTestIp(get("/api/v1/iocs/" + PUBLIC_CLEAR_INTERNAL.value())))
+                .andExpect(status().isNotFound());
     }
 
     @Test

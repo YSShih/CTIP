@@ -42,6 +42,38 @@ describe('IocDetailPage', () => {
     expect(screen.getByText(/找不到這筆資料/)).toBeInTheDocument();
   });
 
+  it('does not render non-http(s) attribution homepage as a link', async () => {
+    // 來源登錄資料屬半信任面:javascript: 等 scheme 不得進入 href sink
+    server.use(
+      http.get('*/api/v1/iocs/:id', () =>
+        HttpResponse.json({
+          ...sampleIoc,
+          attribution: [{ sourceName: 'Evil Source', homepage: 'javascript:alert(1)' }],
+        }),
+      ),
+    );
+    renderRoute({ routes, initialEntry: detailUrl });
+    const attribution = await screen.findByLabelText('attribution');
+    expect(attribution).toHaveTextContent('Evil Source');
+    expect(screen.queryByRole('link', { name: /來源連結/ })).not.toBeInTheDocument();
+  });
+
+  it('surfaces an error for the source records section instead of silently omitting it', async () => {
+    // §12.6 #4:sources 查詢失敗不得讓明細靜默消失
+    server.use(
+      http.get('*/api/v1/iocs/:id/sources', () =>
+        HttpResponse.json(
+          { ...notFoundError, code: 'INTERNAL_ERROR', status: 500 },
+          { status: 500 },
+        ),
+      ),
+    );
+    renderRoute({ routes, initialEntry: detailUrl });
+    expect(await screen.findByText(sampleIoc.value)).toBeInTheDocument();
+    expect(await screen.findByText(/來源觀測明細載入失敗/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('來源觀測明細')).not.toBeInTheDocument();
+  });
+
   it('shows ForbiddenState instead of blank content on 403', async () => {
     server.use(
       http.get('*/api/v1/iocs/:id', () =>

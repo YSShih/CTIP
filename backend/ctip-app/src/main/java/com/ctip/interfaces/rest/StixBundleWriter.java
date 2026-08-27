@@ -24,12 +24,15 @@ class StixBundleWriter {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "bundle");
         root.put("id", bundle.bundleId());
-        ArrayNode objects = root.putArray("objects");
-        for (Map<String, Object> marking : bundle.markings()) {
-            objects.add(objectMapper.valueToTree(marking));
-        }
-        for (String content : bundle.indicatorContents()) {
-            objects.add(objectMapper.readTree(content));
+        // STIX 2.1:objects 屬性存在時 minItems 1——零筆匯出必須整個省略,否則不符 OASIS schema
+        if (!bundle.markings().isEmpty() || !bundle.indicatorContents().isEmpty()) {
+            ArrayNode objects = root.putArray("objects");
+            for (Map<String, Object> marking : bundle.markings()) {
+                objects.add(objectMapper.valueToTree(marking));
+            }
+            for (String content : bundle.indicatorContents()) {
+                objects.add(objectMapper.readTree(content));
+            }
         }
         return objectMapper.writeValueAsString(root);
     }

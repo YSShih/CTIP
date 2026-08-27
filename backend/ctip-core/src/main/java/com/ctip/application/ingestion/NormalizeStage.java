@@ -5,7 +5,9 @@ import com.ctip.domain.indicator.normalization.IocFormatException;
 import com.ctip.domain.indicator.normalization.IocNormalizers;
 import com.ctip.domain.indicator.normalization.ReservedIpRanges;
 import com.ctip.sdk.IocType;
+import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Stage 3 Normalize(正規化規則 §7.2)+ 需要 canonical 值的拒絕規則(§7.3):
@@ -19,7 +21,20 @@ public final class NormalizeStage implements IngestionStage {
 
     public NormalizeStage(IocNormalizers normalizers, Set<String> domainAllowlist) {
         this.normalizers = normalizers;
-        this.domainAllowlist = Set.copyOf(domainAllowlist);
+        // allowlist 項目套用與 feed 值相同的正規化,否則大小寫/IDN 寫法差異會使比對靜默失效
+        this.domainAllowlist = domainAllowlist.stream()
+                .map(String::trim)
+                .filter(entry -> !entry.isEmpty())
+                .map(entry -> normalizeAllowlistEntry(normalizers, entry))
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static String normalizeAllowlistEntry(IocNormalizers normalizers, String entry) {
+        try {
+            return normalizers.normalize(IocType.DOMAIN, entry);
+        } catch (IocFormatException e) {
+            return entry.toLowerCase(Locale.ROOT);
+        }
     }
 
     @Override
@@ -34,6 +49,13 @@ public final class NormalizeStage implements IngestionStage {
             normalized = normalizers.normalize(context.type(), context.cleanedValue());
         } catch (IocFormatException e) {
             context.reject(RejectionReason.MALFORMED_VALUE, e.getMessage());
+            return context;
+        }
+        if (normalized.length() > ValidateStage.MAX_STORED_VALUE_LENGTH) {
+            // punycode/百分比編碼可能使 normalized 長於 cleaned;超出 DB 欄位上限會在 flush 期炸掉整批交易
+            context.reject(
+                    RejectionReason.LENGTH_EXCEEDED,
+                    "正規化後長度 " + normalized.length() + " 超過儲存上限 " + ValidateStage.MAX_STORED_VALUE_LENGTH);
             return context;
         }
         if (isReservedIp(context.type(), normalized) && !context.source().allowsPrivateIps()) {

@@ -72,7 +72,14 @@ class StatsAdapter implements StatsPort {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Tuple> query = cb.createTupleQuery();
         Root<IndicatorEntity> root = query.from(IndicatorEntity.class);
-        Expression<Instant> day = cb.function("date_trunc", Instant.class, cb.literal("day"), root.get("lastSeen"));
+        // date_trunc 對 timestamptz 依 session TimeZone 切日(JDBC 連線帶 JVM 時區);
+        // 必須先 timezone('UTC', …) 再取日期字串,否則非 UTC 環境會把 UTC 16:00–24:00
+        // 的資料切到鄰日、掉出 7 日窗(與下方以 UTC 對桶的 Java 端不一致)
+        Expression<String> day = cb.function(
+                "to_char",
+                String.class,
+                cb.function("timezone", Instant.class, cb.literal("UTC"), root.get("lastSeen")),
+                cb.literal("YYYY-MM-DD"));
         query.multiselect(day, cb.count(root))
                 .where(cb.and(
                         activeAndVisible(visibility, root, query, cb),
@@ -80,7 +87,7 @@ class StatsAdapter implements StatsPort {
                 .groupBy(day);
         Map<LocalDate, Long> counted = new HashMap<>();
         for (Tuple row : entityManager.createQuery(query).getResultList()) {
-            counted.put(LocalDate.ofInstant(row.get(0, Instant.class), ZoneOffset.UTC), row.get(1, Long.class));
+            counted.put(LocalDate.parse(row.get(0, String.class)), row.get(1, Long.class));
         }
         List<DailyCount> trend = new ArrayList<>(TREND_DAYS);
         LocalDate first = LocalDate.ofInstant(windowStart, ZoneOffset.UTC);

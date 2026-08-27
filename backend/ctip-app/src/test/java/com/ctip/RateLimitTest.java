@@ -2,6 +2,7 @@ package com.ctip;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -31,12 +32,19 @@ class RateLimitTest extends AbstractPostgresIntegrationTest {
                     .andExpect(header().string("X-RateLimit-Remaining", String.valueOf(2 - i)))
                     .andExpect(header().exists("X-RateLimit-Reset"));
         }
+        // 429 body 必須是統一錯誤結構(09 §9.4)——filter 手工組 JSON,欄位 drift 要被測試抓到
         mvc.perform(get("/api/v1/rate-limit-probe"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("X-RateLimit-Limit", "3"))
                 .andExpect(header().string("X-RateLimit-Remaining", "0"))
                 .andExpect(header().exists("X-RateLimit-Reset"))
-                .andExpect(header().exists("Retry-After"));
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"))
+                .andExpect(jsonPath("$.message").value("Rate limit exceeded"))
+                .andExpect(jsonPath("$.path").value("/api/v1/rate-limit-probe"))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.details").isArray());
     }
 
     @Test

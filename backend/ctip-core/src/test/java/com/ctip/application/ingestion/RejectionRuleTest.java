@@ -78,6 +78,54 @@ class RejectionRuleTest {
     }
 
     @Test
+    void rawValueExceedingStorageCapIsRejectedEvenWhenCleanedFits() {
+        // 前置零寬字元:清理後 2040 ≤ 2048 通過型別上限,但原始值 2540 超過 DB VARCHAR(2048)
+        // ——不擋下會在批次交易 flush 期炸掉整批(含拒絕記錄)
+        String raw = "\u200b".repeat(500) + "https://long.example.com/" + "a".repeat(2015);
+        assertThat(runOne(record(raw, IocType.URL))).isEqualTo(RejectionReason.LENGTH_EXCEEDED);
+    }
+
+    @Test
+    void normalizedValueExceedingStorageCapIsRejected() {
+        // 無 path 的 URL 正規化會補「/」:cleaned 恰為 2048 通過 Validate,
+        // normalized 2049 > 2048 必須在 NormalizeStage 擋下,同樣是 flush 期整批炸掉的防線
+        String host = ("a".repeat(61) + ".").repeat(32) + "a".repeat(56);
+        String url = "https://" + host;
+        assertThat(url).hasSize(2048);
+        assertThat(runOne(record(url, IocType.URL))).isEqualTo(RejectionReason.LENGTH_EXCEEDED);
+    }
+
+    @Test
+    void redSourceTlpIsRejected() {
+        // §7.7:RED 不進入平台,ingestion 一律拒絕(reason = MALFORMED_VALUE,detail 固定)
+        SourceContext redSource = new SourceContext(
+                new SourceId(UUID.fromString("00000000-0000-0000-0000-0000000000ed")),
+                TenantId.PUBLIC,
+                Tlp.RED,
+                RedistributionPolicy.INTERNAL_ONLY,
+                new Reputation(70),
+                false);
+        BatchOutcome outcome =
+                processor.process(redSource, SYNC_ID, List.of(record("red-feed.example.com", IocType.DOMAIN)));
+        assertThat(outcome.accepted()).isZero();
+        assertThat(outcome.rejected()).isEqualTo(1);
+        assertThat(rejections.getLast().reason()).isEqualTo(RejectionReason.MALFORMED_VALUE);
+        assertThat(rejections.getLast().detail()).isEqualTo("TLP:RED not accepted");
+    }
+
+    @Test
+    void allowlistEntriesAreNormalizedBeforeMatching() {
+        // 設定端寫「大小寫混用 + 尾點 + 空白」也必須比對得中——否則 allowlist 靜默失效
+        IngestionPipeline sloppyAllowlist = pipeline(Set.of("  ALLOWLISTED.Example.COM.  "));
+        IngestionBatchProcessor sloppyProcessor =
+                new IngestionBatchProcessor(sloppyAllowlist, rejections::add, new IngestionSettings(true, 500));
+        BatchOutcome outcome = sloppyProcessor.process(
+                sourceContext(), SYNC_ID, List.of(record("allowlisted.example.com", IocType.DOMAIN)));
+        assertThat(outcome.rejected()).isEqualTo(1);
+        assertThat(rejections.getLast().reason()).isEqualTo(RejectionReason.ALLOWLISTED_DOMAIN);
+    }
+
+    @Test
     void hashLengthMismatchIsRejected() {
         RawThreatRecord sha1LengthDeclaredSha256 = new RawThreatRecord(
                 "da39a3ee5e6b4b0d3255bfef95601890afd80709",

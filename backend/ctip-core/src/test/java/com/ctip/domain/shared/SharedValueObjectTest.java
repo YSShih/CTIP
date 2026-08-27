@@ -35,6 +35,17 @@ class SharedValueObjectTest {
         assertThat(decoded).isEqualTo(cursor);
         assertThatThrownBy(() -> Cursor.decode("not-a-cursor")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Cursor.decode(":missing")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Cursor.decode("1234:00000000-0000-0000-0000-000000000001"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void cursorPreservesSubMillisecondPrecision() {
+        // last_seen 為 TIMESTAMPTZ(微秒);內部編碼截到毫秒會使 keyset 漏掉頁界後同毫秒的資料列
+        Cursor cursor = new Cursor(T0.plusNanos(123_456_789), new UUID(3, 4));
+        Cursor decoded = Cursor.decode(cursor.encode());
+        assertThat(decoded.lastSeen()).isEqualTo(T0.plusNanos(123_456_789));
+        assertThat(decoded).isEqualTo(cursor);
     }
 
     @Test

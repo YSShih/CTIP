@@ -30,6 +30,8 @@ export default function IocDetailPage() {
         <SourceAttributionList
           attribution={detail.data.attribution ?? []}
           sources={sources.data ?? []}
+          sourcesError={sources.isError}
+          onRetrySources={() => void sources.refetch()}
         />
         <StixJsonViewer stixId={`indicator--${id}`} />
       </div>

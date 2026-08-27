@@ -103,6 +103,17 @@ class StixSchemaValidationTest {
         assertThat(validate("/common/bundle.json", writer.toJson(bundle))).isEmpty();
     }
 
+    @Test
+    void emptyBundleOmitsObjectsAndStillValidates() {
+        // STIX 2.1:objects 存在時 minItems 1——零筆匯出必須整個省略 objects 屬性
+        StixBundleWriter writer = new StixBundleWriter(objectMapper);
+        StixBundle bundle = new StixBundle(
+                "bundle--" + UUID.fromString("9c9d8e7f-6b2a-4d5e-a1b2-c3d4e5f60719"), List.of(), List.of());
+        String json = writer.toJson(bundle);
+        assertThat(json).doesNotContain("\"objects\"");
+        assertThat(validate("/common/bundle.json", json)).isEmpty();
+    }
+
     private Set<ValidationMessage> validate(String schemaPath, String json) {
         JsonSchema schema = schemaFactory.getSchema(SchemaLocation.of(SCHEMA_BASE + schemaPath));
         return schema.validate(json, InputFormat.JSON);

@@ -37,41 +37,76 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !enabled || request.getRequestURI().startsWith("/actuator");
+        // getRequestURI() 為未正規化原文;含 ".." 的路徑不得享有 /actuator 豁免(路徑穿越防禦)
+        String uri = request.getRequestURI();
+        return !enabled || (uri.startsWith("/actuator") && !uri.contains(".."));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String subject = normalizeIp(request.getRemoteAddr());
+        // §10.7 依序檢查,任一超限即拒絕:minute 超限的請求不再消耗 day 配額,
+        // 否則被 429 的猛打流量會燒光整個 IP 的日配額
         RateLimitResult minute = limiter.tryConsume(RateLimitKey.anonymousIp(subject, RateLimitKey.Window.MINUTE), 1);
-        RateLimitResult day = limiter.tryConsume(RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY), 1);
-
-        RateLimitResult tightest = minute.remaining() <= day.remaining() ? minute : day;
-        response.setHeader("X-RateLimit-Limit", Long.toString(tightest.limit()));
-        response.setHeader("X-RateLimit-Remaining", Long.toString(tightest.remaining()));
-        response.setHeader("X-RateLimit-Reset", Long.toString(tightest.resetAt().getEpochSecond()));
-
-        if (minute.allowed() && day.allowed()) {
-            chain.doFilter(request, response);
+        if (!minute.allowed()) {
+            writeRateLimitHeaders(response, minute);
+            reject(request, response, minute);
             return;
         }
-        RateLimitResult rejecting = minute.allowed() ? day : minute;
+        RateLimitResult day = limiter.tryConsume(RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY), 1);
+        RateLimitResult tightest = minute.remaining() <= day.remaining() ? minute : day;
+        writeRateLimitHeaders(response, tightest);
+        if (!day.allowed()) {
+            reject(request, response, day);
+            return;
+        }
+        chain.doFilter(request, response);
+    }
+
+    private static void writeRateLimitHeaders(HttpServletResponse response, RateLimitResult result) {
+        response.setHeader("X-RateLimit-Limit", Long.toString(result.limit()));
+        response.setHeader("X-RateLimit-Remaining", Long.toString(result.remaining()));
+        response.setHeader("X-RateLimit-Reset", Long.toString(result.resetAt().getEpochSecond()));
+    }
+
+    private void reject(HttpServletRequest request, HttpServletResponse response, RateLimitResult rejecting)
+            throws IOException {
         long retryAfter =
                 Math.max(1, Duration.between(clock.now(), rejecting.resetAt()).getSeconds());
         response.setStatus(429);
         response.setHeader("Retry-After", Long.toString(retryAfter));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        // 統一錯誤結構(09 §9.4);filter 在 MVC 之前,手工組 JSON(欄位皆無需跳脫的受控值)
+        // 統一錯誤結構(09 §9.4);filter 在 MVC 之前,手工組 JSON;path 為 client 可控值,必須跳脫
         response.getWriter()
                 .write("{\"timestamp\":\"" + clock.now() + "\",\"status\":429,\"code\":\"RATE_LIMIT_EXCEEDED\","
-                        + "\"message\":\"Rate limit exceeded\",\"path\":\"" + request.getRequestURI() + "\","
-                        + "\"traceId\":" + jsonStringOrNull(org.slf4j.MDC.get("traceId"))
+                        + "\"message\":\"Rate limit exceeded\",\"path\":\"" + escapeJson(request.getRequestURI())
+                        + "\",\"traceId\":" + jsonStringOrNull(org.slf4j.MDC.get("traceId"))
                         + ",\"details\":[]}");
     }
 
     private static String jsonStringOrNull(String value) {
-        return value == null ? "null" : "\"" + value + "\"";
+        return value == null ? "null" : "\"" + escapeJson(value) + "\"";
+    }
+
+    /** 最小 JSON 字串跳脫(引號、反斜線、控制字元)——不押注 servlet 容器對 request line 的過濾。 */
+    static String escapeJson(String value) {
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"' -> sb.append("\\\"");
+                case '\\' -> sb.append("\\\\");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /** 匿名 IP 正規化(§10.7):IPv4 取完整位址;IPv6 取 /64 前綴,避免以 /64 內位址繞過。 */

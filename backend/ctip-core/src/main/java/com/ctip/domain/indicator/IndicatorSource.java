@@ -65,7 +65,12 @@ public final class IndicatorSource {
         return ttl == null ? null : sourceLastSeen.plus(ttl);
     }
 
-    /** 同來源再次回報:更新觀測值並累加 reportCount(UPSERT 語意)。 */
+    /**
+     * 同來源再次回報:更新觀測值並累加 reportCount(UPSERT 語意)。
+     * status 規則(§7.5 撤回語意依賴 RETRACTED 存續,不得被例行同步沖掉):
+     * 新回報為 RETRACTED 一律生效;RETRACTED 與 FALSE_POSITIVE 不因後續 ACTIVE 回報復活
+     * (前者對齊 STIX 2.1 revoked 的單向性,後者為使用者斷言);EXPIRED 因新觀測回到 ACTIVE。
+     */
     void mergeReport(IndicatorSource newer) {
         if (!newer.sourceId.equals(sourceId)) {
             throw new IllegalArgumentException("mergeReport 僅限同一來源");
@@ -79,7 +84,11 @@ public final class IndicatorSource {
         this.sourceValidUntil = newer.sourceValidUntil;
         this.tags.addAll(newer.tags);
         this.reportCount++;
-        this.status = SourceRecordStatus.ACTIVE;
+        if (newer.status == SourceRecordStatus.RETRACTED) {
+            this.status = SourceRecordStatus.RETRACTED;
+        } else if (this.status == SourceRecordStatus.EXPIRED) {
+            this.status = SourceRecordStatus.ACTIVE;
+        }
     }
 
     void retract() {
