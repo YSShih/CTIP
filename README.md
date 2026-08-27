@@ -215,6 +215,15 @@ docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml
 
 ---
 
+## Demo(畫面速覽)
+
+M1 的四個主要畫面——儀表板、IOC 檢索、IOC 詳情、Swagger UI——的截圖與說明見
+[`docs/demo/`](docs/demo/README.md)(匿名唯讀,只呈現 public TLP:CLEAR 情資)。
+
+[![儀表板](docs/demo/dashboard.png)](docs/demo/README.md)
+
+---
+
 ## 授權與安全
 
 - 授權：見 `LICENSE`（實作階段建立）
