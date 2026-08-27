@@ -277,7 +277,16 @@ Retry-After: 42
 
 ### 實作方式
 
-**使用 Spring Security filter 或 `HandlerInterceptor`，禁止用 Decorator 堆疊。** 集中一處，可讀可除錯（見 [01-architecture.md](01-architecture.md#17-抽象判準強制)）。
+**使用 Spring Security filter 或 `HandlerInterceptor`，禁止用 Decorator 堆疊。**
+
+> **實作回饋修訂（2026-08-27，Phase 13；ADR 0012 決策 16)**
+> 限流器與認證的**先後順序**是安全需求,不只是實作細節。認證 filter 在憑證無效時會直接寫出 401
+> 並中止 filter chain;限流器若排在認證之後就完全不會執行,**只要掛一個亂寫的 `Authorization`
+> 標頭即可無限量發送請求**(實測:75 次無效 token 全回 401、零個 429,而同 IP 的匿名請求 60 次後
+> 正常 429)。每次嘗試都會查一次資料庫,同時是暴力破解與資源耗盡的入口。
+>
+> 因此:**維度 4(匿名 IP)必須在認證之前檢查**;維度 1–3(apiKey / user / tenant)需要已解析的身分,
+> 只能在認證之後。Phase 14 加入維度 1–3 時不得把維度 4 一起移到認證之後。 集中一處，可讀可除錯（見 [01-architecture.md](01-architecture.md#17-抽象判準強制)）。
 
 ---
 

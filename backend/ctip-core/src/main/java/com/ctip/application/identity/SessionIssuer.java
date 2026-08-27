@@ -4,8 +4,6 @@ import com.ctip.application.port.AccessTokenClaims;
 import com.ctip.application.port.AccessTokenPort;
 import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.RefreshTokenRepository;
-import com.ctip.domain.user.RefreshTokenId;
-import com.ctip.domain.user.TokenFamilyId;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
@@ -29,20 +27,23 @@ public class SessionIssuer {
         this.idGenerator = idGenerator;
     }
 
-    /** 新登入:開一個新的輪替家族。 */
+    /** 新登入:開一個新的輪替家族,建立並持久化第一枚 refresh token。 */
     public AuthSession issueNewSession(AuthenticatedIdentity identity, ClientInfo client) {
-        return issue(identity, refreshTokens.newFamily(), null, client);
-    }
-
-    /** 輪替:沿用既有家族並以舊枚為 parent。 */
-    public AuthSession issue(
-            AuthenticatedIdentity identity, TokenFamilyId family, RefreshTokenId parentId, ClientInfo client) {
-        return complete(identity, refreshTokens.create(identity.userId(), family, parentId, client));
-    }
-
-    /** 持久化新枚 refresh token 並簽發 access token(輪替路徑已在別處建構好新枚)。 */
-    public AuthSession complete(AuthenticatedIdentity identity, IssuedRefreshToken issued) {
+        IssuedRefreshToken issued = refreshTokens.create(identity.userId(), refreshTokens.newFamily(), null, client);
         refreshTokenRepository.save(issued.token());
+        return sign(identity, issued);
+    }
+
+    /**
+     * 輪替後續簽:<strong>不再寫入</strong>——新枚已由 {@link RefreshTokenRotator} 在「消耗舊枚」的
+     * 同一個交易內持久化。若在這裡才存,舊枚已提交為已使用、新枚卻可能存不進去,
+     * 使用者會在一次基礎設施抖動後被無聲登出且該 family 就此斷掉。
+     */
+    public AuthSession resume(AuthenticatedIdentity identity, IssuedRefreshToken issued) {
+        return sign(identity, issued);
+    }
+
+    private AuthSession sign(AuthenticatedIdentity identity, IssuedRefreshToken issued) {
         String accessToken = accessTokens.issue(claimsFor(identity));
         return new AuthSession(accessToken, issued.plaintext(), accessTokens.accessTokenTtlSeconds(), identity, null);
     }

@@ -59,6 +59,11 @@ public class RefreshTokenRotator {
         RefreshTokenRotation rotation = user.rotateRefreshToken(new RefreshTokenRotationCommand(
                 presented, tokens.findByFamily(presented.familyId()), replacement.token(), clock.now()));
         tokens.saveAll(rotation.mutated());
+        if (rotation.isRotated()) {
+            // 新枚必須與「舊枚被消耗」在同一個交易內提交:否則舊枚已作廢而新枚沒存進去,
+            // 使用者會被無聲登出,且該 family 沒有任何可用的後繼
+            tokens.save(replacement.token());
+        }
         user.pullEvents().forEach(events::publish);
         return rotation.isRotated()
                 ? RotatedTokens.rotated(user, replacement)

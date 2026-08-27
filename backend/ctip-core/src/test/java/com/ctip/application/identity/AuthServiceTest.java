@@ -144,6 +144,74 @@ class AuthServiceTest {
                 .isInstanceOf(InvalidRefreshTokenException.class);
     }
 
+    /**
+     * 迴歸鎖(Phase 13 安全修正):帳號不存在時<strong>也必須</strong>做一次密碼比對。
+     *
+     * <p>否則不存在的帳號會略過 BCrypt 而在數毫秒內回應、存在的要數百毫秒,回應時間本身就能列舉出
+     * 哪些 email 已註冊——錯誤訊息寫得再一致也擋不住(修正前實測 7ms vs 440ms)。
+     */
+    @Test
+    void loginPerformsAPasswordComparisonEvenWhenTheAccountDoesNotExist() {
+        AuthServiceFixture fixture = new AuthServiceFixture();
+        fixture.register(EMAIL);
+
+        int before = fixture.passwordHasher.comparisons();
+        assertThatThrownBy(() -> fixture.login("no-such-account@example.org", AuthServiceFixture.PASSWORD))
+                .isInstanceOf(AuthenticationFailedException.class);
+        assertThat(fixture.passwordHasher.comparisons() - before)
+                .as("帳號不存在的路徑也要耗掉一次比對")
+                .isEqualTo(1);
+
+        before = fixture.passwordHasher.comparisons();
+        assertThatThrownBy(() -> fixture.login(EMAIL, "wrong-password-value"))
+                .isInstanceOf(AuthenticationFailedException.class);
+        assertThat(fixture.passwordHasher.comparisons() - before)
+                .as("帳號存在但密碼錯誤的路徑,比對次數必須相同")
+                .isEqualTo(1);
+    }
+
+    /** 鎖定中的帳號同樣不得因為「提早返回」而更快回應。 */
+    @Test
+    void lockedAccountsAlsoPerformThePasswordComparison() {
+        AuthServiceFixture fixture = new AuthServiceFixture();
+        fixture.register(EMAIL);
+        for (int attempt = 0; attempt < 10; attempt++) {
+            assertThatThrownBy(() -> fixture.login(EMAIL, "wrong-password-value"))
+                    .isInstanceOf(AuthenticationFailedException.class);
+        }
+        int before = fixture.passwordHasher.comparisons();
+        assertThatThrownBy(() -> fixture.login(EMAIL, AuthServiceFixture.PASSWORD))
+                .isInstanceOf(AuthenticationFailedException.class)
+                .hasMessageContaining("locked");
+        assertThat(fixture.passwordHasher.comparisons() - before).isEqualTo(1);
+    }
+
+    /**
+     * 迴歸鎖(Phase 13 資料完整性修正):輪替的「消耗舊枚」與「持久化新枚」必須同一交易。
+     *
+     * <p>rotate() 回傳當下新枚就必須已在儲存庫中;若延到之後才存,舊枚已提交為已使用而新枚可能存不進去,
+     * 使用者會被無聲登出,且該 family 沒有任何可用的後繼。
+     */
+    @Test
+    void rotationPersistsTheReplacementInTheSameStepThatConsumesTheOldToken() {
+        AuthServiceFixture fixture = new AuthServiceFixture();
+        AuthSession first = fixture.register(EMAIL);
+
+        RotatedTokens rotated =
+                fixture.rotator.rotate(new AuthCommands.Refresh(first.refreshToken(), "junit", "127.0.0.1"));
+
+        assertThat(rotated.isRotated()).isTrue();
+        assertThat(fixture.refreshTokens.findByHash(
+                        TokenHash.of(rotated.issued().plaintext())))
+                .as("rotate() 回傳時新枚就必須已持久化")
+                .isPresent();
+        assertThat(fixture.refreshTokens
+                        .findByHash(TokenHash.of(first.refreshToken()))
+                        .orElseThrow()
+                        .isUsed())
+                .isTrue();
+    }
+
     @Test
     void logoutRevokesTheWholeFamily() {
         AuthServiceFixture fixture = new AuthServiceFixture();

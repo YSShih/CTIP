@@ -11,6 +11,13 @@ public final class FakePasswordHasher implements PasswordHasherPort {
 
     private static final String PREFIX = "$2a$12$";
 
+    private int comparisons;
+
+    /** 比對次數。等時比對的斷言靠它:帳號不存在時也必須發生一次比對。 */
+    public int comparisons() {
+        return comparisons;
+    }
+
     @Override
     public PasswordHash hash(String rawPassword) {
         return new PasswordHash(PREFIX + Integer.toHexString(rawPassword.hashCode()) + "fake");
@@ -18,6 +25,12 @@ public final class FakePasswordHasher implements PasswordHasherPort {
 
     @Override
     public boolean matches(String rawPassword, PasswordHash hash) {
+        comparisons++;
         return hash(rawPassword).equals(hash);
+    }
+
+    @Override
+    public PasswordHash dummyHash() {
+        return hash("dummy-never-matches-any-account");
     }
 }

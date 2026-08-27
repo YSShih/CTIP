@@ -638,7 +638,7 @@
   - `verify -Ptest-integration -Dtest='AuthFlowIntegrationTest,RefreshTokenRotationTest,RbacMatrixTest,ApiKeyTest,CrossTenantIsolationTest,SecurityTest'`(逐字)✅ 138/138
     (RbacMatrix 101 = **95 格矩陣參數化** + 6;SecurityTest 15,條號 1–9 全數具名;
      CrossTenantIsolation 以參數化涵蓋每一個 tenant-scoped 端點,全部 404)
-  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 203 + adapters 24 + app 240 = 480;
+  - 另跑 `clean verify -Ptest-integration` 無過濾 ✅(sdk 13 + core 207 + adapters 24 + app 243 = 487;
     Spotless/Checkstyle/JaCoCo 全過,含 domain.user / domain.identity ≥ 0.85)
   - frontend ✅ `tsc --noEmit`、`eslint --max-warnings 0`、`api:check`、`build`、`test`(97 tests,行覆蓋 90%)、`format:check`
   - `dod.sh mvp` **38/38 回歸**(M2-01)
@@ -672,6 +672,17 @@
      消費它所以一直沒事;HS256 上線後,照 README 快速開始複製樣板的全新環境**直接啟動失敗**。
      樣板改為 `CHANGE_ME_MIN_32_BYTES_REPLACE_THIS`(35 bytes,仍含 `CHANGE_ME` 故 prod 守衛不受影響),
      並加 `EnvTemplateSecretTest` 逐檔鎖住(ADR 0012 決策 15)
+- **收尾複查抓到的 4 個安全/完整性缺陷(全部已修 + 回歸測試,ADR 0012 決策 16–19)**:
+  1. **認證失敗完全繞過限流**(我在本 phase 引入的迴歸):認證 filter 憑證無效時直接寫 401 並中止 chain,
+     而 `RateLimitFilter` 排在 security chain 之後(Boot 對 Filter bean 預設 `LOWEST_PRECEDENCE`)。
+     實測 75 次無效 token → **零個 429**。改以 `FilterRegistrationBean` 排在
+     `SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1`。
+     **Phase 14 加維度 1–3 時,IP 維度必須留在認證之前**(已回寫 10 §10.7)
+  2. **登入回應時間洩漏帳號是否存在**:查無帳號時略過 BCrypt,實測 7ms vs 440ms(60 倍),
+     錯誤訊息一致完全沒用。改為一律比對(帳號不存在時比 `PasswordHasherPort.dummyHash()`),鎖定路徑亦然
+  3. **輪替的消耗舊枚與持久化新枚不同交易**:中間失敗會讓舊枚已作廢、新枚不存在 → 無聲登出且 family 斷掉。
+     新枚改在 rotator 同一交易內持久化;`SessionIssuer` 拆為 `issueNewSession` / `resume`
+  4. **API key 雜湊用 `String.equals`**(會短路)→ 改 `MessageDigest.isEqual`
 - **環境維運(實測踩到)**:
   - **新增 Maven 相依後 dev 容器必須重建**:`spring-boot:run` 的 classpath 在啟動時算好,
     DevTools restart 只換 app classes → `NoClassDefFoundError`。用

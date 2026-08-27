@@ -393,6 +393,11 @@ Phase 13（認證、RBAC、API Key、租戶隔離）發現兩項規格自身衝�
 | 3 | phase-13 要求「`AuthState` 擴充為完整身分」，但同一執行單又禁止改動 TLP 過濾邏輯——而 `AuthState` 正是該邏輯的軸 | `AuthState` 保留兩態；完整身分改由 `AuthenticatedIdentity` 承載，`TlpSpecifications`／`Visibility` 零修改 | [01 §1.11](01-architecture.md#111-最小安全層m1-即建立) |
 | 4 | §9.1 的 `/auth/*` 與 `/api-keys` 只有路徑與權限，無 DTO、無匿名標註、無狀態碼 | `/auth/*` 標為匿名（refresh／logout 以主體 token 自我認證）；DTO 依 §9.5 慣例由實作定義，契約以 `docs/api/openapi.json` 為準；狀態碼明列 | [09 §9.1](09-api.md#91-端點清單) |
 
+> ⚠️ **收尾複查發現的安全缺陷(4 項,詳見 ADR 0012 決策 16–19)**:認證失敗完全繞過限流
+> (我在本 phase 引入的迴歸,實測 75 次無效 token 零個 429)、登入回應時間洩漏帳號是否存在
+> (實測 440ms vs 7ms)、refresh token 輪替的消耗與持久化不同交易、API key 雜湊非常數時間比對。
+> 其中限流順序已回寫 [10 §10.7](10-identity-plans.md#107-限流):**IP 維度必須在認證之前檢查**。
+
 > ⚠️ **實作期發現的實質缺陷（非規格問題，但足以使不變量失效）**：
 > `@Transactional` 方法內「寫入失敗紀錄 → 丟例外」會使該寫入隨交易 rollback——
 > 登入失敗計數（U7 鎖定）與重用偵測的 family 全撤（U5）因此完全失效。

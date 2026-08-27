@@ -93,6 +93,17 @@ class ApiKeyAggregateTest {
         assertThat(ApiKeyFormat.compose("stg", RANDOM_SEGMENT)).isEqualTo("ctip_stg_" + RANDOM_SEGMENT);
     }
 
+    /** 比對憑證一律走常數時間;{@code equals} 會在第一個相異字元短路,不得用於 secret。 */
+    @Test
+    void k1HashComparisonIsConstantTimeAndStillCorrect() {
+        KeyHash stored = KeyHash.of(FULL_KEY);
+        assertThat(stored.matches(FULL_KEY)).isTrue();
+        assertThat(stored.matches("ctip_mvp_" + "z".repeat(32))).isFalse();
+        // 只差最後一個字元也必須判否(常數時間不代表比對變寬鬆)
+        assertThat(stored.matches(FULL_KEY.substring(0, FULL_KEY.length() - 1) + "f"))
+                .isFalse();
+    }
+
     @Test
     void k3ScopeOutsideTheSystemPermissionCatalogIsRejected() {
         assertThatThrownBy(() -> ApiKey.issue(

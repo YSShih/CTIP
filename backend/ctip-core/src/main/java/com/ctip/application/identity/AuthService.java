@@ -58,7 +58,7 @@ public class AuthService {
                     INVALID_REFRESH_TOKEN, rotated.outcome() == RefreshTokenRotationOutcome.REUSE_DETECTED);
         }
         return sessionIssuer
-                .complete(identityResolver.resolve(rotated.user()), rotated.issued())
+                .resume(identityResolver.resolve(rotated.user()), rotated.issued())
                 .withDisplayName(rotated.user().displayName());
     }
 

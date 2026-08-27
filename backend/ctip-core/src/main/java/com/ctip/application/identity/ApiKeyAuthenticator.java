@@ -7,7 +7,6 @@ import com.ctip.application.port.TenantMembershipRepository;
 import com.ctip.application.rbac.RoleCode;
 import com.ctip.domain.identity.ApiKey;
 import com.ctip.domain.identity.ApiKeyFormat;
-import com.ctip.domain.identity.KeyHash;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -49,7 +48,7 @@ public class ApiKeyAuthenticator {
         }
         Instant now = clock.now();
         return apiKeys.findByPrefix(ApiKeyFormat.prefixOf(fullKey))
-                .filter(key -> key.keyHash().equals(KeyHash.of(fullKey)))
+                .filter(key -> key.keyHash().matches(fullKey))
                 .filter(key -> key.isUsable(now))
                 .map(key -> toIdentity(key, now));
     }

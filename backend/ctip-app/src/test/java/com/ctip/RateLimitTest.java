@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
  * 記憶體限流(docs/spec/10-identity-plans.md §10.7,Phase 6):套用全端點、
@@ -23,17 +24,28 @@ class RateLimitTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private MockMvc mvc;
 
+    /**
+     * 每個測試方法綁不同的 client IP。限流是 per-IP 的,若共用 127.0.0.1,
+     * 先跑的測試會吃掉後跑測試的配額,失敗訊息還會指向無辜的那一個。
+     */
+    private static MockHttpServletRequestBuilder from(MockHttpServletRequestBuilder builder, String ip) {
+        return builder.with(request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        });
+    }
+
     @Test
     void anonymousIpExceedingLimitGets429WithHeadersOnEveryResponse() throws Exception {
         for (int i = 0; i < 3; i++) {
-            mvc.perform(get("/api/v1/rate-limit-probe"))
+            mvc.perform(from(get("/api/v1/rate-limit-probe"), "198.51.100.1"))
                     .andExpect(status().isNotFound()) // Phase 9 前尚無 controller;限流在 filter 層已生效
                     .andExpect(header().string("X-RateLimit-Limit", "3"))
                     .andExpect(header().string("X-RateLimit-Remaining", String.valueOf(2 - i)))
                     .andExpect(header().exists("X-RateLimit-Reset"));
         }
         // 429 body 必須是統一錯誤結構(09 §9.4)——filter 手工組 JSON,欄位 drift 要被測試抓到
-        mvc.perform(get("/api/v1/rate-limit-probe"))
+        mvc.perform(from(get("/api/v1/rate-limit-probe"), "198.51.100.1"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("X-RateLimit-Limit", "3"))
                 .andExpect(header().string("X-RateLimit-Remaining", "0"))
@@ -47,10 +59,41 @@ class RateLimitTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.details").isArray());
     }
 
+    /**
+     * 迴歸鎖(Phase 13):憑證無效的請求<strong>一樣要計入限流</strong>。
+     *
+     * <p>認證 filter 在憑證無效時直接寫 401 並中止 chain;限流器若排在 security chain 之後就完全不會執行,
+     * 只要掛一個亂寫的 Authorization 標頭即可無限量發送(每次都查一次資料庫)。
+     * 實測曾為:75 次無效 token 全回 401、零個 429。
+     */
+    @Test
+    void rejectedCredentialsStillConsumeTheRateLimitBudget() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(from(get("/api/v1/iocs").header("Authorization", "Bearer invalid-token-" + i), "198.51.100.2"))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(header().string("X-RateLimit-Remaining", String.valueOf(2 - i)));
+        }
+        mvc.perform(from(get("/api/v1/iocs").header("Authorization", "Bearer invalid-token-final"), "198.51.100.2"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("RATE_LIMIT_EXCEEDED"));
+    }
+
+    /** 同上,X-API-Key 路徑也不得繞過(它每次都會查 api_keys 表)。 */
+    @Test
+    void rejectedApiKeysStillConsumeTheRateLimitBudget() throws Exception {
+        String bogus = "ctip_mvp_" + "z".repeat(32);
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(from(get("/api/v1/iocs").header("X-API-Key", bogus), "198.51.100.3"))
+                    .andExpect(status().isUnauthorized());
+        }
+        mvc.perform(from(get("/api/v1/iocs").header("X-API-Key", bogus), "198.51.100.3"))
+                .andExpect(status().isTooManyRequests());
+    }
+
     @Test
     void actuatorProbesAreNotRateLimited() throws Exception {
         for (int i = 0; i < 10; i++) {
-            mvc.perform(get("/actuator/health"))
+            mvc.perform(from(get("/actuator/health"), "198.51.100.4"))
                     .andExpect(status().isOk())
                     .andExpect(header().doesNotExist("X-RateLimit-Limit"));
         }

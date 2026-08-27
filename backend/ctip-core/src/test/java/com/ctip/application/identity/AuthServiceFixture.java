@@ -30,6 +30,8 @@ final class AuthServiceFixture {
 
     private final MutableClock clock;
     final AuthService authService;
+    final RefreshTokenRotator rotator;
+    final FakePasswordHasher passwordHasher = new FakePasswordHasher();
 
     AuthServiceFixture() {
         this(FixedClockPort.DEFAULT_NOW);
@@ -42,10 +44,10 @@ final class AuthServiceFixture {
                 new SequentialTokenGenerator(), ids, clock, new RefreshTokenSettings(Duration.ofDays(30)));
         SessionIssuer sessionIssuer = new SessionIssuer(accessTokens, tokenFactory, refreshTokens, ids);
         UserRegistrar registrar = new UserRegistrar(
-                users, new TenantProvisioner(tenants, memberships, ids, events), new FakePasswordHasher(), ids, events);
-        LoginAuthenticator loginAuthenticator = new LoginAuthenticator(
-                users, new FakePasswordHasher(), clock, new LoginPolicy(10, Duration.ofMinutes(15)));
-        RefreshTokenRotator rotator = new RefreshTokenRotator(users, refreshTokens, tokenFactory, clock, events);
+                users, new TenantProvisioner(tenants, memberships, ids, events), passwordHasher, ids, events);
+        LoginAuthenticator loginAuthenticator =
+                new LoginAuthenticator(users, passwordHasher, clock, new LoginPolicy(10, Duration.ofMinutes(15)));
+        this.rotator = new RefreshTokenRotator(users, refreshTokens, tokenFactory, clock, events);
         this.authService = new AuthService(registrar, loginAuthenticator, rotator, sessionIssuer, identityResolver);
     }
 

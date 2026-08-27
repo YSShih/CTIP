@@ -166,6 +166,63 @@ HS256 要求 256-bit 金鑰,`JwtAccessTokenAdapter` 在所有環境的建構期�
 
 ---
 
+## Phase 13 收尾複查發現的安全與完整性缺陷(4 項,皆已修正並加回歸測試)
+
+以下不是規格衝突,是**我在 Phase 13 引入或遺漏的實作缺陷**,於「確認 Phase 13」時實測發現。
+
+### 決策 16:限流必須排在認證之前 — 認證失敗曾完全繞過限流(我引入的迴歸)
+
+`CtipAuthenticationFilter` 在憑證無效時直接寫出 401 並中止 filter chain,而 `RateLimitFilter`
+排在 Spring Security chain **之後**(Boot 對 Filter bean 的預設順序是 `LOWEST_PRECEDENCE`)。
+結果:**任何帶著無效憑證的請求都不受限流**。
+
+實測:同一 IP 送 75 次無效 Bearer token → **75 次 401、零個 429**;對照組 75 次匿名請求 → 60 次 200 後正常 429。
+
+這不只是暴力破解的入口,每一次嘗試都會查一次資料庫(API key 路徑查 `api_keys`),也是廉價的資源耗盡向量。
+M1 沒有 security chain,`RateLimitFilter` 看得到每一個請求;是我加上 chain 才打破這個性質。
+
+**決策**:以 `FilterRegistrationBean` 明確把 `RateLimitFilter` 排在
+`SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1`(= -101),即 security chain 之前。
+回歸鎖:`RateLimitTest.rejectedCredentialsStillConsumeTheRateLimitBudget` 與
+`rejectedApiKeysStillConsumeTheRateLimitBudget`。
+
+> ⚠️ **Phase 14 注意**:加入 key/user/tenant 維度時,那些維度需要已解析的身分、只能在認證之後檢查;
+> 但 **IP 維度必須留在認證之前**,否則這個繞過會原封不動地回來。
+
+### 決策 17:登入的回應時間不得洩漏帳號是否存在
+
+`LoginAuthenticator` 原本在「查無此 email」時立刻返回,不跑 BCrypt;帳號存在才跑(cost 12 ≈ 400ms)。
+於是回應時間本身就是一個帳號列舉神諭——**錯誤訊息刻意寫成一致完全沒有意義**。
+
+實測:已存在帳號 + 錯密碼 ≈ **440ms**;不存在帳號 + 同樣密碼 ≈ **7ms**(60 倍差距,跨網路也量得到)。
+
+**決策**:密碼比對一律執行,帳號不存在時比對 `PasswordHasherPort.dummyHash()`
+(由實作在啟動時算一次的固定雜湊,不對應任何帳號)。鎖定中的帳號亦然,不得提早返回。
+回歸鎖:`AuthServiceTest.loginPerformsAPasswordComparisonEvenWhenTheAccountDoesNotExist`、
+`lockedAccountsAlsoPerformThePasswordComparison`(以比對次數斷言,不依賴計時)。
+
+> 仍保留的取捨:鎖定中的帳號回 `Account temporarily locked`,與一般失敗訊息不同,
+> 因此攻擊者可用「先打 10 次錯密碼、看是否轉為 locked」來確認帳號存在。
+> 保留的理由是:改成一律回同一句話會讓被鎖住的真實使用者完全無法理解自己為何登不進去;
+> 而這條列舉路徑每個候選 email 要花 10 次請求,且本身受 IP 限流與帳號鎖定雙重壓制。
+
+### 決策 18:輪替的「消耗舊枚」與「持久化新枚」必須同一交易
+
+`RefreshTokenRotator.rotate` 消耗舊枚後提交,新枚卻延到 `SessionIssuer` 才寫。中間任何失敗都會讓
+**舊枚已作廢、新枚不存在**——使用者被無聲登出,該 family 也沒有可用的後繼。
+
+**決策**:新枚在 rotator 的同一交易內持久化;`SessionIssuer.complete` 拆成 `issueNewSession`
+(登入:建立 + 持久化 + 簽章)與 `resume`(輪替:只簽章,不再寫入)。
+回歸鎖:`AuthServiceTest.rotationPersistsTheReplacementInTheSameStepThatConsumesTheOldToken`。
+
+### 決策 19:API key 雜湊以常數時間比對
+
+`KeyHash.equals` 走 `String.equals`,會在第一個相異字元短路。實際可利用性很低
+(攻擊者只控制原文,無法針對 SHA-256 摘要前綴逐位元試探),但「比對憑證用常數時間」
+不該有例外。改用 `MessageDigest.isEqual`(`KeyHash.matches`)。
+
+---
+
 ## 不變事項
 
 - `TlpSpecifications` / `Visibility` / `Indicator.canBeRedistributedTo`:**零修改**

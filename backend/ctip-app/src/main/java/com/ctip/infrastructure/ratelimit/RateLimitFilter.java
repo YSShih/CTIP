@@ -41,7 +41,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest request) {
         // getRequestURI() 為未正規化原文;含 ".." 的路徑不得享有 /actuator 豁免(路徑穿越防禦)
         String uri = request.getRequestURI();
-        return !enabled || (uri.startsWith("/actuator") && !uri.contains(".."));
+        return !enabled || isCorsPreflight(request) || (uri.startsWith("/actuator") && !uri.contains(".."));
+    }
+
+    /**
+     * CORS preflight 不計入配額。
+     *
+     * <p>它是瀏覽器自動產生的額外往返——每個非簡單跨源請求都會多一次——計入等於把 SPA 的可用配額砍半。
+     * 且 preflight 不帶憑證、不查資料庫,完全由 CORS 設定回答,沒有可被濫用的成本。
+     * 判定條件刻意比「method == OPTIONS」窄:必須帶 {@code Access-Control-Request-Method},
+     * 否則一般的 OPTIONS 就成了繞過限流的洞。
+     */
+    private static boolean isCorsPreflight(HttpServletRequest request) {
+        return "OPTIONS".equalsIgnoreCase(request.getMethod())
+                && request.getHeader("Access-Control-Request-Method") != null;
     }
 
     @Override

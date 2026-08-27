@@ -252,6 +252,13 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
    `spring-boot:run` 的 classpath 時,沿用 3.1 以前的 `<directories>` **不報錯但靜默無效**;
    4.x 必須用 `<additionalClasspathElements><additionalClasspathElement>…`(3.2.0 起)。
 
+8. **Spring Security 的 filter 順序常數在 Boot 4 換了位置**(2026-08-27 Phase 13 實測補入):
+   `DEFAULT_FILTER_ORDER`(= -100)不再在 `org.springframework.boot.autoconfigure.security.SecurityProperties`,
+   而是 `org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties`
+   (Boot 4 的 `SecurityProperties` 只剩 `getUser()`)。要把自訂 filter 明確排在 security chain
+   之前/之後時會用到——**沒有明確指定順序的 Filter bean 會落在 chain 之後**(Boot 預設
+   `LOWEST_PRECEDENCE`),Phase 13 的限流繞過就是這樣來的。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。
