@@ -690,6 +690,16 @@
   - `up.sh` 對「已在執行但 unhealthy」的容器不會重建,只會等 healthcheck 逾時 300s 後報錯
   - host 端 `mvnw clean` 會刪掉與 dev 容器共用的 `target/classes`,執行中的 app 隨即死亡
     (ADR 0010 只擋掉「重啟」,擋不掉 class 被刪);跑完 gate 前後都要確認容器 healthy
+- **未處理、但已確認「現在不該處理」的一項(§10.7 強制)**:
+  `server.forward-headers-strategy=framework` 全專案沒有設定。查證後結論是**現階段刻意不設**:
+  nginx 只服務前端靜態檔、**沒有反代 `/api`**,後端在四個環境都直接對外,因此 `getRemoteAddr()`
+  取到的就是真實 client IP,匿名限流是準的;此時若設 framework,前面沒有可信代理,
+  **任何人都能偽造 `X-Forwarded-For` 換一個全新配額**,等於自己開洞。
+  ⚠️ **但 M2-25 的 VITE_API_URL 修法若採「nginx 反代 `/api`」,就會在後端前面放上代理** ——
+  屆時所有請求的 remote addr 都變成 nginx 容器 IP,**整個平台共用同一個限流桶**(單一使用者即可
+  耗盡全部配額)。那時必須同時設 `forward-headers-strategy=framework` **並**以
+  `server.tomcat.remoteip.internal-proxies` 限定信任來源,兩者缺一都是洞。
+  §10.7 另要求「若無法確定真實 client IP 須在 `docs/deployment/` 記載」——該目錄是 M3 交付物,目前為空。
 - **給下一 session 的注意事項(Phase 14 = Plan/Subscription/配額 + IOC 寫入端點)**:
   - 配額值一律讀 `plans` 表;現有四處硬綁 `CtipProperties` 要改:`IocController.clampLimit()`、
     `api.maxBatchLookup()`、`StixExportSettings`、`RateLimitConfig` 的匿名 60/1000
