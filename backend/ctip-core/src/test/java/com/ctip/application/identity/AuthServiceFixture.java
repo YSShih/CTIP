@@ -18,6 +18,7 @@ import java.time.Instant;
 final class AuthServiceFixture {
 
     static final String PASSWORD = "unit-test-password";
+    static final Duration FAMILY_MAX_LIFETIME = Duration.ofDays(90);
 
     final InMemoryUserRepository users = new InMemoryUserRepository();
     final InMemoryRefreshTokenRepository refreshTokens = new InMemoryRefreshTokenRepository();
@@ -26,7 +27,8 @@ final class AuthServiceFixture {
     final StubRolePermissions rolePermissions = new StubRolePermissions();
     final RecordingEventPublisher events = new RecordingEventPublisher();
     final FakeAccessTokens accessTokens = new FakeAccessTokens();
-    final IdentityResolver identityResolver = new IdentityResolver(memberships, rolePermissions);
+    final AccountAccessPolicy accounts = new AccountAccessPolicy(users, memberships);
+    final IdentityResolver identityResolver = new IdentityResolver(accounts, rolePermissions);
 
     private final MutableClock clock;
     final AuthService authService;
@@ -41,13 +43,16 @@ final class AuthServiceFixture {
         this.clock = new MutableClock(start);
         SequentialIdGenerator ids = new SequentialIdGenerator();
         RefreshTokenFactory tokenFactory = new RefreshTokenFactory(
-                new SequentialTokenGenerator(), ids, clock, new RefreshTokenSettings(Duration.ofDays(30)));
+                new SequentialTokenGenerator(),
+                ids,
+                clock,
+                new RefreshTokenSettings(Duration.ofDays(30), FAMILY_MAX_LIFETIME));
         SessionIssuer sessionIssuer = new SessionIssuer(accessTokens, tokenFactory, refreshTokens, ids);
         UserRegistrar registrar = new UserRegistrar(
                 users, new TenantProvisioner(tenants, memberships, ids, events), passwordHasher, ids, events);
         LoginAuthenticator loginAuthenticator =
                 new LoginAuthenticator(users, passwordHasher, clock, new LoginPolicy(10, Duration.ofMinutes(15)));
-        this.rotator = new RefreshTokenRotator(users, refreshTokens, tokenFactory, clock, events);
+        this.rotator = new RefreshTokenRotator(accounts, refreshTokens, tokenFactory, clock, events);
         this.authService = new AuthService(registrar, loginAuthenticator, rotator, sessionIssuer, identityResolver);
     }
 

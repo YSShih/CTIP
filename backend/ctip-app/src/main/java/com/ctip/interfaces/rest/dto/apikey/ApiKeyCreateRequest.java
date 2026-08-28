@@ -2,13 +2,19 @@ package com.ctip.interfaces.rest.dto.apikey;
 
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.Set;
 
-/** 建立 API key。scopes 不得超出建立者在該租戶的權限(不變量 K4)。 */
+/**
+ * 建立 API key。scopes 不得超出建立者在該租戶的權限(不變量 K4)。
+ *
+ * <p>{@code expiresAt} 為 null 表示永不過期;給過去的時間會建出一把出生即死的金鑰,
+ * 故以 {@code @FutureOrPresent} 擋在欄位層(ADR 0013)。
+ */
 public record ApiKeyCreateRequest(
         @NotBlank @Size(max = 128) @Schema(example = "ci-pipeline")
         String name,
@@ -16,4 +22,5 @@ public record ApiKeyCreateRequest(
         @NotNull @ArraySchema(schema = @Schema(example = "ioc:read"))
         Set<String> scopes,
 
-        @Schema(example = "2027-01-01T00:00:00Z") Instant expiresAt) {}
+        @FutureOrPresent @Schema(example = "2027-01-01T00:00:00Z")
+        Instant expiresAt) {}

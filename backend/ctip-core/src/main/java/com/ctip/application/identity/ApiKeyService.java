@@ -3,7 +3,6 @@ package com.ctip.application.identity;
 import com.ctip.application.port.ApiKeyRepository;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.EventPublisherPort;
-import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.domain.identity.ApiKey;
 import com.ctip.domain.identity.ApiKeyId;
 import com.ctip.domain.identity.IssuedApiKey;
@@ -20,19 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApiKeyService {
 
     private final ApiKeyRepository apiKeys;
-    private final RolePermissionRepository rolePermissions;
+    private final ApiKeySettings settings;
     private final ApiKeyFactory factory;
     private final EventPublisherPort events;
     private final ClockPort clock;
 
     public ApiKeyService(
             ApiKeyRepository apiKeys,
-            RolePermissionRepository rolePermissions,
+            ApiKeySettings settings,
             ApiKeyFactory factory,
             EventPublisherPort events,
             ClockPort clock) {
         this.apiKeys = apiKeys;
-        this.rolePermissions = rolePermissions;
+        this.settings = settings;
         this.factory = factory;
         this.events = events;
         this.clock = clock;
@@ -43,7 +42,12 @@ public class ApiKeyService {
         if (!request.tenantId().equals(creator.tenantId())) {
             throw new IllegalArgumentException("不得為其他租戶建立 API key");
         }
-        IssuedApiKey issued = factory.create(request, rolePermissions.allPermissionCodes(), creator.permissions());
+        // §10.5 的數量上限。沒有這道檢查,任何具 apikey:create 的身分可無限量鑄造金鑰,
+        // 而一把帶該 scope 的金鑰還能自我複製出更多金鑰(ADR 0013)
+        if (apiKeys.countActive(request.tenantId()) >= settings.maxPerTenant()) {
+            throw new ApiKeyLimitExceededException("API key quota exhausted");
+        }
+        IssuedApiKey issued = factory.create(request, creator.permissions());
         ApiKey saved = apiKeys.save(issued.apiKey());
         issued.apiKey().pullEvents().forEach(events::publish);
         return new IssuedApiKey(saved, issued.plaintext());

@@ -21,6 +21,9 @@ class AuthServiceTest {
 
     private static final String EMAIL = "analyst@example.org";
 
+    /** 所有登入失敗共用的訊息:鎖定與密碼錯誤不得可區分(ADR 0013)。 */
+    private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid credentials";
+
     @Test
     void registrationCreatesTenantEnrolsAdminAndPublishesEvents() {
         AuthServiceFixture fixture = new AuthServiceFixture();
@@ -91,9 +94,11 @@ class AuthServiceTest {
             assertThatThrownBy(() -> fixture.login(EMAIL, "wrong-password-value"))
                     .isInstanceOf(AuthenticationFailedException.class);
         }
+        // 鎖定期間即使密碼正確也拒絕,且訊息與密碼錯誤完全相同 ——
+        // 可區分的訊息就是帳號列舉的 oracle(ADR 0013)
         assertThatThrownBy(() -> fixture.login(EMAIL, AuthServiceFixture.PASSWORD))
                 .isInstanceOf(AuthenticationFailedException.class)
-                .hasMessageContaining("locked");
+                .hasMessage(INVALID_CREDENTIALS_MESSAGE);
 
         fixture.advance(Duration.ofMinutes(16));
         assertThat(fixture.login(EMAIL, AuthServiceFixture.PASSWORD).accessToken())
@@ -182,7 +187,7 @@ class AuthServiceTest {
         int before = fixture.passwordHasher.comparisons();
         assertThatThrownBy(() -> fixture.login(EMAIL, AuthServiceFixture.PASSWORD))
                 .isInstanceOf(AuthenticationFailedException.class)
-                .hasMessageContaining("locked");
+                .hasMessage(INVALID_CREDENTIALS_MESSAGE);
         assertThat(fixture.passwordHasher.comparisons() - before).isEqualTo(1);
     }
 

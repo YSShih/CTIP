@@ -8,9 +8,10 @@ import java.util.Set;
 /**
  * docs/spec/10-identity-plans.md §10.3 的角色與權限矩陣,逐格謄寫。
  *
- * <p>這是矩陣的第二份獨立來源(第一份是 {@code V24__seed_rbac.sql}),兩者互為驗證——
- * 種子改動而規格未改,測試立即失敗。§10.3 標題誤寫「18 項」,實際清單為 19 個字串
- * (ADR 0012 決策 1)。
+ * <p>這是矩陣的第二份獨立來源(第一份是 {@code V24__seed_rbac.sql} + {@code V27__seed_rbac_read_permissions.sql}),
+ * 兩者互為驗證——種子改動而規格未改,測試立即失敗。§10.3 標題原誤寫「18 項」,實際清單為 19 個字串
+ * (ADR 0012 決策 1);Phase 13 收尾稽核補入 {@code source:read} / {@code stats:read} 後為 21 個
+ * (ADR 0013)。
  */
 public final class RbacMatrix {
 
@@ -32,6 +33,8 @@ public final class RbacMatrix {
         cells.put("ioc:read", ALL);
         cells.put("threat:read", ALL);
         cells.put("sync:bloom", ALL);
+        cells.put("source:read", ALL);
+        cells.put("stats:read", ALL);
         cells.put("ioc:export", LOGGED_IN);
         cells.put("stix:export", LOGGED_IN);
         cells.put("sync:delta", LOGGED_IN);

@@ -1,5 +1,6 @@
 package com.ctip.interfaces.rest.error;
 
+import com.ctip.application.identity.ApiKeyLimitExceededException;
 import com.ctip.application.identity.ApiKeyNotFoundException;
 import com.ctip.application.identity.AuthenticationFailedException;
 import com.ctip.application.identity.EmailAlreadyRegisteredException;
@@ -12,6 +13,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -51,6 +53,12 @@ public class ApiExceptionHandler {
         return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, "Bundle exceeds plan object limit", List.of(), request);
     }
 
+    /** §10.5 的每租戶 API key 數量上限(ADR 0013)。 */
+    @ExceptionHandler(ApiKeyLimitExceededException.class)
+    ResponseEntity<ErrorResponse> apiKeyLimitExceeded(ApiKeyLimitExceededException e, HttpServletRequest request) {
+        return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, "API key quota exhausted", List.of(), request);
+    }
+
     /** 認證失敗、無效／重用的 refresh token:一律 401,不揭露細節(避免帳號列舉)。 */
     @ExceptionHandler({AuthenticationFailedException.class, InvalidRefreshTokenException.class})
     ResponseEntity<ErrorResponse> unauthenticated(RuntimeException e, HttpServletRequest request) {
@@ -71,6 +79,17 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ErrorResponse> accessDenied(AccessDeniedException e, HttpServletRequest request) {
         return respond(ErrorCode.FORBIDDEN, "Insufficient permission", List.of(), request);
+    }
+
+    /**
+     * 唯一約束衝突。註冊的 email 檢查(existsByEmail → insert)與 tenant slug 檢查都是 TOCTOU,
+     * 併發同 email／同 tenantName 註冊時輸家會撞 ux_users_email / ux_tenants_slug;
+     * 原本落到兜底成 500,而語意上這是衝突(ADR 0013)。訊息固定,不揭露是哪個約束。
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    ResponseEntity<ErrorResponse> conflictingWrite(DataIntegrityViolationException e, HttpServletRequest request) {
+        log.warn("唯一約束衝突:{} {}", request.getMethod(), request.getRequestURI(), e);
+        return respond(ErrorCode.CONFLICT, "Conflicting request", List.of(), request);
     }
 
     /**

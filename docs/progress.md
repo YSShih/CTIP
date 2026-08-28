@@ -712,3 +712,84 @@
   - 整合測試身分建立用 `com.ctip.support.TestIdentities`(走真實 register/login);
     fixture 用 `IndicatorFixtures` / `SecurityFixtures`;`SecurityTest` 已達 300 行上限,新條號請先瘦身
   - 前端加新 feature 前確認 `eslint.config.js` 的 feature 名單已含該名稱(auth/apikey/subscription 皆已列)
+
+---
+
+## Phase 13 收尾稽核 — 逐端點對照 §10.3 + 架構 / 資安複查
+
+- **狀態**:done(2026-08-28)。使用者指示:逐端點對照 §10.3 矩陣稽核、以資深架構師與資安專家
+  視角複查、找到問題修復並回寫 README。**不是新 phase**,是 Phase 13 的收尾。
+- **Commit**:(見 git log,message `Phase 13 audit: endpoint-level authorization + credential revocation fixes`)
+- **完成判準結果**:全綠 —
+  - Phase 13 判準逐字 ✅ **151/151**(原 138;RbacMatrix 95 格 → **105 格** + CrossTenantIsolation 加認證方式軸 4 → 8)
+  - `clean verify -Ptest-integration` 無過濾 ✅ **532 tests**(sdk 13 + core 214 + adapters 24 + app 281;
+    Spotless / Checkstyle / JaCoCo 全過)
+  - frontend ✅ `tsc --noEmit`、`eslint --max-warnings 0`、`api:check`、`build`、`test`(97)、`format:check`
+  - `openapi.json` 重產(password `maxLength` 256 → 72),破壞性檢查 **PASS**
+  - mvp stack 實測:V27 已套用(permissions 21、role_permissions 68)、匿名 `/sources`、`/stats` 仍 200、
+    `Authorization: bearer …`(小寫)與 `Basic …` 皆 401
+  - `dod.sh mvp` **38/38 回歸**(M2-01)
+
+### 稽核方法與最重要的發現
+
+判準寫「`RbacMatrixTest` 必須涵蓋 §10.3 矩陣**每一格**」,實作的 95 格是 **19 權限 × 5 角色**
+的種子一致性檢查 —— 字面達成,但 **「端點 → 需要哪個權限」這條軸完全沒有守門**
+(21 個 handler 只有 3 個路徑在該測試裡)。逐端點比對後抓到 5 個端點沒有任何授權宣告。
+
+三份矩陣來源(規格表 / `V24` / 測試常數 `RbacMatrix`)逐格比對**無差異** ✅。
+
+### 修正(12 項,細節與取捨見 `docs/architecture/decisions/0013-phase13-audit-fixes.md`,規格索引 §0.15)
+
+1. **[高] `/sources` ×3、`/stats` ×2 完全沒有 `@PreAuthorize`**。`SecurityConfig` 是
+   `anyRequest().permitAll()` + 純方法層授權 → **沒有標註等於完全開放**。一把 scope 只有
+   `["apikey:create"]` 的 API key 讀不到 `/iocs`(403)卻讀得到這五個端點,`/stats/summary`
+   還帶 `tenantContext.visibility()` 連該租戶私有 IOC 的統計都給 —— §14.4 條號 6 在此失效。
+   → 新增 `source:read` / `stats:read`(權限 **19 → 21**、矩陣 **95 → 105 格**、`V27` 種子),
+   五個角色全持有故匿名行為不變;`EndpointAuthorizationTest` 逐 handler 守門(**已實測**:
+   拿掉一個標註即 FAIL 並指名該端點)
+2. **[高] 停權 / 移除成員資格對既有憑證完全無效**。登入會擋 `UserStatus`,refresh 輪替與
+   API key 驗證**完全不看**;成員資格查無時兩處都 `orElse(RoleCode.USER)` → 靜默降級而非撤銷。
+   → `AccountAccessPolicy` 為單一判定點,規則統一為 fail-closed(登出不受此限)
+3. **[中] refresh token family 無絕對存活上限** → 竊得一枚後每 30 天輪替一次即可永久維持存取,
+   重用偵測只在「兩邊都用同一枚」時才觸發。→ 90 天上限,逾期整組撤銷
+4. **[中] 登入鎖定訊息洩漏帳號是否存在**(`Account temporarily locked` vs `Invalid credentials`),
+   抵銷了 ADR 0012 決策 17 才修掉的時間側信道 → 訊息統一,鎖定只記伺服器端
+5. **[中] 宣告的密碼政策 12–256 字元在 BCrypt 下不可實現**:Spring Security 7 的 BCrypt 對
+   > 72 bytes **丟例外**而非截斷 → 80 字元的密碼在註冊時變成沒有欄位說明的 400。
+   → 上限改 UTF-8 **72 bytes**(字元數擋不住:25 個中文字 = 75 bytes)
+6. **[中] `/api-keys` 沒有任何數量上限**,`countActive` 是死程式 → `ctip.api-key.max-per-tenant`
+   (預設 10),Phase 14 移入 plans 表
+7. **[中] `last_used_at` 走整列覆寫的 `save`** → 併發時把剛寫入的 `revoked_at` 沖回 null。
+   與 ADR 0011 第 1 項的 `mergeReport` 沖掉撤回**同一類缺陷** → port 新增 `markUsed` 定向 UPDATE
+8. 其餘:`Authorization` scheme 大小寫不敏感且非 Bearer 回 401(不再靜默降級匿名)、
+   註冊的 email/slug TOCTOU 由 500 收斂為 409、`expiresAt` 加 `@FutureOrPresent`、
+   `CtipPermissionEvaluator` 的「任何 UUID 都當 tenantId」陷阱寫進 javadoc + 測試、
+   04 表 12 的權限清單原寫 19 項但只列 18 個(漏 `ioc:publish`)已補回
+
+### 查證後確認「沒有問題」(避免重工)
+
+JWT algorithm confusion(Nimbus 在 `JWSHeader.parse` 即拒絕 `alg:none`、`MACVerifier` 對非 HMAC
+丟例外)—— 無漏洞,但那是相依函式庫行為,已以否定案例測試釘住;refresh 48 base62 ≈ 285 bits /
+API key 32 base62 ≈ 190 bits;`KeyHash` 常數時間比對;前端 token 只存記憶體且 401 輪替有去重;
+`ApiKeyController` 無 IDOR;`/auth/*` 確實受限流涵蓋;`TenantSlugs` 對各種爛輸入都產生合法 slug;
+actuator 四環境皆 `health,info`。
+
+### 給 Phase 14 的注意事項(在既有清單之外新增)
+
+- **⚠️ 方案配額是唯一阻止「免費取得 PREMIUM 能力」的閘門**:自助註冊即得 `TENANT_ADMIN`
+  (ADR 0012 決策 5),而該角色持有 `ioc:submit` / `ioc:import` / `webhook:manage`。
+  `plans.manual_submissions_per_day` 對 FREE 必須是 0 **且必須真的被檢查**
+- 配額改讀 plans 表的清單多一項:`ApiKeySettings.maxPerTenant`(現為 `ctip.api-key.max-per-tenant`)
+- **Flyway 版本號地雷**:已套用 V24、V27,但 Phase 14 的 `V22__create_plans` / `V23__seed_plans`
+  版本號**較低**。既有 DB 上 `flyway migrate` 會因 out-of-order 而失敗 ——
+  屆時需 `spring.flyway.out-of-order=true` 或重建開發用 DB。全新環境不受影響
+- `@PreAuthorize("hasPermission(#id, '…')")` 的 `#id` 若不是 tenantId **一定要用 4 參數重載**,
+  否則對所有人恆為 false(見 `CtipPermissionEvaluatorTest`)
+- 新增 controller 一定要掛 `@PreAuthorize`,否則 `EndpointAuthorizationTest` 會擋;
+  白名單只有 `/health`、`/version`、`/auth/*` 六項
+- **⚠️ 升級既有環境**:本次修正前建立的 API key 其 scopes 不含 `source:read` / `stats:read`,
+  會失去這五個端點的存取權(這正是修正的目的)。需重新建立金鑰
+- M3 實作改密碼端點時,`User.changePassword` **必須一併撤銷該使用者全部 token family**
+  (現在沒有呼叫端,加上去會是推測性行為,故未實作)
+- `Tenant.suspend()` / `TenantStatus.SUSPENDED` 在任何認證路徑都沒被檢查 —— 與使用者停權同一類,
+  但租戶停權的語意 §10 未定義,留待 Phase 14 方案/訂閱一併定義

@@ -10,7 +10,7 @@ public record RegisterRequest(
         @NotBlank @Email @Size(max = 320) @Schema(example = "analyst@example.org")
         String email,
 
-        @NotBlank @Size(min = 12, max = 256) @Schema(example = "correct-horse-battery")
+        @NotBlank @Size(min = 12, max = 72) @Schema(example = "correct-horse-battery")
         String password,
 
         @Size(max = 255) @Schema(example = "Alice Analyst") String displayName,

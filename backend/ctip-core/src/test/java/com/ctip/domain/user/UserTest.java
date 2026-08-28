@@ -108,6 +108,25 @@ class UserTest {
         void rawPasswordNeverLeaksThroughToString() {
             assertThat(new RawPassword("correct-horse-battery").toString()).doesNotContain("correct-horse");
         }
+
+        /**
+         * 上限是 BCrypt 的 72 <strong>bytes</strong>,不是字元數 —— Spring Security 7 對超長輸入
+         * 直接丟例外,原本宣告 256 字元的政策在 BCrypt 下不可實現(ADR 0013)。
+         */
+        @Test
+        void passwordLengthIsCappedAtBcryptSeventyTwoBytes() {
+            assertThat(new RawPassword("a".repeat(72)).value()).hasSize(72);
+            assertThatThrownBy(() -> new RawPassword("a".repeat(73)))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("72");
+        }
+
+        /** 多位元組:24 個中文字 = 72 bytes 可用,25 個 = 75 bytes 不可用。字元數擋不住。 */
+        @Test
+        void multiBytePasswordsAreMeasuredInBytes() {
+            assertThat(new RawPassword("情".repeat(24)).value()).hasSize(24);
+            assertThatThrownBy(() -> new RawPassword("情".repeat(25))).isInstanceOf(IllegalArgumentException.class);
+        }
     }
 
     @Test

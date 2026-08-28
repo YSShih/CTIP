@@ -10,12 +10,18 @@ import com.ctip.interfaces.rest.mapper.SourceDtoMapper;
 import com.ctip.interfaces.rest.openapi.SourceApi;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 來源端點(docs/spec/09-api.md §9.1,匿名)。sources 表無租戶歸屬,不需 tenant 過濾。 */
+/**
+ * 來源端點(docs/spec/09-api.md §9.1)。sources 表無租戶歸屬,不需 tenant 過濾。
+ *
+ * <p>{@code source:read} 是 ANONYMOUS 起全部角色都持有的權限,匿名仍可存取;
+ * 標註的作用是讓 scope 受限的 API key 也受同一套授權約束(ADR 0013)。
+ */
 @RestController
 @RequestMapping("/api/v1/sources")
 class SourceController implements SourceApi {
@@ -29,18 +35,21 @@ class SourceController implements SourceApi {
     }
 
     @Override
+    @PreAuthorize("hasAuthority('source:read')")
     @GetMapping
     public List<SourceDto> list() {
         return sources.all().stream().map(mapper::toDto).toList();
     }
 
     @Override
+    @PreAuthorize("hasAuthority('source:read')")
     @GetMapping("/{id}")
     public SourceDto byId(@PathVariable UUID id) {
         return mapper.toDto(source(id));
     }
 
     @Override
+    @PreAuthorize("hasAuthority('source:read')")
     @GetMapping("/{id}/status")
     public SourceStatusDto status(@PathVariable UUID id) {
         return mapper.toStatusDto(source(id));

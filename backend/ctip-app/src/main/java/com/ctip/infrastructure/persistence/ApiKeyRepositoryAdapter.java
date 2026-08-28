@@ -6,6 +6,7 @@ import com.ctip.domain.identity.ApiKey;
 import com.ctip.domain.identity.ApiKeyId;
 import com.ctip.domain.identity.KeyPrefix;
 import com.ctip.domain.tenant.TenantId;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -50,6 +51,11 @@ class ApiKeyRepositoryAdapter implements ApiKeyRepository {
     @Transactional(readOnly = true)
     public long countActive(TenantId tenantId) {
         return jpa.countActive(tenantId.value(), clock.now());
+    }
+
+    @Override
+    public void markUsed(ApiKeyId id, Instant usedAt) {
+        jpa.markUsed(id.value(), usedAt);
     }
 
     @Override

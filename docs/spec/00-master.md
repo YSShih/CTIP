@@ -390,7 +390,7 @@ Phase 13（認證、RBAC、API Key、租戶隔離）發現兩項規格自身衝�
 
 | # | 缺口 | 解決 | 修訂處 |
 |---|---|---|---|
-| 3 | phase-13 要求「`AuthState` 擴充為完整身分」，但同一執行單又禁止改動 TLP 過濾邏輯——而 `AuthState` 正是該邏輯的軸 | `AuthState` 保留兩態；完整身分改由 `AuthenticatedIdentity` 承載，`TlpSpecifications`／`Visibility` 零修改 | [01 §1.11](01-architecture.md#111-最小安全層m1-即建立) |
+| 3 | phase-13 要求「`AuthState` 擴充為完整身分」，但同一執行單又禁止改動 TLP 過濾邏輯——而 `AuthState` 正是該邏輯的軸 | `AuthState` 保留兩態；完整身分改由 `AuthenticatedIdentity` 承載，`TlpSpecifications`／`Visibility` 零修改 | [01 §1.11](01-architecture.md#111-m1-最小安全層強制phase-4) |
 | 4 | §9.1 的 `/auth/*` 與 `/api-keys` 只有路徑與權限，無 DTO、無匿名標註、無狀態碼 | `/auth/*` 標為匿名（refresh／logout 以主體 token 自我認證）；DTO 依 §9.5 慣例由實作定義，契約以 `docs/api/openapi.json` 為準；狀態碼明列 | [09 §9.1](09-api.md#91-端點清單) |
 
 > ⚠️ **收尾複查發現的安全缺陷(4 項,詳見 ADR 0012 決策 16–19)**:認證失敗完全繞過限流
@@ -410,4 +410,35 @@ Phase 13（認證、RBAC、API Key、租戶隔離）發現兩項規格自身衝�
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27 實作回饋修訂，見 §0.7–§0.14）。*
+## 0.15 實作回饋修訂（2026-08-28，Phase 13 收尾稽核後回寫）
+
+使用者要求「逐端點對照 §10.3 矩陣稽核 + 資深架構師視角 + 資訊安全專家視角」的複查結果。
+處置與取捨見 [ADR 0013](../architecture/decisions/0013-phase13-audit-fixes.md)。
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | 判準只涵蓋「權限 × 角色」95 格；**「端點 → 需要哪個權限」這條軸完全沒有守門**，21 個 handler 只有 3 個路徑在該測試裡 | 新增 `EndpointAuthorizationTest` 逐 handler 檢查；§10.3 實作要求加一列 | [10 §10.3](10-identity-plans.md#103-使用者與-rbac-phase-13--m2) |
+| 2 | `GET /sources`（×3）、`GET /stats`（×2）完全沒有 `@PreAuthorize`，而 filter chain 是 `anyRequest().permitAll()`——**scope 窄的 API key 可繞過**，§14.4 條號 6 在此失效 | 新增 `source:read`、`stats:read`（權限 19 → **21**，矩陣 95 → **105 格**），五個角色全持有，匿名行為不變；種子 `V27` | [10 §10.3](10-identity-plans.md#103-使用者與-rbac-phase-13--m2)、[04 表 12、§4.7](04-data-dictionary.md)、[09 §9.1](09-api.md#91-端點清單) |
+| 3 | 04 表 12 的權限清單寫「共 19 項」但只列了 18 個（漏 `ioc:publish`） | 補回並更新計數 | [04 表 12](04-data-dictionary.md) |
+| 4 | **停權與移除成員資格對既有憑證完全無效**：refresh 輪替與 API key 驗證都不看 `UserStatus`，成員資格查無時退回 `USER` 角色 | `AccountAccessPolicy` 為單一判定點，規則統一為 fail-closed | [10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2) |
+| 5 | refresh token family 無絕對存活上限——竊得一枚後每 30 天輪替一次即可**永久維持存取** | family 上限 90 天（`ctip.jwt.refresh-token-family-max-days`），逾期整組撤銷 | [10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2) |
+| 6 | 登入鎖定回 `Account temporarily locked`、密碼錯回 `Invalid credentials`，**可區分即可列舉帳號**（抵銷 §0.14 才修掉的時間側信道） | 統一訊息，鎖定只記伺服器端 | [10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2) |
+| 7 | 宣告的密碼政策 12–256 **字元**在 BCrypt 下不可實現（Spring Security 7 對 > 72 bytes 丟例外），80 字元的密碼會變成無說明的 400 | 上限改為 UTF-8 **72 bytes**，DTO 同步 | [10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2) |
+| 8 | `/api-keys` **沒有任何數量上限**，`countActive` 是無呼叫端的死程式（違反規則 16） | 比照 §0.8 匿名限流前例先以 `ctip.api-key.max-per-tenant`（預設 10）承載，Phase 14 移入 `plans` | [10 §10.5](10-identity-plans.md#105-api-key-phase-13--m2) |
+| 9 | `last_used_at` 走整列覆寫的 `save`，併發時會把剛寫入的 `revoked_at` **沖回 null**（與 §0.13 的 `mergeReport` 沖掉撤回同一類） | port 新增 `markUsed`，`@Modifying` JPQL 只寫該欄 | [10 §10.5](10-identity-plans.md#105-api-key-phase-13--m2) |
+| 10 | `Authorization: bearer <token>`（小寫）被靜默降級為匿名（RFC 7235 的 scheme 大小寫不敏感） | scheme 比對改大小寫不敏感；非 Bearer 回 401，不降級 | [09 §9.2](09-api.md#92-認證方式) |
+| 11 | 註冊的 email／slug 唯一性都是 TOCTOU，併發時回 500 | `DataIntegrityViolationException` → `CONFLICT` | — |
+| 12 | `ApiKeyCreateRequest.expiresAt` 無驗證，可建出「出生即死」的金鑰 | 加 `@FutureOrPresent` | [10 §10.5](10-identity-plans.md#105-api-key-phase-13--m2) |
+
+> ✅ **查證後確認無漏洞**：JWT algorithm confusion（Nimbus 在 `JWSHeader.parse` 即拒絕 `alg:none`，
+> `MACVerifier` 對非 HMAC 演算法丟例外）——已以否定案例測試釘住，因為那是相依函式庫的行為。
+> 另：refresh/API key 的熵、常數時間比對、前端 token 只存記憶體、`ApiKeyController` 無 IDOR、
+> `/auth/*` 確實受限流涵蓋，均查證通過。
+
+> ⚠️ **給 Phase 14 的交叉檢查**:自助註冊即得 `TENANT_ADMIN`(ADR 0012 決策 5),而該角色持有
+> `ioc:submit`／`ioc:import`／`webhook:manage`。**方案配額是唯一阻止「免費取得 PREMIUM 能力」的閘門**
+> ——`plans.manual_submissions_per_day` 對 FREE 必須是 0 且必須真的被檢查,否則權限本身就足以提交。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.15）。*

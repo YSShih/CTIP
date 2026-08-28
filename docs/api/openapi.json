@@ -300,7 +300,7 @@
           },
           "password" : {
             "example" : "correct-horse-battery",
-            "maxLength" : 256,
+            "maxLength" : 72,
             "minLength" : 0,
             "type" : "string"
           }
@@ -376,7 +376,7 @@
           },
           "password" : {
             "example" : "correct-horse-battery",
-            "maxLength" : 256,
+            "maxLength" : 72,
             "minLength" : 12,
             "type" : "string"
           },

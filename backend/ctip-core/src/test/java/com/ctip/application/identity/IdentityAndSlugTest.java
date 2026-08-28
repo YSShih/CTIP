@@ -6,6 +6,7 @@ import com.ctip.application.rbac.RoleCode;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.domain.user.UserId;
 import com.ctip.testing.InMemoryTenantMemberships;
+import com.ctip.testing.InMemoryUserRepository;
 import com.ctip.testing.StubRolePermissions;
 import java.util.Set;
 import java.util.UUID;
@@ -30,10 +31,11 @@ class IdentityAndSlugTest {
     }
 
     @Test
-    void identityResolverFallsBackToUserWhenNoMembershipExists() {
+    void identityResolverExposesRolePermissionsAndRecordsMembership() {
         InMemoryTenantMemberships memberships = new InMemoryTenantMemberships();
         StubRolePermissions rolePermissions = new StubRolePermissions();
-        IdentityResolver resolver = new IdentityResolver(memberships, rolePermissions);
+        IdentityResolver resolver = new IdentityResolver(
+                new AccountAccessPolicy(new InMemoryUserRepository(), memberships), rolePermissions);
 
         assertThat(resolver.permissionsOf(RoleCode.ANONYMOUS)).containsExactly("ioc:read");
         assertThat(resolver.anonymousPermissions()).containsExactly("ioc:read");

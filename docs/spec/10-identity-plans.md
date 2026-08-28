@@ -63,11 +63,12 @@ status: ACTIVE
 ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN
 ```
 
-### 權限（19 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
+### 權限（21 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
 
 ```text
 ioc:read       ioc:export      ioc:submit    ioc:import    ioc:report-fp   ioc:publish
 threat:read    stix:export
+source:read    stats:read
 sync:bloom     sync:delta
 apikey:create  apikey:revoke
 webhook:manage
@@ -79,12 +80,14 @@ system:admin
 
 ### 角色與權限矩陣
 
-種子資料由 `V24__seed_rbac.sql` 寫入（冪等）。
+種子資料由 `V24__seed_rbac.sql` 與 `V27__seed_rbac_read_permissions.sql` 寫入（皆冪等）。
 
 | 權限 | ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN |
 |---|---|---|---|---|---|
 | `ioc:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `threat:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `source:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `stats:read` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `ioc:export` | — | ✓ | ✓ | ✓ | ✓ |
 | `stix:export` | — | ✓ | ✓ | ✓ | ✓ |
 | `sync:bloom` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -109,6 +112,7 @@ system:admin
 |---|
 | **不得**在 controller 中散落 `if (role == ...)` 判斷 |
 | 使用 `@PreAuthorize("hasAuthority('ioc:export')")` |
+| **每一個** handler 都必須宣告授權，或列入明確的免授權白名單（`/health`、`/version`、`/auth/*`）——filter chain 對路徑一律 `permitAll`，沒有標註等於完全開放 |
 | 角色→權限對應存於資料庫（`roles`、`permissions`、`role_permissions`），可調整 |
 | 集中的 `PermissionEvaluator` 處理 tenant-scoped 權限 |
 | API key 的 `scopes` 必須 ⊆ 建立者在該 tenant 的角色所擁有的權限（不得提權，不變量 K4） |
@@ -128,6 +132,23 @@ system:admin
 | 密碼雜湊 | BCrypt（cost 12）或 Argon2id |
 | 登入鎖定 | 連續失敗 10 次 → 鎖定 15 分鐘 |
 
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 3、4、5、8）**
+>
+> 1. **refresh 輪替必須檢查使用者狀態。** 原本只有登入路徑檢查 `UserStatus`，輪替與 API key 驗證
+>    完全不看——被停權的帳號可每 30 天輪替一次，無限期換到新的 access token。成員資格查無時
+>    兩處都退回 `USER` 角色，等於「移除成員資格」只是靜默降級而非撤銷。規則統一為
+>    **非 ACTIVE、或在該租戶無成員資格，就沒有身分**（`AccountAccessPolicy`）。登出不受此限
+>    ——被停權者仍應能撤銷自己的 token family。
+> 2. **輪替家族有絕對存活上限，預設 90 天**（`ctip.jwt.refresh-token-family-max-days`）。本節原本只寫
+>    「30 天、單次使用並輪替」，而每次輪替都給滿 30 天：竊得一枚 token 的人只要持續輪替即可
+>    無限期維持存取，重用偵測只在「兩邊都用同一枚」時才觸發。逾期的 family 整組撤銷
+>    （`revoked_reason = EXPIRED_CLEANUP`）。
+> 3. **登入失敗的訊息一律相同。** 鎖定原本回 `Account temporarily locked`、密碼錯回
+>    `Invalid credentials`，連送 10 次錯密碼即可列舉帳號——抵銷了先前才修掉的 BCrypt 時間側信道。
+>    鎖定事實只記伺服器端。
+> 4. **密碼上限為 UTF-8 72 bytes**（BCrypt 的硬性上限；Spring Security 7 對超長輸入丟例外而非截斷）。
+>    字元數擋不住：25 個中文字就是 75 bytes。
+
 `JWT_SECRET` 必須來自環境設定，長度 ≥ 32 bytes，**絕不 commit**。
 啟動時若 `ENVIRONMENT=prod` 且 `JWT_SECRET` 為樣板值或長度不足，**拒絕啟動**（見 [05-environment.md](05-environment.md#57-spring-設定對應本版新增)）。
 
@@ -145,7 +166,18 @@ Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms
 - 只儲存 `SHA-256(fullKey)` 與**隨機段**前 8 碼的明碼前綴
 - 驗證流程：取請求中的隨機段前 8 碼 → 以 `ux_api_keys_prefix` 定位單一列 → 比對雜湊（**避免全表雜湊比對**）
 - `last_used_at` 非同步更新，容許最多 60 秒延遲（避免每次請求一次 UPDATE）
-- 數量上限 `plans.max_api_keys`
+- 數量上限 `plans.max_api_keys`（M2 先以 `ctip.api-key.max-per-tenant` 承載，預設 10；見下方修訂）
+
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 1、2）**
+>
+> 1. 權限自 19 項增為 **21 項**：新增 `source:read`、`stats:read`。原因是 `GET /sources`（×3）與
+>    `GET /stats`（×2）在 §9.1 標「匿名」，實作因此完全沒有 `@PreAuthorize`——而 filter chain 是
+>    `anyRequest().permitAll()`，**沒有標註等於完全開放**。一把 scope 不含 `ioc:read` 的 API key
+>    讀不到 `/iocs`（403）卻讀得到這五個端點，§14.4 條號 6 的保證在此失效。兩個新權限比照
+>    `ioc:read`／`threat:read`，五個角色全部持有，匿名行為不變。矩陣格數 95 → **105**。
+> 2. 上表「實作要求」新增一列：每個 handler 都必須宣告授權或列入白名單，由
+>    `EndpointAuthorizationTest` 逐 handler 守門（判準原本只涵蓋「權限 × 角色」這條軸，
+>    「端點 → 權限」那條軸沒有任何自動化檢查）。
 
 > **實作回饋修訂（2026-08-27，Phase 13；ADR 0012 決策 1、2）**
 >
@@ -156,6 +188,19 @@ Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms
 >    `ctip_mvp` / `ctip_dev` / `ctip_stg` / `ctip_pro`（prod 被截斷）——同一環境**第二把 key 就會撞
 >    `ux_api_keys_prefix` 唯一約束**，且「定位單一列」永不成立。改為取**隨機段**前 8 碼，
 >    這是唯一同時滿足 `CHAR(8)` + UNIQUE 與定位語意的讀法（前綴仍可公開顯示於 UI）。
+
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 6、7、11）**
+>
+> 1. **數量上限在 M2 以 property 承載。** `plans` 表要到 Phase 14 才存在，而 Phase 13 完全沒有
+>    任何上限檢查（`countActive` 是無呼叫端的死程式），任何具 `apikey:create` 的身分可無限量鑄造金鑰。
+>    比照 [ADR 0004](../architecture/decisions/0004-phase6-ingestion-pipeline-decisions.md) 匿名限流的前例，
+>    先以 `ctip.api-key.max-per-tenant`（預設 10，對齊 §10.6 的 PREMIUM 列）承載，超限回
+>    `PLAN_LIMIT_EXCEEDED`。**Phase 14 必須改為 `plans.max_api_keys` 查表。**
+> 2. **`last_used_at` 必須以定向 UPDATE 寫入**，不得走整列覆寫的 `save`：`touch` 手上的快照是
+>    認證那一刻讀的，期間若另一個請求撤銷了金鑰，回寫會把 `revoked_at` 覆寫回 null——撤銷被沖掉。
+>    這與 [ADR 0011](../architecture/decisions/0011-m1-review-fixes.md) 第 1 項的
+>    `IndicatorSource.mergeReport` 沖掉撤回是同一類缺陷。
+> 3. `expiresAt` 由請求指定時必須是未來時間（`@FutureOrPresent`），否則會建出一把出生即死的金鑰。
 
 ---
 

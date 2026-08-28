@@ -2,6 +2,8 @@ package com.ctip.application.identity;
 
 import com.ctip.domain.user.RefreshTokenRotationOutcome;
 import com.ctip.domain.user.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final String INVALID_CREDENTIALS = "Invalid credentials";
     private static final String INVALID_REFRESH_TOKEN = "Invalid refresh token";
 
@@ -42,11 +45,18 @@ public class AuthService {
         return startSession(registrar.register(command), client);
     }
 
+    /**
+     * 全部失敗原因回同一則訊息。原本鎖定與密碼錯誤的訊息可區分 —— 對候選 email 連送 10 次錯密碼,
+     * 第 11 次的訊息就分辨出帳號是否存在,直接抵銷 ADR 0012 決策 17 才修掉的時間側信道。
+     * 鎖定事實只記伺服器端(ADR 0013)。
+     */
     public AuthSession login(AuthCommands.Login command) {
         LoginResult result = loginAuthenticator.authenticate(command);
         if (!result.isSuccess()) {
-            throw new AuthenticationFailedException(
-                    result.failure() == LoginFailure.LOCKED ? "Account temporarily locked" : INVALID_CREDENTIALS);
+            if (result.failure() == LoginFailure.LOCKED) {
+                log.info("登入被拒:帳號處於鎖定期間(不變量 U7)");
+            }
+            throw new AuthenticationFailedException(INVALID_CREDENTIALS);
         }
         return startSession(result.user(), new ClientInfo(command.userAgent(), command.ip()));
     }
@@ -57,8 +67,11 @@ public class AuthService {
             throw new InvalidRefreshTokenException(
                     INVALID_REFRESH_TOKEN, rotated.outcome() == RefreshTokenRotationOutcome.REUSE_DETECTED);
         }
+        AuthenticatedIdentity identity = identityResolver
+                .resolve(rotated.user())
+                .orElseThrow(() -> new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN, false));
         return sessionIssuer
-                .resume(identityResolver.resolve(rotated.user()), rotated.issued())
+                .resume(identity, rotated.issued())
                 .withDisplayName(rotated.user().displayName());
     }
 
@@ -68,9 +81,11 @@ public class AuthService {
         }
     }
 
+    /** 解析不出身分(停權或已無成員資格)一律走與密碼錯誤相同的失敗路徑,不揭露差異。 */
     private AuthSession startSession(User user, ClientInfo client) {
-        return sessionIssuer
-                .issueNewSession(identityResolver.resolve(user), client)
-                .withDisplayName(user.displayName());
+        AuthenticatedIdentity identity = identityResolver
+                .resolve(user)
+                .orElseThrow(() -> new AuthenticationFailedException(INVALID_CREDENTIALS));
+        return sessionIssuer.issueNewSession(identity, client).withDisplayName(user.displayName());
     }
 }

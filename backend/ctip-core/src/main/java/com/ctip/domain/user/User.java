@@ -60,6 +60,9 @@ public final class User {
     /**
      * 不變量 U4–U6。重用(presented 已使用)一律撤銷整個 family 並發 TokenReuseDetected;
      * 已撤銷／已過期則單純拒絕,不牽連 family。
+     *
+     * <p>另有一道 family 絕對存活上限:每次輪替都給滿 ttl,沒有上限的話竊得一枚 token 的人
+     * 只要持續輪替就能無限期維持存取(ADR 0013)。逾期的 family 整組撤銷。
      */
     public RefreshTokenRotation rotateRefreshToken(RefreshTokenRotationCommand command) {
         RefreshToken presented = command.presented();
@@ -70,6 +73,12 @@ public final class User {
         if (presented.isRevoked() || presented.isExpired(command.at())) {
             return new RefreshTokenRotation(RefreshTokenRotationOutcome.INVALID, null, List.of());
         }
+        if (familyOutlivedItsLimit(command)) {
+            return new RefreshTokenRotation(
+                    RefreshTokenRotationOutcome.INVALID,
+                    null,
+                    revokeFamily(command.family(), command.at(), RevokedReason.EXPIRED_CLEANUP));
+        }
         RefreshToken replacement = command.replacement();
         requireOwnedByThisUser(replacement);
         if (!replacement.familyId().equals(presented.familyId())) {
@@ -78,6 +87,17 @@ public final class User {
         presented.markUsed(command.at());
         presented.revoke(command.at(), RevokedReason.ROTATED);
         return new RefreshTokenRotation(RefreshTokenRotationOutcome.ROTATED, replacement, List.of(presented));
+    }
+
+    /** family 的年齡以最早一枚的 issuedAt 起算——輪替鏈上每一枚都算同一個 family 的延續。 */
+    private static boolean familyOutlivedItsLimit(RefreshTokenRotationCommand command) {
+        TokenFamilyId family = command.presented().familyId();
+        return command.family().stream()
+                .filter(token -> token.familyId().equals(family))
+                .map(RefreshToken::issuedAt)
+                .min(Instant::compareTo)
+                .map(oldest -> command.at().isAfter(oldest.plus(command.familyMaxLifetime())))
+                .orElse(false);
     }
 
     private RefreshTokenRotation revokeFamilyOnReuse(RefreshTokenRotationCommand command) {

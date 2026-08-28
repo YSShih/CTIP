@@ -39,6 +39,9 @@ import tools.jackson.databind.ObjectMapper;
  * DoD M2-06:租戶 A 無法存取租戶 B 的任何資源,<strong>每一個</strong> tenant-scoped 端點
  * 一律回 404(非 403;docs/spec/14-testing.md §14.4 條號 3、09 §9.4)。
  * 端點清單以參數化涵蓋,不可只測代表。
+ *
+ * <p>認證方式也是一條軸:API key 路徑的租戶綁定取自 {@code key.tenantId()},
+ * 是與 JWT {@code tid} claim 完全不同的程式碼,原本沒有任何跨租戶案例走過它(ADR 0013)。
  */
 @AutoConfigureMockMvc
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -46,6 +49,8 @@ class CrossTenantIsolationTest extends AbstractPostgresIntegrationTest {
 
     private static final String CLIENT_IP = "10.20.0.14";
     private static final IndicatorId OWNED = new IndicatorId(UUID.fromString("00000000-0000-0000-0000-0000000000c1"));
+
+    private String intruderApiKey;
 
     @Autowired
     private MockMvc mvc;
@@ -100,6 +105,22 @@ class CrossTenantIsolationTest extends AbstractPostgresIntegrationTest {
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
+    /** 同一份端點清單改走 {@code X-API-Key}:租戶綁定來自金鑰本身,不是 JWT claim。 */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "GET /api/v1/iocs/{indicatorId}",
+                "GET /api/v1/iocs/{indicatorId}/sources",
+                "GET /api/v1/stix/indicator--{indicatorId}"
+            })
+    void apiKeyAuthenticationIsIsolatedTheSameWay(String endpoint) throws Exception {
+        String url =
+                endpoint.split(" ", 2)[1].replace("{indicatorId}", OWNED.value().toString());
+        mvc.perform(asClient(get(url)).header("X-API-Key", intruderApiKey()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
     /** 對照組:擁有租戶自己看得到,證明 404 來自隔離而非資料不存在。 */
     @Test
     void ownerCanReachTheSameResources() throws Exception {
@@ -124,16 +145,32 @@ class CrossTenantIsolationTest extends AbstractPostgresIntegrationTest {
         assertThat(body).doesNotContain(OWNED.value().toString());
     }
 
+    /** intruder 的金鑰只建一次(PER_CLASS),它不會被任何測試撤銷。 */
+    private String intruderApiKey() throws Exception {
+        if (intruderApiKey == null) {
+            intruderApiKey = createApiKey(intruder, "intruder-key");
+        }
+        return intruderApiKey;
+    }
+
     private String createOwnedApiKey() throws Exception {
-        String response = mvc.perform(asClient(post("/api/v1/api-keys")
-                        .header("Authorization", TestIdentities.bearer(owner))
+        return json.readTree(issueApiKey(owner, "owned-key")).at("/apiKey/id").asString();
+    }
+
+    /** 回傳完整金鑰原文(K1:只有這一刻拿得到)。 */
+    private String createApiKey(AuthSession session, String name) throws Exception {
+        return json.readTree(issueApiKey(session, name)).get("key").asString();
+    }
+
+    private String issueApiKey(AuthSession session, String name) throws Exception {
+        return mvc.perform(asClient(post("/api/v1/api-keys")
+                        .header("Authorization", TestIdentities.bearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"owned-key\",\"scopes\":[\"ioc:read\"]}")))
+                        .content("{\"name\":\"" + name + "\",\"scopes\":[\"ioc:read\"]}")))
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return json.readTree(response).at("/apiKey/id").asString();
     }
 
     private void seedOwnedIndicator(TenantId ownerTenant) {

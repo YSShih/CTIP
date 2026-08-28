@@ -9,5 +9,5 @@ public record LoginRequest(
         @NotBlank @Size(max = 320) @Schema(example = "analyst@example.org")
         String email,
 
-        @NotBlank @Size(max = 256) @Schema(example = "correct-horse-battery")
+        @NotBlank @Size(max = 72) @Schema(example = "correct-horse-battery")
         String password) {}

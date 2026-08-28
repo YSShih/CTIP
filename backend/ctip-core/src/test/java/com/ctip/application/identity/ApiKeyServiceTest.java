@@ -9,10 +9,16 @@ import com.ctip.domain.identity.ApiKeyFormat;
 import com.ctip.domain.identity.IssuedApiKey;
 import com.ctip.domain.identity.ScopeSet;
 import com.ctip.domain.tenant.TenantId;
+import com.ctip.domain.user.EmailAddress;
+import com.ctip.domain.user.PasswordHash;
+import com.ctip.domain.user.User;
 import com.ctip.domain.user.UserId;
+import com.ctip.domain.user.UserSnapshot;
+import com.ctip.domain.user.UserStatus;
 import com.ctip.testing.FixedClockPort;
 import com.ctip.testing.InMemoryApiKeyRepository;
 import com.ctip.testing.InMemoryTenantMemberships;
+import com.ctip.testing.InMemoryUserRepository;
 import com.ctip.testing.RecordingEventPublisher;
 import com.ctip.testing.SequentialIdGenerator;
 import com.ctip.testing.SequentialTokenGenerator;
@@ -31,10 +37,12 @@ class ApiKeyServiceTest {
     private static final TenantId TENANT = new TenantId(new UUID(0, 11));
     private static final TenantId OTHER_TENANT = new TenantId(new UUID(0, 12));
     private static final UserId USER = new UserId(new UUID(0, 21));
+    private static final int MAX_KEYS_PER_TENANT = 10;
 
     private final InMemoryApiKeyRepository apiKeyRepository = new InMemoryApiKeyRepository();
     private final StubRolePermissions rolePermissions = new StubRolePermissions();
     private final InMemoryTenantMemberships memberships = new InMemoryTenantMemberships();
+    private final InMemoryUserRepository users = new InMemoryUserRepository();
     private final RecordingEventPublisher events = new RecordingEventPublisher();
     private final FixedClockPort clock = FixedClockPort.at(FixedClockPort.DEFAULT_NOW);
 
@@ -43,11 +51,60 @@ class ApiKeyServiceTest {
 
     @BeforeEach
     void setUp() {
+        ApiKeySettings settings = new ApiKeySettings("mvp", MAX_KEYS_PER_TENANT);
         ApiKeyFactory factory = new ApiKeyFactory(
-                new SequentialTokenGenerator(), new SequentialIdGenerator(), clock, new ApiKeySettings("mvp"));
-        service = new ApiKeyService(apiKeyRepository, rolePermissions, factory, events, clock);
-        authenticator = new ApiKeyAuthenticator(apiKeyRepository, memberships, rolePermissions, clock);
+                new SequentialTokenGenerator(), new SequentialIdGenerator(), clock, settings, rolePermissions);
+        service = new ApiKeyService(apiKeyRepository, settings, factory, events, clock);
+        users.save(owner(UserStatus.ACTIVE));
+        authenticator = new ApiKeyAuthenticator(
+                apiKeyRepository, new AccountAccessPolicy(users, memberships), rolePermissions, clock);
         memberships.assign(TENANT, USER, RoleCode.TENANT_ADMIN);
+    }
+
+    /** 建立者被停權 → 金鑰立即失效。金鑰自己沒過期,但持有者已不該有存取權(ADR 0013)。 */
+    @Test
+    void suspendedOwnerInvalidatesTheKey() {
+        IssuedApiKey issued = issue("suspend-me", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        assertThat(authenticator.authenticate(issued.plaintext())).isPresent();
+
+        users.save(owner(UserStatus.SUSPENDED));
+
+        assertThat(authenticator.authenticate(issued.plaintext())).isEmpty();
+    }
+
+    /** 成員資格被移除 → 金鑰失效,而不是靜默降級成 USER 角色。 */
+    @Test
+    void removedMembershipInvalidatesTheKeyInsteadOfDowngradingIt() {
+        IssuedApiKey issued = issue("orphan", Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        assertThat(authenticator.authenticate(issued.plaintext())).isPresent();
+
+        memberships.remove(TENANT, USER);
+
+        assertThat(authenticator.authenticate(issued.plaintext())).isEmpty();
+    }
+
+    /** §10.5 的每租戶數量上限;countActive 原本是無呼叫端的死程式。 */
+    @Test
+    void quotaIsEnforcedPerTenant() {
+        for (int i = 0; i < MAX_KEYS_PER_TENANT; i++) {
+            issue("key-" + i, Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
+        }
+        assertThatThrownBy(() -> issue("one-too-many", Set.of("ioc:read"), RoleCode.TENANT_ADMIN))
+                .isInstanceOf(ApiKeyLimitExceededException.class);
+    }
+
+    /** 金鑰的建立者。API key 驗證會查它的狀態與成員資格(ADR 0013 fail-closed)。 */
+    private static User owner(UserStatus status) {
+        return User.reconstitute(new UserSnapshot(
+                USER,
+                EmailAddress.of("owner@example.org"),
+                new PasswordHash("$2a$12$0123456789012345678901234567890123456789012345678901"),
+                "Key Owner",
+                status,
+                TENANT,
+                null,
+                0,
+                null));
     }
 
     private AuthenticatedIdentity creator(RoleCode role) {
@@ -146,13 +203,17 @@ class ApiKeyServiceTest {
 
     @Test
     void environmentSegmentIsValidated() {
-        assertThatThrownBy(() -> new ApiKeySettings("production")).isInstanceOf(IllegalArgumentException.class);
-        assertThat(new ApiKeySettings("prod").environment()).isEqualTo("prod");
+        assertThatThrownBy(() -> new ApiKeySettings("production", 1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ApiKeySettings("prod", 0)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new ApiKeySettings("prod", 10).environment()).isEqualTo("prod");
     }
 
     @Test
     void refreshTokenSettingsRejectNonPositiveTtl() {
-        assertThatThrownBy(() -> new RefreshTokenSettings(Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RefreshTokenSettings(Duration.ZERO, Duration.ofDays(90)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new RefreshTokenSettings(Duration.ofDays(30), Duration.ofDays(7)))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new LoginPolicy(0, Duration.ofMinutes(1)))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new LoginPolicy(10, Duration.ZERO)).isInstanceOf(IllegalArgumentException.class);

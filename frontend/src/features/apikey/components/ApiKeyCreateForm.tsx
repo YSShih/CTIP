@@ -7,6 +7,8 @@ import { Input } from '../../../components/ui/input';
 export const GRANTABLE_SCOPES = [
   'ioc:read',
   'ioc:export',
+  'source:read',
+  'stats:read',
   'stix:export',
   'sync:bloom',
   'sync:delta',

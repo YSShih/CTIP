@@ -27,6 +27,7 @@ public record CtipProperties(
         @NotNull @Valid Scheduler scheduler,
         @NotNull @Valid Normalization normalization,
         @NotNull @Valid Api api,
+        @NotNull @Valid ApiKey apiKey,
         @NotNull @Valid Stix stix,
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
@@ -42,10 +43,15 @@ public record CtipProperties(
 
     public record Cors(@NotBlank String allowedOrigins) {}
 
+    /**
+     * {@code refreshTokenFamilyMaxDays} 是輪替家族的絕對存活上限(§10.4 未定義,ADR 0013 取 90 天):
+     * 每次輪替都給滿 ttl,沒有上限則竊得一枚 token 者可無限期續期。
+     */
     public record Jwt(
             @NotBlank String secret,
             @Positive long accessTokenExpiration,
-            @Positive long refreshTokenExpiration) {}
+            @Positive long refreshTokenExpiration,
+            @Positive long refreshTokenFamilyMaxDays) {}
 
     /** 登入鎖定門檻(docs/spec/10-identity-plans.md §10.4:連續失敗 10 次 → 鎖定 15 分鐘)。 */
     public record Security(
@@ -90,6 +96,12 @@ public record CtipProperties(
             @Positive int defaultPageSize,
             @Positive int maxPageSize,
             @Positive int maxBatchLookup) {}
+
+    /**
+     * 每租戶 API key 數量上限(§10.5「數量上限 plans.max_api_keys」)。
+     * plans 表在 Phase 14 才存在,比照 ADR 0004 匿名限流的前例先以此承載(ADR 0013)。
+     */
+    public record ApiKey(@Positive int maxPerTenant) {}
 
     /** 良性網域 allowlist(§7.3:僅 DOMAIN、exact match;預設為空)。 */
     public record DataQuality(@NotNull java.util.List<String> domainAllowlist) {}

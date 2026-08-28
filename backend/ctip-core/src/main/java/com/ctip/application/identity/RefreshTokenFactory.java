@@ -57,6 +57,11 @@ public class RefreshTokenFactory {
         return new IssuedRefreshToken(RefreshToken.issue(snapshot), plaintext);
     }
 
+    /** family 的絕對存活上限(§10.4 未定義,ADR 0013 取 90 天);輪替判定需要它。 */
+    public java.time.Duration familyMaxLifetime() {
+        return settings.familyMaxLifetime();
+    }
+
     public TokenFamilyId newFamily() {
         return new TokenFamilyId(idGenerator.nextId());
     }

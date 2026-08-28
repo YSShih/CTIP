@@ -24,4 +24,9 @@ public final class InMemoryTenantMemberships implements TenantMembershipReposito
     public void assign(TenantId tenantId, UserId userId, RoleCode role) {
         roles.put(new Key(tenantId, userId), role);
     }
+
+    /** 移除成員資格(port 尚無此操作,使用者管理是 M3);供 fail-closed 測試使用。 */
+    public void remove(TenantId tenantId, UserId userId) {
+        roles.remove(new Key(tenantId, userId));
+    }
 }

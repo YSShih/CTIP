@@ -492,11 +492,12 @@ CONSTRAINT ux_permissions_code UNIQUE (code)
 CONSTRAINT ck_permissions_fmt  CHECK (code ~ '^[a-z]+:[a-z-]+$')
 ```
 
-完整權限清單（種子資料，共 19 項）：
+完整權限清單（種子資料，共 21 項）：
 
 ```text
-ioc:read      ioc:export     ioc:submit      ioc:import      ioc:report-fp
+ioc:read      ioc:export     ioc:submit      ioc:import      ioc:report-fp   ioc:publish
 threat:read   stix:export
+source:read   stats:read
 sync:bloom    sync:delta
 apikey:create apikey:revoke
 webhook:manage
@@ -506,7 +507,13 @@ source:manage source:sync
 system:admin
 ```
 
-> `ioc:submit`、`ioc:import`、`ioc:report-fp`、`source:sync` 為本版新增，對應 [09-api.md](09-api.md) 的寫入端點。
+> `ioc:submit`、`ioc:import`、`ioc:report-fp`、`source:sync` 為 v2.0 新增，對應 [09-api.md](09-api.md) 的寫入端點。
+>
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 1）**：本清單原寫「共 19 項」但
+> 實際只列了 18 個——漏掉 [10 §10.3](10-identity-plans.md#103-使用者與-rbac-phase-13--m2) 有的
+> `ioc:publish`，已補回。另新增 `source:read`、`stats:read` 兩個唯讀權限（`GET /sources`、`GET /stats`
+> 原本完全沒有授權宣告，而 filter chain 對路徑一律 `permitAll`），種子由
+> `V27__seed_rbac_read_permissions.sql` 補入。合計 21 項。
 
 **`role_permissions`**（關聯）
 
@@ -1097,6 +1104,7 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
 | `V25__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
 | `V26__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
+| `V27__seed_rbac_read_permissions.sql` | 補 `source:read`、`stats:read` 兩個權限與其角色對應（冪等，ADR 0013） | — |
 | `V30__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |
 | `V31__create_audit_logs.sql` | `audit_logs` + `REVOKE UPDATE, DELETE` | 27 |
 

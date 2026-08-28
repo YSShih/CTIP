@@ -40,8 +40,8 @@ POST   /api/v1/iocs/{id}/report-false-positive     ioc:report-fp   誤判回報
 ### 統計（Dashboard）
 
 ```text
-GET    /api/v1/stats/summary                       匿名   公開統計（總數、型別分布、近 7 日趨勢）
-GET    /api/v1/stats/sources                       匿名   各來源筆數與健康狀態
+GET    /api/v1/stats/summary                       stats:read    公開統計（匿名持有此權限）
+GET    /api/v1/stats/sources                       stats:read    各來源筆數與健康狀態
 ```
 
 > **本版新增。** v1.1 的前端頁面表列了 M1 的 Dashboard 且標「匿名可存取（公開統計）」，但端點清單裡沒有任何統計端點。
@@ -74,9 +74,9 @@ GET    /api/v1/sync/delta?base=<n>&scope=          sync:delta
 ### 來源
 
 ```text
-GET    /api/v1/sources                             匿名
-GET    /api/v1/sources/{id}                        匿名
-GET    /api/v1/sources/{id}/status                 匿名
+GET    /api/v1/sources                             source:read   匿名持有此權限
+GET    /api/v1/sources/{id}                        source:read
+GET    /api/v1/sources/{id}/status                 source:read
 ```
 
 ### 認證 `[M2]`
@@ -138,6 +138,15 @@ X-API-Key: ctip_<env>_<key>        機器對機器
 ```
 
 三者皆經同一條 security filter chain，統一設定 `TenantContext` 與 `AuthState`（見 [01-architecture.md](01-architecture.md#111-m1-最小安全層強制phase-4)）。
+
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 1、9）**
+>
+> 1. `/sources`（×3）與 `/stats`（×2）原本標「匿名」，實作因此完全沒有 `@PreAuthorize`。
+>    filter chain 對路徑一律 `permitAll`，**沒有標註等於完全開放**——scope 不含 `ioc:read` 的
+>    API key 仍讀得到。改標 `source:read` / `stats:read`（ANONYMOUS 亦持有，匿名行為不變）。
+>    標「匿名」的端點一律是「所需權限恰好是 ANONYMOUS 角色也有的權限」，不是「不做授權檢查」。
+> 2. `Authorization` 的 auth-scheme 依 RFC 7235 **大小寫不敏感**；標頭存在但 scheme 不是 Bearer
+>    （例如 `Basic`）一律回 `401 UNAUTHENTICATED`，**不得靜默降級為匿名**。
 
 同時提供 `Authorization` 與 `X-API-Key` 時，**以 `Authorization` 為準**，並記錄一則 WARN。
 

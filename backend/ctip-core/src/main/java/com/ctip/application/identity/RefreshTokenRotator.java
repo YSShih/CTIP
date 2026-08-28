@@ -3,7 +3,6 @@ package com.ctip.application.identity;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.EventPublisherPort;
 import com.ctip.application.port.RefreshTokenRepository;
-import com.ctip.application.port.UserRepository;
 import com.ctip.domain.user.RefreshToken;
 import com.ctip.domain.user.RefreshTokenRotation;
 import com.ctip.domain.user.RefreshTokenRotationCommand;
@@ -23,19 +22,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RefreshTokenRotator {
 
-    private final UserRepository users;
+    private final AccountAccessPolicy accounts;
     private final RefreshTokenRepository tokens;
     private final RefreshTokenFactory factory;
     private final ClockPort clock;
     private final EventPublisherPort events;
 
     public RefreshTokenRotator(
-            UserRepository users,
+            AccountAccessPolicy accounts,
             RefreshTokenRepository tokens,
             RefreshTokenFactory factory,
             ClockPort clock,
             EventPublisherPort events) {
-        this.users = users;
+        this.accounts = accounts;
         this.tokens = tokens;
         this.factory = factory;
         this.clock = clock;
@@ -49,15 +48,23 @@ public class RefreshTokenRotator {
             return RotatedTokens.failed(RefreshTokenRotationOutcome.INVALID);
         }
         RefreshToken presented = located.get();
-        Optional<User> owner = users.findById(presented.userId());
-        if (owner.isEmpty()) {
+        // 停權 / 已無成員資格的帳號不得續期。登入路徑一直有擋,輪替路徑漏了 ——
+        // 沒有這道檢查,被停權的帳號可以靠每 30 天輪替一次無限期換到新的 access token(ADR 0013)
+        Optional<User> owner = accounts.activeUser(presented.userId());
+        if (owner.isEmpty()
+                || accounts.eligibleRole(owner.get(), owner.get().primaryTenantId())
+                        .isEmpty()) {
             return RotatedTokens.failed(RefreshTokenRotationOutcome.INVALID);
         }
         User user = owner.get();
         ClientInfo client = new ClientInfo(command.userAgent(), command.ip());
         IssuedRefreshToken replacement = factory.create(user.id(), presented.familyId(), presented.id(), client);
         RefreshTokenRotation rotation = user.rotateRefreshToken(new RefreshTokenRotationCommand(
-                presented, tokens.findByFamily(presented.familyId()), replacement.token(), clock.now()));
+                presented,
+                tokens.findByFamily(presented.familyId()),
+                replacement.token(),
+                clock.now(),
+                factory.familyMaxLifetime()));
         tokens.saveAll(rotation.mutated());
         if (rotation.isRotated()) {
             // 新枚必須與「舊枚被消耗」在同一個交易內提交:否則舊枚已作廢而新枚沒存進去,
@@ -78,7 +85,8 @@ public class RefreshTokenRotator {
             return false;
         }
         RefreshToken presented = located.get();
-        Optional<User> owner = users.findById(presented.userId());
+        // 登出刻意不要求 ACTIVE:被停權的使用者仍應能撤銷自己的 token family
+        Optional<User> owner = accounts.find(presented.userId());
         if (owner.isEmpty()) {
             return false;
         }

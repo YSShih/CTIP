@@ -1,5 +1,6 @@
 package com.ctip.domain.user;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -9,7 +10,11 @@ import java.util.List;
  * 該規則亦禁止 domain 出現名為 {@code now} 的方法,故時間欄位命名為 {@code at})。
  */
 public record RefreshTokenRotationCommand(
-        RefreshToken presented, List<RefreshToken> family, RefreshToken replacement, Instant at) {
+        RefreshToken presented,
+        List<RefreshToken> family,
+        RefreshToken replacement,
+        Instant at,
+        Duration familyMaxLifetime) {
 
     public RefreshTokenRotationCommand {
         List.copyOf(family);

@@ -46,6 +46,11 @@ public final class InMemoryApiKeyRepository implements ApiKeyRepository {
     }
 
     @Override
+    public void markUsed(ApiKeyId id, Instant usedAt) {
+        findById(id).ifPresent(key -> key.markUsed(usedAt));
+    }
+
+    @Override
     public ApiKey save(ApiKey apiKey) {
         byId.put(apiKey.id(), apiKey);
         return apiKey;

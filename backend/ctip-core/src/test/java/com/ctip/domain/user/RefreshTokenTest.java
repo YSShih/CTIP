@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 class RefreshTokenTest {
 
     private static final Instant NOW = Instant.parse("2026-08-27T08:00:00Z");
+    private static final Duration FAMILY_MAX = Duration.ofDays(90);
     private static final UserId USER = new UserId(new UUID(0, 2));
     private static final TokenFamilyId FAMILY = new TokenFamilyId(new UUID(0, 3));
 
@@ -35,8 +36,67 @@ class RefreshTokenTest {
                 "203.0.113.7");
     }
 
+    /** issuedAt 可指定的變體:family 的年齡以最早一枚的 issuedAt 起算,測試必須能拉開時間差。 */
+    private static RefreshTokenSnapshot snapshotAt(
+            RefreshTokenId id, String plaintext, RefreshTokenId parent, Instant issuedAt) {
+        return new RefreshTokenSnapshot(
+                id,
+                USER,
+                TokenHash.of(plaintext),
+                FAMILY,
+                parent,
+                issuedAt,
+                issuedAt.plus(Duration.ofDays(30)),
+                null,
+                null,
+                null,
+                "junit-agent",
+                "203.0.113.7");
+    }
+
     private static RefreshToken issue(String plaintext) {
         return RefreshToken.issue(snapshot(new RefreshTokenId(new UUID(0, 4)), plaintext, null));
+    }
+
+    /**
+     * family 絕對存活上限。真實情境:輪替鏈上呈交的那一枚永遠是新的(≤ 30 天),
+     * 老的是 family 本身 —— 沒有這道上限,竊得一枚 token 的人只要持續輪替就能無限期維持存取,
+     * 而重用偵測只在「兩邊都用同一枚」時才觸發,安靜獨占輪替鏈不會被抓到(ADR 0013)。
+     */
+    @Test
+    void familyOlderThanTheAbsoluteLimitIsRevokedInsteadOfRotated() {
+        User user = user();
+        Instant rotatingAt = NOW.plus(FAMILY_MAX).plus(Duration.ofDays(1));
+        RefreshToken oldest =
+                RefreshToken.reconstitute(snapshotAt(new RefreshTokenId(new UUID(0, 20)), "family-origin", null, NOW));
+        RefreshToken presented = RefreshToken.issue(snapshotAt(
+                new RefreshTokenId(new UUID(0, 21)), "fresh-link", oldest.id(), rotatingAt.minus(Duration.ofDays(1))));
+        RefreshToken replacement = RefreshToken.issue(
+                snapshotAt(new RefreshTokenId(new UUID(0, 22)), "replacement-3", presented.id(), rotatingAt));
+
+        RefreshTokenRotation rotation = user.rotateRefreshToken(new RefreshTokenRotationCommand(
+                presented, List.of(oldest, presented), replacement, rotatingAt, FAMILY_MAX));
+
+        assertThat(rotation.outcome()).isEqualTo(RefreshTokenRotationOutcome.INVALID);
+        assertThat(rotation.mutated()).containsExactly(oldest, presented);
+        assertThat(presented.isRevoked()).isTrue();
+        assertThat(presented.revokedReason()).isEqualTo(RevokedReason.EXPIRED_CLEANUP);
+    }
+
+    /** 上限之內照常輪替;判定是嚴格 after,邊界剛好等於上限時仍允許。 */
+    @Test
+    void familyWithinTheAbsoluteLimitStillRotates() {
+        User user = user();
+        Instant rotatingAt = NOW.plus(FAMILY_MAX);
+        RefreshToken presented = RefreshToken.issue(snapshotAt(
+                new RefreshTokenId(new UUID(0, 23)), "young-link", null, rotatingAt.minus(Duration.ofDays(1))));
+        RefreshToken replacement = RefreshToken.issue(
+                snapshotAt(new RefreshTokenId(new UUID(0, 24)), "replacement-4", presented.id(), rotatingAt));
+
+        RefreshTokenRotation rotation = user.rotateRefreshToken(
+                new RefreshTokenRotationCommand(presented, List.of(presented), replacement, rotatingAt, FAMILY_MAX));
+
+        assertThat(rotation.outcome()).isEqualTo(RefreshTokenRotationOutcome.ROTATED);
     }
 
     @Test
@@ -131,7 +191,8 @@ class RefreshTokenTest {
                 null,
                 null,
                 null));
-        RefreshTokenRotationCommand command = new RefreshTokenRotationCommand(foreign, List.of(foreign), foreign, NOW);
+        RefreshTokenRotationCommand command =
+                new RefreshTokenRotationCommand(foreign, List.of(foreign), foreign, NOW, FAMILY_MAX);
         assertThatThrownBy(() -> user.rotateRefreshToken(command)).isInstanceOf(IllegalArgumentException.class);
 
         RefreshToken presented = issue("presented");
@@ -149,7 +210,7 @@ class RefreshTokenTest {
                 null,
                 null));
         RefreshTokenRotationCommand mismatched =
-                new RefreshTokenRotationCommand(presented, List.of(presented), otherFamily, NOW);
+                new RefreshTokenRotationCommand(presented, List.of(presented), otherFamily, NOW, FAMILY_MAX);
         assertThatThrownBy(() -> user.rotateRefreshToken(mismatched)).isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -162,7 +223,7 @@ class RefreshTokenTest {
                 RefreshToken.issue(snapshot(new RefreshTokenId(new UUID(0, 11)), "replacement", presented.id()));
 
         RefreshTokenRotation rotation = user.rotateRefreshToken(
-                new RefreshTokenRotationCommand(presented, List.of(presented), replacement, NOW));
+                new RefreshTokenRotationCommand(presented, List.of(presented), replacement, NOW, FAMILY_MAX));
         assertThat(rotation.outcome()).isEqualTo(RefreshTokenRotationOutcome.INVALID);
         assertThat(rotation.mutated()).isEmpty();
         // 重複撤銷保留最初原因(K6 的姊妹規則)

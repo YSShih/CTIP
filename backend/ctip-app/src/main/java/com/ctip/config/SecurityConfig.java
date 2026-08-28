@@ -65,7 +65,9 @@ public class SecurityConfig {
 
     @Bean
     RefreshTokenSettings refreshTokenSettings(CtipProperties properties) {
-        return new RefreshTokenSettings(Duration.ofSeconds(properties.jwt().refreshTokenExpiration()));
+        CtipProperties.Jwt jwt = properties.jwt();
+        return new RefreshTokenSettings(
+                Duration.ofSeconds(jwt.refreshTokenExpiration()), Duration.ofDays(jwt.refreshTokenFamilyMaxDays()));
     }
 
     @Bean
@@ -82,7 +84,8 @@ public class SecurityConfig {
                     case DEV -> "dev";
                     case STAGING -> "stg";
                     case PROD -> "prod";
-                });
+                },
+                properties.apiKey().maxPerTenant());
     }
 
     @Bean

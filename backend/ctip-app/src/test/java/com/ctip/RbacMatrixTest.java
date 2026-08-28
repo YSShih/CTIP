@@ -25,8 +25,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * DoD M2-04:§10.3 角色與權限矩陣的<strong>每一格</strong>(19 權限 × 5 角色 = 95 格),
+ * DoD M2-04:§10.3 角色與權限矩陣的<strong>每一格</strong>(21 權限 × 5 角色 = 105 格),
  * 以及 {@code @PreAuthorize} 於端點層確實生效。
+ *
+ * <p>「端點 → 需要哪個權限」是另一條軸,由 {@link EndpointAuthorizationTest} 守門。
  */
 @AutoConfigureMockMvc
 class RbacMatrixTest extends AbstractPostgresIntegrationTest {
@@ -68,10 +70,10 @@ class RbacMatrixTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void seedContainsExactlyTheNineteenSpecifiedPermissions() {
+    void seedContainsExactlyTheTwentyOneSpecifiedPermissions() {
         assertThat(rolePermissions.allPermissionCodes())
                 .containsExactlyInAnyOrderElementsOf(RbacMatrix.MATRIX.keySet())
-                .hasSize(19);
+                .hasSize(21);
     }
 
     /** 矩陣的單調性:上層角色涵蓋下層角色的全部權限。 */

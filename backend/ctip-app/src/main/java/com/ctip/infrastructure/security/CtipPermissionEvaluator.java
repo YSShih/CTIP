@@ -14,6 +14,12 @@ import org.springframework.security.core.Authentication;
  * <p>tenant-scoped 權限同時要求「持有該權限」與「目標屬於自己的租戶」;
  * {@code SYSTEM_ADMIN}(roles.tenant_scoped = false)不受租戶限制。
  * 非 tenant-scoped 的檢查退化為單純的 authority 判斷,不得在 controller 散落 role 判斷。
+ *
+ * <p><strong>陷阱:</strong>2 參數的 {@code hasPermission(#target, 'perm')} 只要 {@code target}
+ * 是 {@code UUID} 就<em>一律解讀為 tenantId</em>。若寫成
+ * {@code @PreAuthorize("hasPermission(#id, 'ioc:report-fp')")} 而 {@code #id} 是 indicator 的 UUID,
+ * 會拿 indicatorId 去比 tenantId → 對所有人恆為 false,變成全員 403 的靜默 bug。
+ * 非租戶目標必須用 4 參數重載並給對應的 {@code targetType}(ADR 0013)。
  */
 public class CtipPermissionEvaluator implements PermissionEvaluator {
 
