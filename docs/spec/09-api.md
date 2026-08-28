@@ -77,6 +77,18 @@ GET    /api/v1/sync/delta?base=<n>&scope=          sync:delta
 
 > `POST /api/v1/sync/check` **已移除**——它與 `POST /api/v1/iocs/lookup` 功能完全相同（批次精確驗證）。保留兩個端點會產生兩套配額、兩套稽核、兩份文件。client 同步流程改用 `/iocs/lookup`。
 
+> **實作回饋修訂（2026-08-28，Phase 16；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**
+>
+> | 端點 | 回應 | 備註 |
+> |---|---|---|
+> | `GET /sync/manifest` | `200` JSON | 沒有可同步的那一層整個欄位省略；**不受** `min_sync_interval_seconds` 限制 |
+> | `GET /sync/bloom` | `200` `application/octet-stream` | 直接串流（不採 302 簽章 URL，§5.4 沒有簽章金鑰）；必帶 `X-Bloom-*` 七個標頭並列入 CORS `exposedHeaders` |
+> | `GET /sync/delta` | `200` JSON / `409 SNAPSHOT_REQUIRED` | `409` 不消耗同步間隔——否則 client 依 §11.6 轉去下載 full 時會立刻撞 `429` |
+>
+> 三個端點的錯誤出口：方案不含該層 Bloom → `403 PLAN_LIMIT_EXCEEDED`（非時間窗的能力上限）；
+> 尚未產生 snapshot → `404`；同步過於頻繁 → `429` + `Retry-After`。
+> client 契約全文在 [`docs/api/sync-client-contract.md`](../api/sync-client-contract.md)（[11 §11.7](11-sync-bloom.md#117-client-契約摘要必須複製進-sdk-與-api-文件) 要求）。
+
 ### 來源
 
 ```text
@@ -436,4 +448,4 @@ OpenAPI JSON: /v3/api-docs
 
 ---
 
-*檔案結束。端點數：43。上次校對：2026-08-28（原寫 47，實列 43；ADR 0016）。*
+*檔案結束。端點數：43。上次校對：2026-08-28（Phase 16；端點數不變——同步三個端點自 v2.0 起即在清單內）。*

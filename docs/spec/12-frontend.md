@@ -218,6 +218,21 @@ server: {
 
 **MSW handlers 必須由 generated 型別驅動**，不得手寫 response 形狀——否則測試會與真實 API 漂移。
 
+> **實作回饋修訂（2026-08-28，Phase 16；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**——
+> E2E 的位置與執行方式原本沒有規定（Playwright 只出現在版本表與 DoD 的 M2-26／M3-05，
+> 見 [ADR 0022](../architecture/decisions/0022-orphan-deliverables.md)）：
+>
+> | 項目 | 規格 |
+> |---|---|
+> | 位置 | `frontend/playwright.config.ts` + `frontend/e2e/`（`*.spec.ts`；不得放進 `src/`——Vitest 會收進去而失敗） |
+> | 執行 | `cd frontend && npx playwright test`（等同 `npm run e2e`）。`webServer` 跑 `npm run build && npm run preview`：M2-26 檢查的是使用者實際拿到的 bundle |
+> | API 邊界 | 預設以 `page.route` 攔截 `/api/v1/**`（`e2e/stubs.ts`）——本表把 E2E 列在**前端**測試之下，測的是 bundle、路由、Query 快取與渲染 |
+> | 對整套環境跑 | `E2E_BASE_URL=<origin>` 時不安裝攔截、也不啟動 webServer；全端驗證由 M2-25（compose）與 M3-05（WebSocket）負責 |
+> | 瀏覽器本體 | `npx playwright install chromium` 屬本機／CI 前置，非專案交付物 |
+>
+> 四個情境已於 Phase 16 全數交付（`e2e/smoke.spec.ts`、`e2e/session.spec.ts`），
+> Phase 20 再加 WebSocket 案例。
+
 ---
 
-*檔案結束。上次校對：2026-08-21。*
+*檔案結束。上次校對：2026-08-28（Phase 16：Sync 頁與 Playwright 骨架）。*

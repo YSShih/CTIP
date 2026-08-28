@@ -28,7 +28,20 @@ class WebCorsConfig implements WebMvcConfigurer {
                 .allowedOrigins(parseOrigins(cors.allowedOrigins()))
                 .allowedMethods("GET", "POST", "DELETE")
                 .allowedHeaders("*")
-                .exposedHeaders("X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "Retry-After")
+                // X-Bloom-*:Browser Extension 這類瀏覽器 client 必須讀得到下載回應的版本與 checksum,
+                // 否則它只能相信 manifest 的版號,而那是「delta 可到達的最新版」而非這份 artifact 的版本
+                .exposedHeaders(
+                        "X-RateLimit-Limit",
+                        "X-RateLimit-Remaining",
+                        "X-RateLimit-Reset",
+                        "Retry-After",
+                        "X-Bloom-Scope",
+                        "X-Bloom-Dataset-Version",
+                        "X-Bloom-Version",
+                        "X-Bloom-Checksum",
+                        "X-Bloom-Compression",
+                        "X-Bloom-Bit-Size",
+                        "X-Bloom-Hash-Count")
                 .maxAge(3600);
     }
 

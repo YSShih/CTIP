@@ -15,6 +15,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
+    // e2e/ 由 Playwright 執行(playwright.config.ts):它的 spec 用 @playwright/test 的
+    // test/expect,被 Vitest 收進去會直接失敗
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     css: false,
     coverage: {
       // 14 §14.6:features/** 與 components/** 行覆蓋 ≥ 70%,v8 provider,generated 排除

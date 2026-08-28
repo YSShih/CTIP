@@ -36,6 +36,23 @@ public final class BloomDeltaCodec {
         return out.toByteArray();
     }
 
+    /**
+     * 把一段連續 delta 的 payload 併成單一 payload(Phase 16 的 {@code /sync/delta?base=} 用)。
+     *
+     * <p>client 要的是「從我的 base 到現在」的全部新增位元,而 artifact 是逐段存的。
+     * 併集後重新編碼即為那段區間的 {@code addedBits}:Bloom 只會把位元由 0 設為 1,
+     * 因此區間內各段的併集與「逐段依序套用」對位元陣列的作用完全相同(§11.3)。
+     *
+     * @param payloads 依 {@code bloomVersion} <strong>升序</strong>的各段 delta payload
+     */
+    public static byte[] merge(List<byte[]> payloads) {
+        List<Long> indices = new ArrayList<>();
+        for (byte[] payload : payloads) {
+            indices.addAll(decode(payload));
+        }
+        return encode(indices);
+    }
+
     public static List<Long> decode(byte[] payload) {
         List<Long> indices = new ArrayList<>();
         long current = 0;

@@ -77,16 +77,21 @@ class OpenApiCompletenessTest extends AbstractPostgresIntegrationTest {
         }
     }
 
+    /**
+     * §9.6 要求每個端點記載回應內容,<strong>但不限 JSON</strong>:
+     * {@code GET /sync/bloom} 回的是 {@code application/octet-stream} 的位元陣列(11 §11.5),
+     * 把檢查寫死在 {@code application/json} 會逼它假裝自己回 JSON。
+     */
     private static void assertOkResponseWithSchema(JsonNode op, String where) {
         JsonNode responses = op.get("responses");
-        boolean okWithSchema = false;
+        boolean documented = false;
         for (Map.Entry<String, JsonNode> r : responses.properties()) {
             if (r.getKey().startsWith("2")
-                    && !r.getValue().at("/content/application~1json").isMissingNode()) {
-                okWithSchema = true;
+                    && !r.getValue().path("content").properties().isEmpty()) {
+                documented = true;
             }
         }
-        assertThat(okWithSchema).as("%s 2xx response schema", where).isTrue();
+        assertThat(documented).as("%s 2xx response content", where).isTrue();
     }
 
     private static void assertErrorResponse(JsonNode op, String where) {

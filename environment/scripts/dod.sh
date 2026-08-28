@@ -393,7 +393,7 @@ gate_phase2() {
   check M2-12 "Bloom checksum 驗證通過" "${MVNT}BloomGenerationTest"
   check M2-13 "TLP:GREEN 不進入 public bloom" "${MVNT}BloomCoverageTest"
   check M2-14 "Delta 生成與套用正確,resultingChecksum 相符" "${MVNT}BloomDeltaTest"
-  check M2-15 "Delta 鏈超過上限時回 409 SNAPSHOT_REQUIRED" "${MVNT}BloomDeltaTest"
+  check M2-15 "Delta 鏈超過上限時回 409 SNAPSHOT_REQUIRED" "${MVNT}SyncEndToEndTest"
   check M2-16 "完整同步流程端對端(manifest → delta → 套用 → 更新版本)" "${MVNT}SyncEndToEndTest"
   check M2-17 "manifest 含 coverage 與 notCovered 欄位" "${MVNT}SyncEndToEndTest"
   check M2-18 "手動提交 IOC 走完整 pipeline,預設 TLP:AMBER" "${MVNT}ManualSubmissionTest"

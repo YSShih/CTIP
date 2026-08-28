@@ -3,8 +3,10 @@ package com.ctip.config;
 import com.ctip.application.plan.QuotaService;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.application.port.SyncThrottlePort;
 import com.ctip.domain.plan.PlanCode;
 import com.ctip.infrastructure.ratelimit.InMemoryRateLimiter;
+import com.ctip.infrastructure.ratelimit.InMemorySyncThrottle;
 import com.ctip.infrastructure.ratelimit.RateLimitFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,17 @@ public class RateLimitConfig {
             log.warn("RATE_LIMIT_BACKEND=redis:RedisRateLimiter 於 Phase 17(M2)提供,暫以記憶體實作代替(僅單一實例正確)");
         }
         return new InMemoryRateLimiter(clock);
+    }
+
+    /**
+     * 同步節流(11 §11.6 的 {@code min_sync_interval_seconds})。
+     *
+     * <p>與限流器同一個後端切換點:{@code RATE_LIMIT_BACKEND=redis} 於 Phase 17 才有實作,
+     * 在那之前一律記憶體(僅單一實例正確;WARN 由上面的 bean 統一發出,不重複)。
+     */
+    @Bean
+    SyncThrottlePort syncThrottlePort(ClockPort clock) {
+        return new InMemorySyncThrottle(clock);
     }
 
     /**

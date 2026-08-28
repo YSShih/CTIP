@@ -29,5 +29,14 @@ public interface BloomVersionRepository {
      */
     List<BloomVersion> findNewestFirst(BloomScope scope, TenantId tenantId, int limit);
 
+    /**
+     * 記一次下載(04 表 23 的 {@code download_count})。
+     *
+     * <p>以<strong>定向 UPDATE</strong> 實作,不走「讀出聚合 → 改 → 存回」:
+     * 下載與排程生成可能同時發生,整列覆寫會把新產生的版本資訊沖掉
+     * (與 ADR 0013 對 {@code api_keys.last_used_at} 的處置同一個理由)。
+     */
+    void recordDownload(BloomVersionId id);
+
     void delete(BloomVersionId id);
 }

@@ -578,4 +578,27 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.21）。*
+## 0.22 實作回饋修訂（2026-08-28，Phase 16）
+
+增量同步 API 與 client 契約的實作回饋，逐項見
+[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | `min_sync_interval_seconds` 的值(86400/21600/300/60)在 `RateLimitKey.Window` 表達不了,且沒有任何欄位記錄「上次同步時間」([ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md) 已列此缺口) | 新增 `SyncThrottlePort`(M2 記憶體、Phase 17 起 Redis),記帳對象是**呼叫者身分**而非 tenant——匿名綁 public tenant,以 tenant 記帳會讓全體匿名 client 共用一個額度 | [11 §11.6](11-sync-bloom.md#116-client-同步流程) |
+| 2 | manifest 的 `checksum` 若取「最新版本 artifact 的 checksum」,最新版本是 delta 時算的是 varint payload 的雜湊,client 拿它驗自己的陣列**永遠不會相符** | 定調為「完全同步後陣列應有的 SHA-256」(`BloomVersion.arrayChecksum()`);`sizeBytes` 取未壓縮陣列長度(與 §11.5 範例的 17,971,985 一致) | [11 §11.5](11-sync-bloom.md#115-metadata-與-api) |
+| 3 | §11.6 第 4 步「更新版本」沒說更新成哪個數字。照 manifest 記,client 的陣列會少掉 delta 的位元卻自認最新——**Bloom 的 false negative 不可接受** | `/sync/bloom` 回應必帶 `X-Bloom-*` 七個標頭(含這份 artifact 自己的版號與 checksum),client 一律據此更新;CORS 的 `exposedHeaders` 一併補上 | [11 §11.5](11-sync-bloom.md#115-metadata-與-api)、[09 §9.1](09-api.md#91-端點清單) |
+| 4 | `409 SNAPSHOT_REQUIRED` 若也消耗同步間隔,client 依 §11.6 轉去下載 full 時會立刻撞 `429`,**復原路徑永遠走不完** | 節流只在「已確定回 200」之後才記帳;`/sync/manifest` 完全不節流(它是流程第 1 步) | [11 §11.5](11-sync-bloom.md#115-metadata-與-api)、[11 §11.6](11-sync-bloom.md#116-client-同步流程) |
+| 5 | 「302 至簽章下載 URL」沒有簽章金鑰的環境變數(ADR 0019 已列) | 採直接串流;不新增設定項(規則 18) | [11 §11.5](11-sync-bloom.md#115-metadata-與-api) |
+| 6 | 匿名對 `scope=TENANT` 的語意未定義(ADR 0019 已列) | 回 `403 PLAN_LIMIT_EXCEEDED`;判定點 `BloomScopePlanner.hasTenantBloom` **與生成端共用**,避免「manifest 說有、下載回 403」 | [11 §11.5](11-sync-bloom.md#115-metadata-與-api) |
+| 7 | **M2-15 是假綠**:判準跑 `BloomDeltaTest`(生成端),而 `409` 的 HTTP 行為在 Phase 15 不存在 | 判準改指向 `SyncEndToEndTest`(真的產生 25 段 delta);`dod.sh` 同步 | [15 §15.2](15-dod-gates.md) |
+| 8 | Playwright 只出現在版本表與 DoD,**位置與執行方式沒有規格**([ADR 0022](../architecture/decisions/0022-orphan-deliverables.md) 只指定了「歸 Phase 16」) | 補 `frontend/e2e/` + `playwright.config.ts` 的契約、API 邊界(`page.route`)、`E2E_BASE_URL` 的整套環境模式;M2-26 的四個情境全數交付 | [12 §12.8](12-frontend.md#128-前端測試)、[14 §14.6](14-testing.md#146-前端測試) |
+| 9 | `OpenApiCompletenessTest` 的 2xx 檢查寫死 `application/json`,會逼 `GET /sync/bloom`(octet-stream)假裝自己回 JSON | 改為「任一 2xx 有非空 `content`」——§9.6 要求的是記載回應內容,不是 JSON | (測試) |
+| 10 | `bloom_artifacts.download_count`(04 表 23)自 Phase 15 就存在卻**從未被寫入**,而下載端點是它唯一可能的呼叫端(規則 16 的永不可達欄位) | 下載成功後以**定向 UPDATE** +1(整列覆寫會與排程生成互相沖掉);連帶發現 `download()` 不得宣告 `readOnly` 交易 | [04 表 23](04-data-dictionary.md) |
+
+> 其餘實作決策(`ClientIp` 抽到 `infrastructure/web` 讓限流與同步節流共用同一份 IPv6 `/64` 收斂、
+> delta 區間以併集後重新編碼、`SyncService` 只讀不觸發生成)屬規格自由度內的選擇,僅記於 ADR 0025。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.22）。*

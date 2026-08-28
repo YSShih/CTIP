@@ -492,6 +492,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sync/bloom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a full Bloom snapshot
+         * @description Streams the newest full snapshot for the scope as binary, encoded with the compression named in the manifest. Verify X-Bloom-Checksum against the SHA-256 of the decompressed array before use, and store X-Bloom-Dataset-Version / X-Bloom-Version as your local version — the manifest's bloomVersion is the newest version reachable via delta, not the version of this artifact. Download authorization follows the plan (public_bloom_enabled / tenant_bloom_capacity) and consumes the sync interval (429 when called again too soon). 認證:需要 sync:bloom(ANONYMOUS 角色亦持有);scope=TENANT 另需方案含 tenant Bloom。
+         */
+        get: operations["bloom"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/delta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the delta since a base version
+         * @description Returns every bit index added between `base` and the newest version of the current dataset, encoded as ascending-deduplicated LEB128 varint deltas in base64url without padding. Apply them, then verify `resultingChecksum`; on mismatch discard and download a full snapshot. 409 SNAPSHOT_REQUIRED when the chain is too long, when no snapshot exists yet, or when `base` is not part of the current dataset. 認證:需要 sync:delta(匿名不持有)。
+         */
+        get: operations["delta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/manifest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the Bloom sync manifest
+         * @description Metadata for both Bloom layers plus the mandatory coverage disclosure. `checksum` is the SHA-256 the local bit array must have once fully synced, and `sizeBytes` is the uncompressed array length; `compression` is the transport encoding used by GET /sync/bloom. A layer is omitted when there is nothing to sync there (no snapshot yet, or the plan has no tenant Bloom). This endpoint is not rate-limited by min_sync_interval_seconds so clients can poll it cheaply. 認證:需要 sync:bloom(ANONYMOUS 角色亦持有)。
+         */
+        get: operations["manifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -572,6 +632,63 @@ export interface components {
             /** @example Bearer */
             tokenType?: string;
             user?: components["schemas"]["SessionUserDto"];
+        };
+        BloomManifestDto: {
+            /**
+             * Format: int64
+             * @example 143775880
+             */
+            bitSize?: number;
+            /**
+             * Format: int64
+             * @example 42
+             */
+            bloomVersion?: number;
+            /**
+             * Format: int64
+             * @example 10000000
+             */
+            capacity?: number;
+            /** @example 3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a */
+            checksum?: string;
+            /** @example ZSTD */
+            compression?: string;
+            /** @example TLP:CLEAR only */
+            coverage?: string;
+            /**
+             * Format: int64
+             * @example 128
+             */
+            datasetVersion?: number;
+            /**
+             * Format: double
+             * @example 0.001
+             */
+            falsePositiveRate?: number;
+            /** @example SHA256 */
+            fingerprintAlgorithm?: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-21T04:00:00Z
+             */
+            generatedAt?: string;
+            /**
+             * Format: int32
+             * @example 10
+             */
+            hashFunctionCount?: number;
+            /**
+             * Format: int64
+             * @example 8342119
+             */
+            memberCount?: number;
+            /** @example PUBLIC */
+            scope?: string;
+            /**
+             * Format: int64
+             * @example 17971985
+             */
+            sizeBytes?: number;
         };
         DailyCountDto: {
             /** Format: int64 */
@@ -969,6 +1086,51 @@ export interface components {
             manualSubmissionsToday?: components["schemas"]["UsageItem"];
             /** @example PREMIUM */
             planCode?: string;
+        };
+        SyncDeltaDto: {
+            /** @example wYCBAsQF */
+            addedBits?: string;
+            /**
+             * Format: int64
+             * @example 15320
+             */
+            addedMemberCount?: number;
+            /**
+             * Format: int64
+             * @example 40
+             */
+            baseVersion?: number;
+            /** @example 9f2c1a7b3d5e0f4a8c6b2d1e3f5a7c9b0d2e4f6a8c1b3d5e7f9a0c2e4b6d8f1a */
+            checksum?: string;
+            /**
+             * Format: int64
+             * @example 128
+             */
+            datasetVersion?: number;
+            /** @example 3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a */
+            resultingChecksum?: string;
+            /** @example PUBLIC */
+            scope?: string;
+            /**
+             * Format: int64
+             * @example 42
+             */
+            targetVersion?: number;
+        };
+        SyncManifestDto: {
+            /**
+             * Format: int32
+             * @example 24
+             */
+            maxDeltaChain?: number;
+            /**
+             * @example [
+             *       "TLP:GREEN"
+             *     ]
+             */
+            notCovered?: string[];
+            public?: components["schemas"]["BloomManifestDto"];
+            tenant?: components["schemas"]["BloomManifestDto"];
         };
         UsageItem: {
             /**
@@ -2801,6 +2963,242 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SubscriptionUsageDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    bloom: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Which Bloom layer to download
+                 * @example PUBLIC
+                 */
+                scope?: "PUBLIC" | "TENANT";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The compressed bit array */
+            200: {
+                headers: {
+                    /** @description bitSize (m); the array is ceil(m/8) bytes */
+                    "X-Bloom-Bit-Size"?: number;
+                    /** @description SHA-256 of the uncompressed bit array */
+                    "X-Bloom-Checksum"?: string;
+                    /** @description ZSTD | GZIP | NONE */
+                    "X-Bloom-Compression"?: string;
+                    /** @description datasetVersion of this artifact */
+                    "X-Bloom-Dataset-Version"?: number;
+                    /** @description hashFunctionCount (k) */
+                    "X-Bloom-Hash-Count"?: number;
+                    /** @description PUBLIC or TENANT */
+                    "X-Bloom-Scope"?: string;
+                    /** @description bloomVersion of this artifact (0 for a full snapshot) */
+                    "X-Bloom-Version"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description PLAN_LIMIT_EXCEEDED — the plan does not include this Bloom layer */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND — no snapshot has been generated yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delta: {
+        parameters: {
+            query: {
+                /**
+                 * @description The caller's local bloomVersion
+                 * @example 40
+                 */
+                base: number;
+                /**
+                 * @description Which Bloom layer to sync
+                 * @example PUBLIC
+                 */
+                scope?: "PUBLIC" | "TENANT";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bits added between base and target */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "addedBits": "wYCBAsQF",
+                     *       "addedMemberCount": 15320,
+                     *       "baseVersion": 40,
+                     *       "checksum": "9f2c1a7b3d5e0f4a8c6b2d1e3f5a7c9b0d2e4f6a8c1b3d5e7f9a0c2e4b6d8f1a",
+                     *       "datasetVersion": 128,
+                     *       "resultingChecksum": "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+                     *       "scope": "PUBLIC",
+                     *       "targetVersion": 42
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SyncDeltaDto"];
+                };
+            };
+            /** @description Missing sync:delta permission (FORBIDDEN) or plan without this Bloom layer */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description SNAPSHOT_REQUIRED — download a full snapshot instead */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "code": "SNAPSHOT_REQUIRED",
+                     *       "message": "Delta chain too long, download full snapshot",
+                     *       "path": "/api/v1/sync/delta",
+                     *       "status": 409,
+                     *       "timestamp": "2026-08-21T08:00:00Z",
+                     *       "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    manifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Manifest for the layers the caller may sync */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "maxDeltaChain": 24,
+                     *       "notCovered": [
+                     *         "TLP:GREEN"
+                     *       ],
+                     *       "public": {
+                     *         "bitSize": 143775880,
+                     *         "bloomVersion": 42,
+                     *         "capacity": 10000000,
+                     *         "checksum": "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+                     *         "compression": "ZSTD",
+                     *         "coverage": "TLP:CLEAR only",
+                     *         "datasetVersion": 128,
+                     *         "falsePositiveRate": 0.001,
+                     *         "fingerprintAlgorithm": "SHA256",
+                     *         "generatedAt": "2026-08-21T04:00:00Z",
+                     *         "hashFunctionCount": 10,
+                     *         "memberCount": 8342119,
+                     *         "scope": "PUBLIC",
+                     *         "sizeBytes": 17971985
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SyncManifestDto"];
+                };
+            };
+            /** @description Missing sync:bloom permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */

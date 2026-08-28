@@ -34,6 +34,12 @@ public final class InMemoryBloomStorage implements BloomStoragePort {
         return content.clone();
     }
 
+    /** 此實作不壓縮,因此「儲存時的原始位元組」與未壓縮內容相同。 */
+    @Override
+    public byte[] readStored(String storagePath) {
+        return read(storagePath, BloomCompression.NONE);
+    }
+
     @Override
     public void delete(String storagePath) {
         files.remove(storagePath);

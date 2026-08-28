@@ -83,6 +83,11 @@ class BloomVersionRepositoryAdapter implements BloomVersionRepository {
     }
 
     @Override
+    public void recordDownload(BloomVersionId id) {
+        artifacts.incrementDownloadCount(id.value());
+    }
+
+    @Override
     public void delete(BloomVersionId id) {
         // bloom_artifacts 的 FK 帶 ON DELETE CASCADE,artifact 列由資料庫一併移除
         versions.deleteById(id.value());

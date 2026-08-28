@@ -27,39 +27,44 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.UUID;
 
-/** application/bloom 的單元測試共用裝配:全部以記憶體替身組成,不需要資料庫。 */
-final class BloomTestHarness {
+/**
+ * application/bloom 的單元測試共用裝配:全部以記憶體替身組成,不需要資料庫。
+ *
+ * <p>{@code public} 是因為 {@code application/sync} 的測試也用它——同步端讀的正是這裡生成的
+ * 版本與 artifact,另建一份裝配等於讓兩邊的 Bloom 參數各自漂移。
+ */
+public final class BloomTestHarness {
 
-    static final Instant NOW = Instant.parse("2026-08-28T04:00:00Z");
-    static final Instant EARLIER = NOW.minusSeconds(86_400);
-    static final TenantId TENANT = new TenantId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
+    public static final Instant NOW = Instant.parse("2026-08-28T04:00:00Z");
+    public static final Instant EARLIER = NOW.minusSeconds(86_400);
+    public static final TenantId TENANT = new TenantId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
 
-    final InMemoryBloomMembers members = new InMemoryBloomMembers();
-    final InMemoryBloomVersionRepository versions = new InMemoryBloomVersionRepository();
-    final InMemoryBloomStorage storage = new InMemoryBloomStorage();
-    final FixedClockPort clock = FixedClockPort.at(NOW);
-    final SequentialIdGenerator ids = new SequentialIdGenerator();
-    final RecordingEventPublisher events = new RecordingEventPublisher();
-    final BloomChangeTracker changes = new BloomChangeTracker();
-    final InMemoryPlanRepository plans = new InMemoryPlanRepository();
-    final InMemorySubscriptionRepository subscriptions = new InMemorySubscriptionRepository();
+    public final InMemoryBloomMembers members = new InMemoryBloomMembers();
+    public final InMemoryBloomVersionRepository versions = new InMemoryBloomVersionRepository();
+    public final InMemoryBloomStorage storage = new InMemoryBloomStorage();
+    public final FixedClockPort clock = FixedClockPort.at(NOW);
+    public final SequentialIdGenerator ids = new SequentialIdGenerator();
+    public final RecordingEventPublisher events = new RecordingEventPublisher();
+    public final BloomChangeTracker changes = new BloomChangeTracker();
+    public final InMemoryPlanRepository plans = new InMemoryPlanRepository();
+    public final InMemorySubscriptionRepository subscriptions = new InMemorySubscriptionRepository();
 
-    final BloomPorts ports = new BloomPorts(members, versions, storage, clock, ids);
-    final BloomSettings settings = settings(24, 3);
-    final QuotaService quotas = new QuotaService(plans, subscriptions, new CountingRateLimiter(clock), clock);
-    final BloomScopePlanner planner = new BloomScopePlanner(quotas, subscriptions, members, settings);
-    final BloomArrayLoader loader = new BloomArrayLoader(storage);
-    final BloomSnapshotService snapshots = new BloomSnapshotService(ports, settings, planner, events, changes);
-    final BloomDeltaService deltas = new BloomDeltaService(ports, settings, loader, changes);
-    final BloomRetentionService retention = new BloomRetentionService(ports, settings, planner);
+    public final BloomPorts ports = new BloomPorts(members, versions, storage, clock, ids);
+    public final BloomSettings settings = settings(24, 3);
+    public final QuotaService quotas = new QuotaService(plans, subscriptions, new CountingRateLimiter(clock), clock);
+    public final BloomScopePlanner planner = new BloomScopePlanner(quotas, subscriptions, members, settings);
+    public final BloomArrayLoader loader = new BloomArrayLoader(storage);
+    public final BloomSnapshotService snapshots = new BloomSnapshotService(ports, settings, planner, events, changes);
+    public final BloomDeltaService deltas = new BloomDeltaService(ports, settings, loader, changes);
+    public final BloomRetentionService retention = new BloomRetentionService(ports, settings, planner);
 
-    static BloomSettings settings(int maxDeltaChain, int artifactKeep) {
+    public static BloomSettings settings(int maxDeltaChain, int artifactKeep) {
         return new BloomSettings(
                 1_000L, 0.01, 100L, BloomCompression.NONE, BloomChainPolicy.of(maxDeltaChain), artifactKeep);
     }
 
     /** 給租戶一份 PREMIUM 訂閱(tenant_bloom_capacity = 1,000,000)。 */
-    void subscribe(TenantId tenantId, PlanCode code) {
+    public void subscribe(TenantId tenantId, PlanCode code) {
         subscriptions.save(Subscription.subscribe(
                 new SubscriptionId(ids.nextId()),
                 tenantId,
@@ -68,14 +73,14 @@ final class BloomTestHarness {
                 BillingPeriod.openEnded(NOW)));
     }
 
-    BloomBitArray read(BloomVersion version) {
+    public BloomBitArray read(BloomVersion version) {
         return BloomBitArray.of(
                 version.parameters(),
                 storage.read(
                         version.artifact().storagePath(), version.artifact().compression()));
     }
 
-    static boolean mightContain(BloomBitArray array, BloomParameters parameters, Fingerprint fingerprint) {
+    public static boolean mightContain(BloomBitArray array, BloomParameters parameters, Fingerprint fingerprint) {
         return Arrays.stream(BloomIndexer.indices(fingerprint, parameters)).allMatch(array::get);
     }
 }

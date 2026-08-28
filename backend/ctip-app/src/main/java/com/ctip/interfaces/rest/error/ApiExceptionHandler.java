@@ -12,6 +12,8 @@ import com.ctip.application.plan.RequestSizeLimitExceededException;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.stix.StixExportLimitExceededException;
+import com.ctip.application.sync.SnapshotRequiredException;
+import com.ctip.application.sync.SyncTooFrequentException;
 import com.ctip.infrastructure.ratelimit.RateLimitHeaders;
 import com.ctip.interfaces.rest.dto.common.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -88,6 +90,33 @@ public class ApiExceptionHandler {
                 .header("X-RateLimit-Remaining", RateLimitHeaders.remaining(result))
                 .header("X-RateLimit-Reset", Long.toString(result.resetAt().getEpochSecond()))
                 .header("Retry-After", Long.toString(retryAfter))
+                .body(body(
+                        ErrorCode.RATE_LIMIT_EXCEEDED.status().value(),
+                        ErrorCode.RATE_LIMIT_EXCEEDED.name(),
+                        e.getMessage(),
+                        List.of(),
+                        request));
+    }
+
+    /**
+     * §11.3:delta 鏈過長、尚無 snapshot、或 client 的 base 不在現行 dataset 上。
+     * client 的動作三者相同——改下載 full snapshot(§11.6 第 4 步)。
+     */
+    @ExceptionHandler(SnapshotRequiredException.class)
+    ResponseEntity<ErrorResponse> snapshotRequired(SnapshotRequiredException e, HttpServletRequest request) {
+        return respond(ErrorCode.SNAPSHOT_REQUIRED, e.getMessage(), List.of(), request);
+    }
+
+    /**
+     * §11.6:同步頻率超過 {@code plans.min_sync_interval_seconds} → 429 + {@code Retry-After}。
+     *
+     * <p>{@code X-RateLimit-*} 三個標頭由 {@code RateLimitFilter} 在更外層寫入(§10.7 要求
+     * 所有回應都要有),此處只補 {@code Retry-After}——它反映的是同步間隔而非限流視窗。
+     */
+    @ExceptionHandler(SyncTooFrequentException.class)
+    ResponseEntity<ErrorResponse> syncTooFrequent(SyncTooFrequentException e, HttpServletRequest request) {
+        return ResponseEntity.status(ErrorCode.RATE_LIMIT_EXCEEDED.status())
+                .header("Retry-After", Long.toString(e.retryAfter().toSeconds()))
                 .body(body(
                         ErrorCode.RATE_LIMIT_EXCEEDED.status().value(),
                         ErrorCode.RATE_LIMIT_EXCEEDED.name(),

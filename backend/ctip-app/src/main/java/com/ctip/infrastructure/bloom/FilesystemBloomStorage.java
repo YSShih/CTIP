@@ -59,6 +59,15 @@ class FilesystemBloomStorage implements BloomStoragePort {
     }
 
     @Override
+    public byte[] readStored(String storagePath) {
+        try {
+            return Files.readAllBytes(resolve(storagePath));
+        } catch (IOException e) {
+            throw new UncheckedIOException("無法讀取 bloom artifact:" + storagePath, e);
+        }
+    }
+
+    @Override
     public void delete(String storagePath) {
         try {
             Files.deleteIfExists(resolve(storagePath));

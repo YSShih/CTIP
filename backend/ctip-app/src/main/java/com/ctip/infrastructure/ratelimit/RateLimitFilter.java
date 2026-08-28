@@ -5,16 +5,14 @@ import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
 import com.ctip.domain.plan.Plan;
+import com.ctip.infrastructure.web.ClientIp;
 import com.ctip.infrastructure.web.FilterErrorWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.time.Duration;
-import java.util.HexFormat;
 import java.util.function.Supplier;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -109,17 +107,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
         errorWriter.write(request, response, 429, "RATE_LIMIT_EXCEEDED", "Rate limit exceeded");
     }
 
-    /** 匿名 IP 正規化(§10.7):IPv4 取完整位址;IPv6 取 /64 前綴,避免以 /64 內位址繞過。 */
+    /** 匿名 IP 正規化(§10.7);與同步節流共用同一份規則,見 {@link ClientIp}。 */
     static String normalizeIp(String remoteAddr) {
-        try {
-            InetAddress address = InetAddress.getByName(remoteAddr);
-            byte[] bytes = address.getAddress();
-            if (bytes.length == 4) {
-                return address.getHostAddress();
-            }
-            return "v6-" + HexFormat.of().formatHex(bytes, 0, 8);
-        } catch (UnknownHostException e) {
-            return remoteAddr;
-        }
+        return ClientIp.normalize(remoteAddr);
     }
 }

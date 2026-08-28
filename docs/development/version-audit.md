@@ -27,3 +27,15 @@
 | typescript-eslint | (未列於版本表,ESLint flat config 必要工具鏈) | ^8.67.0 | npm ✅;複查日確認與 TS 7 / ESLint 10 相容性 |
 
 **下次複查日:2027-02-21。**
+
+## 2026-08-28 — Phase 16 新增相依(Playwright)
+
+| 套件 | 規格 | 實際 pin | 查證結果 |
+|---|---|---|---|
+| `@playwright/test` | 06 §6.2.2「Playwright 1.x」 | ^1.62.1 | npm ✅;規格只 pin major 系列(該欄標 `~`,支援終止為推估),1.x 內取現行版 |
+
+瀏覽器本體以 `npx playwright install chromium` 取得,**不進 `package.json`**
+(它是本機/CI 前置,同 `gh` CLI 的處置,見 [ADR 0022](../architecture/decisions/0022-orphan-deliverables.md))。
+本次未動任何既有 pin。
+
+**下次複查日:2027-02-21(不變)。**

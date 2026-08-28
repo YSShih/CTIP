@@ -196,6 +196,27 @@ export const finishedImportJob = {
   finishedAt: '2026-08-28T09:00:05Z',
 } satisfies ApiSchemas['ImportJobDto'];
 
+export const sampleSyncManifest = {
+  public: {
+    scope: 'PUBLIC',
+    datasetVersion: 128,
+    bloomVersion: 42,
+    fingerprintAlgorithm: 'SHA256',
+    hashFunctionCount: 10,
+    bitSize: 143775880,
+    capacity: 10000000,
+    falsePositiveRate: 0.001,
+    memberCount: 8342119,
+    checksum: '3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a',
+    sizeBytes: 17971985,
+    compression: 'ZSTD',
+    generatedAt: '2026-08-21T04:00:00Z',
+    coverage: 'TLP:CLEAR only',
+  },
+  notCovered: ['TLP:GREEN'],
+  maxDeltaChain: 24,
+} satisfies ApiSchemas['SyncManifestDto'];
+
 const unauthenticatedError = {
   timestamp: '2026-08-27T08:00:00Z',
   status: 401,
@@ -248,4 +269,5 @@ export const handlers = [
   http.post('*/api/v1/iocs/:id/report-false-positive', () => HttpResponse.json(sampleIoc)),
   http.get('*/api/v1/subscription', () => HttpResponse.json(sampleSubscription)),
   http.get('*/api/v1/subscription/usage', () => HttpResponse.json(sampleUsage)),
+  http.get('*/api/v1/sync/manifest', () => HttpResponse.json(sampleSyncManifest)),
 ];

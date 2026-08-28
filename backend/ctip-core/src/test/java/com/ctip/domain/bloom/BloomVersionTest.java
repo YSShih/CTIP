@@ -125,6 +125,33 @@ class BloomVersionTest {
                 .isFalse();
     }
 
+    /**
+     * manifest 與 {@code /sync/delta} 的 {@code resultingChecksum} 都取這個值:
+     * full 用 artifact 自己的 checksum,delta 用它套用後的陣列 checksum(L6)。
+     * 兩處若各自判斷 full/delta,任一邊寫錯就會讓所有 client 的自我驗證恆為失敗。
+     */
+    @Test
+    void theArrayChecksumFollowsWhetherTheVersionIsFullOrDelta() {
+        BloomVersion first = BloomVersion.firstSnapshot(full(BloomScope.PUBLIC, TenantId.PUBLIC));
+        Checksum applied = Checksum.sha256(new byte[16]);
+
+        BloomVersion delta = first.nextDelta(new BloomVersionId(UUID.randomUUID()), 5, artifact(applied, 12), AT);
+
+        assertThat(first.arrayChecksum()).isEqualTo(SUM);
+        assertThat(delta.arrayChecksum()).isEqualTo(applied);
+        assertThat(delta.artifact().checksum())
+                .as("delta 的 artifact checksum 算的是 addedBits payload,不是陣列")
+                .isEqualTo(SUM);
+    }
+
+    /** §11.5 的 coverage / notCovered 文字與成員條件同一處維護(BloomCoverage)。 */
+    @Test
+    void everyScopeDeclaresItsCoverageAndGreenIsCoveredByNothing() {
+        assertThat(BloomCoverage.describe(BloomScope.PUBLIC)).isEqualTo("TLP:CLEAR only");
+        assertThat(BloomCoverage.describe(BloomScope.TENANT)).contains("AMBER", "your tenant");
+        assertThat(BloomCoverage.NOT_COVERED).containsExactly("TLP:GREEN");
+    }
+
     @Test
     void aFullSnapshotIsRequiredWhenTheChainIsTooLongOrTooLarge() {
         BloomVersion first = BloomVersion.firstSnapshot(full(BloomScope.PUBLIC, TenantId.PUBLIC));

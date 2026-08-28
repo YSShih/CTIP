@@ -108,7 +108,7 @@
 | M2-12 | Bloom checksum 驗證通過 | 同 M2-10 |
 | M2-13 | `TLP:GREEN` 不進入 public bloom | `test -Dtest=BloomCoverageTest` |
 | M2-14 | Delta 生成與套用正確，`resultingChecksum` 相符 | `test -Dtest=BloomDeltaTest` |
-| M2-15 | Delta 鏈超過上限時回 `409 SNAPSHOT_REQUIRED` | 同 M2-14 |
+| M2-15 | Delta 鏈超過上限時回 `409 SNAPSHOT_REQUIRED` | `test -Dtest=SyncEndToEndTest` ¹ |
 | M2-16 | 完整同步流程端對端（manifest → delta → 套用 → 更新版本） | `test -Dtest=SyncEndToEndTest` |
 | M2-17 | manifest 含 `coverage` 與 `notCovered` 欄位 | 同 M2-16 |
 | M2-18 | 手動提交 IOC 走完整 pipeline，預設 `TLP:AMBER` | `test -Dtest=ManualSubmissionTest` |
@@ -119,8 +119,20 @@
 | M2-23 | ES 掛掉時 API 降級為 PostgreSQL（回 200 + `X-Search-Backend: postgres`） | `test -Dtest=SearchFallbackTest` |
 | M2-24 | Reconciliation 能偵測並修正 DB 與 ES 差異 | `test -Dtest=SearchReconciliationTest` |
 | M2-25 | `up.sh staging` 成功且未掛載原始碼 | `./environment/scripts/dod.sh phase2 M2-25` |
-| M2-26 | Playwright E2E：匿名搜尋、登入、建立 API key、提交 IOC | `cd frontend && npx playwright test` |
+| M2-26 | Playwright E2E：匿名搜尋、登入、建立 API key、提交 IOC | `cd frontend && npx playwright test` ² |
 | M2-27 | L1–L3 全通過，覆蓋率門檻達標 | `./mvnw -f backend/pom.xml verify -Ptest-integration` |
+
+> ¹ **判準改指向 `SyncEndToEndTest`（2026-08-28，Phase 16；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**：
+> 原本寫「同 M2-14」，而 `BloomDeltaTest` 驗的是**生成端**「鏈太長 → 改生 full」——
+> `409 SNAPSHOT_REQUIRED` 這個 HTTP 行為在 Phase 15 根本還不存在，該項因此是**假綠**。
+> `SyncEndToEndTest` 真的產生 25 段 delta 讓 `chainLength > BLOOM_MAX_DELTA_CHAIN` 在資料庫裡成立，
+> 再斷言 `409` + `code = SNAPSHOT_REQUIRED`，並確認 409 之後仍可下載 full（409 不消耗同步間隔）。
+>
+> ² **執行前置（2026-08-28，Phase 16）**：需 `cd frontend && npm ci` 與
+> `npx playwright install chromium`（瀏覽器本體屬本機／CI 前置，非專案交付物，同 `gh` CLI 的處置）。
+> `webServer` 會自己跑 `npm run build && npm run preview`，因此不需要另外起 dev server。
+> 四個情境以 `page.route` 攔截 API 邊界執行（[12 §12.8](12-frontend.md#128-前端測試)）；
+> 整套環境的驗證由 M2-25 與 M3-05 負責。
 
 **27 項，全部可執行。**
 

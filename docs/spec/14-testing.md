@@ -108,6 +108,12 @@ L1 測試**不得**使用 `@SpringBootTest`、`@MockBean` 或任何 Spring 註�
 覆蓋率門檻：`features/**` 與 `components/**` 行覆蓋率 ≥ 70%（Vitest coverage，`v8` provider）。
 `src/api/generated/**` 排除。
 
+> **E2E（Playwright）不在上表的 L1–L4 之內**（2026-08-28，Phase 16；
+> [ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）：它跑在瀏覽器裡、
+> 由 `frontend/playwright.config.ts` 而非 Maven profile 驅動，因此 `@Tag` 分層與 JaCoCo 門檻都不適用。
+> Vitest 的 `test.include` 必須排除 `e2e/`（否則它會把 Playwright 的 spec 當成自己的測試而失敗）。
+> 位置、API 邊界與對整套環境執行的方式見 [12 §12.8](12-frontend.md#128-前端測試)。
+
 ---
 
 ## 14.7 測試資料

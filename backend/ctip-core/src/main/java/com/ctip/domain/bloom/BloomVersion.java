@@ -123,6 +123,20 @@ public final class BloomVersion {
                 artifact));
     }
 
+    /**
+     * 套用<strong>到本版本為止</strong>,位元陣列應有的 SHA-256。
+     *
+     * <p>full 是 artifact 本身的 checksum;delta 是它的 {@code resultingChecksum}
+     * (不變量 L6:full 沒有後者、delta 一定有)。manifest 用它表達「完全同步後你的陣列
+     * 應該長什麼樣」,{@code /sync/delta} 用它讓 client 套用後自我驗證(§11.5、§11.6)
+     * ——兩處若各自判斷 full/delta,任一邊寫錯就會讓所有 client 的驗證恆為失敗。
+     */
+    public Checksum arrayChecksum() {
+        return state.fullSnapshot()
+                ? state.artifact().checksum()
+                : state.artifact().resultingChecksum();
+    }
+
     /** L4:client 的本地參數與本版本不相容時,必須重下 full snapshot。 */
     public boolean isCompatibleWith(BloomParameters clientParameters) {
         return state.parameters().isCompatibleWith(clientParameters);

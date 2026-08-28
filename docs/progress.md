@@ -8,7 +8,7 @@
 | Milestone | Phase | 狀態 |
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
-| M2 — Platform | 13–19 | 進行中:Phase 13 完成,下一步 Phase 14 |
+| M2 — Platform | 13–19 | 進行中:Phase 16 完成,下一步 Phase 17 |
 | M3 — Production | 20–23 | 未開始 |
 
 ---
@@ -1135,3 +1135,79 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     且 `BLOOM_PUBLIC_CAPACITY` 縮成 100,000(預設 1,000 萬 → 每份 18MB);新測試沿用即可
   - tenant bloom 需要**真實存在的租戶**(`bloom_versions.tenant_id` 有 FK):用 `support/BloomTenants`
     自建租戶並指派方案,不要動種子的 demo 租戶(其他測試共用)
+
+---
+
+## Phase 16 — 增量同步 API 與 client 契約
+
+- **狀態**:done(2026-08-28)
+- **執行單**:`docs/spec/phases/phase-16.md`
+- **Commit**:(見 git log,message `Phase 16: incremental sync API and client contract`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest=SyncEndToEndTest`(逐字)✅ **4/4**
+    (完整流程、manifest coverage、鏈過長 409、base 不在現行 dataset 409)
+  - `cd frontend && npm run test -- SyncPage`(逐字)✅ **6/6**
+  - `clean verify -Ptest-integration` 無過濾 ✅ **727 tests**
+    (sdk 13 + core 316 + adapters 33 + app 365;Spotless / Checkstyle / JaCoCo 全過)
+  - 前端 `npm run test` ✅ 121、`npx tsc --noEmit` ✅、`npm run lint` ✅、`format:check` ✅、
+    coverage lines 85.43%(門檻 70%)
+  - `npx playwright test` ✅ **3/3**(匿名搜尋、Bloom 說明頁、登入→建 API key→提交 IOC)
+  - `dod.sh phase2 --only M2-10/13/14/15/16/17` ✅ 6/6;`--only M2-26` ✅ 1/1;
+    `dod.sh full --only M3-24` ✅(規格回寫後複跑)
+  - `dod.sh mvp` 回歸 ✅ **38/38**
+- **交付物**:
+  - core/application `sync/`:`SyncService`(manifest / download / delta 的唯一判定點)、
+    `SyncManifest`/`SyncDelta`/`BloomDownload`、`SnapshotRequiredException`、`SyncTooFrequentException`;
+    port `SyncThrottlePort`;`BloomStoragePort.readStored`(回儲存體原始位元組)
+  - core/domain:`BloomCoverage`(coverage / notCovered 的文字與成員條件同一處維護)、
+    `BloomVersion.arrayChecksum()`、`BloomDeltaCodec.merge`(區間併集)、
+    `BloomScopePlanner.hasTenantBloom`(生成端與下載端共用的成員資格判定)
+  - app:`SyncController` + `SyncApi`(OpenAPI,含 `X-Bloom-*` 標頭與三種錯誤的範例)、
+    `dto/sync/`(3 個 record)、`SyncDtoMapper`(base64url 在此發生)、
+    `InMemorySyncThrottle`、`ClientSubject`、`infrastructure/web/ClientIp`(限流與節流共用 IPv6 /64 收斂)、
+    `BloomVersionRepository.recordDownload`(04 表 23 的 `download_count`,定向 UPDATE)、
+    `ApiExceptionHandler` 補 409 SNAPSHOT_REQUIRED 與 429 + Retry-After、
+    CORS `exposedHeaders` 補七個 `X-Bloom-*`
+  - 前端:`features/sync/`(api + hook + `BloomLayerTable` + `BloomSemanticsNotice`)、
+    `pages/SyncPage`(路由 `/sync`,匿名可存取)、主導覽加「Bloom 同步」、MSW handler
+  - **Playwright 骨架**(ADR 0022 歸位):`@playwright/test` 1.62.1、`playwright.config.ts`
+    (webServer 跑 `build && preview`;`E2E_BASE_URL` 可改對整套環境跑)、`e2e/stubs.ts`、
+    `e2e/smoke.spec.ts`、`e2e/session.spec.ts`——**M2-26 的四個情境全數覆蓋**
+  - 文件:`docs/api/sync-client-contract.md`(§11.7 六條 + 位元格式 + 流程 + 錯誤表)、
+    `docs/api/README.md`(索引 + **公開情資誤判申訴流程**——Phase 14 該寫進 `docs/api/` 但漏了)
+  - 測試:`SyncEndToEndTest`(判準)、`SyncAuthorizationTest`(匿名/方案/429)、
+    `SyncServiceTest`(core 13 條)、`BloomVersionTest` 補 `arrayChecksum` 與 coverage 文字、
+    support `SyncTestClient` / `SyncFlowSteps`(把 §11.6 的四個步驟寫成看得懂的流程)
+- **偏離事項 / ADR**:11 項見 `docs/architecture/decisions/0025-phase16-sync-api-decisions.md`;
+  規格回寫 `00 §0.22`(11 §11.5/§11.6/§11.7、09 §9.1、05 §5.1、12 §12.8、14 §14.6、15 §15.2)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **manifest 的 `checksum` 照字面取「最新版本 artifact 的 checksum」會永遠對不上**:
+     最新版本是 delta 時那算的是 varint payload 的雜湊。定調為「完全同步後陣列應有的 SHA-256」
+     (`arrayChecksum()`),並讓 manifest 與 `/sync/delta` 共用同一個方法
+  2. **§11.6 第 4 步「更新版本」沒說更新成哪個數字**——照 manifest 記會產生 Bloom 的
+     **false negative**(陣列少了 delta 的位元卻自認最新)。因此下載回應必帶 `X-Bloom-*`;
+     自我驗證(空區間也有 `resultingChecksum`)是第二道防線
+  3. **409 若也消耗同步間隔,復原路徑永遠走不完**:client 收到 409 必須改下載 full,
+     下一步會立刻撞 429。節流因此只在「已確定回 200」之後才記帳
+  4. **M2-15 是假綠**:它跑 `BloomDeltaTest`(生成端),而 `409` 的 HTTP 行為在 Phase 15 不存在。
+     判準已改指向 `SyncEndToEndTest`(真的產生 25 段 delta),`dod.sh` 同步
+  5. **`min_sync_interval_seconds` 的記帳對象不能是 tenant**:匿名一律綁 public tenant,
+     以 tenant 記帳等於全體匿名 client 共用一個額度(第一個同步完,其他人整天 429)
+  6. `OpenApiCompletenessTest` 的 2xx 檢查寫死 `application/json`,會逼 octet-stream 的下載端點
+     假裝自己回 JSON——判準改為「任一 2xx 有非空 content」
+  7. **Phase 14 漏交的 `docs/api/` 誤判申訴說明**(09 §9.7 明文要求)本 phase 一併補上
+  8. **`bloom_artifacts.download_count` 自 Phase 15 就存在卻從未被寫入**(規則 16 的永不可達欄位)——
+     下載端點是它唯一可能的呼叫端,本 phase 補上定向 UPDATE。順帶抓到:`download()` 若宣告
+     `@Transactional(readOnly = true)`,那個 UPDATE 會被 PostgreSQL 直接拒絕(整合測試實測),
+     而把 18MB 檔案讀取包在交易裡本來就不該做 → 該方法改為不宣告方法層交易
+- **給下一 session 的注意事項(Phase 17 = Redis 快取 + 分散式限流)**:
+  - **`SyncThrottlePort` 要一併換 Redis 實作**:`SETEX subject <interval> <timestamp>`,
+    TTL 讓逐出自動發生;現行 `InMemorySyncThrottle` 僅單一實例正確(與 `InMemoryRateLimiter` 同一定位)
+  - 限流維度 1–3(key/user/tenant)本 phase **沒有**實作;`ClientSubject`(API key → user → IP)
+    已可直接當那三個維度的鍵來源,IPv6 /64 收斂在 `infrastructure/web/ClientIp`
+  - ⚠️ **維度 4(匿名 IP)必須留在認證之前**(ADR 0012 決策 16),不得把它一起搬到認證之後
+  - 整合測試的限流器與節流狀態**在記憶體中跨測試類共用**:新測試一律用自己的 client IP
+    (本 phase 用 `10.30.0.16/.21/.22`),否則會互相把對方的額度用掉
+  - `npx playwright test` 需要 `npx playwright install chromium`(本機已裝);CI 上要記得加這一步
+  - 前端 `api:check` 會比對 `docs/api/openapi.json` 產生的型別與 committed 版本——
+    改動任何 DTO 後要跑 `OpenApiCompletenessTest` 再 `npm run api:generate` 並一起 commit

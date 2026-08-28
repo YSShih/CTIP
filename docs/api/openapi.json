@@ -107,6 +107,76 @@
         },
         "type" : "object"
       },
+      "BloomManifestDto" : {
+        "properties" : {
+          "bitSize" : {
+            "example" : 143775880,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "bloomVersion" : {
+            "example" : 42,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "capacity" : {
+            "example" : 10000000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "checksum" : {
+            "example" : "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+            "type" : "string"
+          },
+          "compression" : {
+            "example" : "ZSTD",
+            "type" : "string"
+          },
+          "coverage" : {
+            "example" : "TLP:CLEAR only",
+            "type" : "string"
+          },
+          "datasetVersion" : {
+            "example" : 128,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "falsePositiveRate" : {
+            "example" : 0.001,
+            "format" : "double",
+            "type" : "number"
+          },
+          "fingerprintAlgorithm" : {
+            "example" : "SHA256",
+            "type" : "string"
+          },
+          "generatedAt" : {
+            "example" : "2026-08-21T04:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "hashFunctionCount" : {
+            "example" : 10,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "memberCount" : {
+            "example" : 8342119,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "scope" : {
+            "example" : "PUBLIC",
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "example" : 17971985,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "DailyCountDto" : {
         "properties" : {
           "count" : {
@@ -891,6 +961,70 @@
           "planCode" : {
             "example" : "PREMIUM",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SyncDeltaDto" : {
+        "properties" : {
+          "addedBits" : {
+            "example" : "wYCBAsQF",
+            "type" : "string"
+          },
+          "addedMemberCount" : {
+            "example" : 15320,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "baseVersion" : {
+            "example" : 40,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "checksum" : {
+            "example" : "9f2c1a7b3d5e0f4a8c6b2d1e3f5a7c9b0d2e4f6a8c1b3d5e7f9a0c2e4b6d8f1a",
+            "type" : "string"
+          },
+          "datasetVersion" : {
+            "example" : 128,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "resultingChecksum" : {
+            "example" : "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+            "type" : "string"
+          },
+          "scope" : {
+            "example" : "PUBLIC",
+            "type" : "string"
+          },
+          "targetVersion" : {
+            "example" : 42,
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SyncManifestDto" : {
+        "properties" : {
+          "maxDeltaChain" : {
+            "example" : 24,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "notCovered" : {
+            "example" : [ "TLP:GREEN" ],
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "public" : {
+            "$ref" : "#/components/schemas/BloomManifestDto"
+          },
+          "tenant" : {
+            "$ref" : "#/components/schemas/BloomManifestDto"
           }
         },
         "type" : "object"
@@ -3038,6 +3172,316 @@
         "tags" : [ "Subscription" ]
       }
     },
+    "/api/v1/sync/bloom" : {
+      "get" : {
+        "description" : "Streams the newest full snapshot for the scope as binary, encoded with the compression named in the manifest. Verify X-Bloom-Checksum against the SHA-256 of the decompressed array before use, and store X-Bloom-Dataset-Version / X-Bloom-Version as your local version — the manifest's bloomVersion is the newest version reachable via delta, not the version of this artifact. Download authorization follows the plan (public_bloom_enabled / tenant_bloom_capacity) and consumes the sync interval (429 when called again too soon). 認證:需要 sync:bloom(ANONYMOUS 角色亦持有);scope=TENANT 另需方案含 tenant Bloom。",
+        "operationId" : "bloom",
+        "parameters" : [ {
+          "description" : "Which Bloom layer to download",
+          "example" : "PUBLIC",
+          "in" : "query",
+          "name" : "scope",
+          "required" : false,
+          "schema" : {
+            "default" : "PUBLIC",
+            "enum" : [ "PUBLIC", "TENANT" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/octet-stream" : {
+                "schema" : {
+                  "format" : "binary",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "The compressed bit array",
+            "headers" : {
+              "X-Bloom-Bit-Size" : {
+                "description" : "bitSize (m); the array is ceil(m/8) bytes",
+                "schema" : {
+                  "type" : "integer"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Checksum" : {
+                "description" : "SHA-256 of the uncompressed bit array",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Compression" : {
+                "description" : "ZSTD | GZIP | NONE",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Dataset-Version" : {
+                "description" : "datasetVersion of this artifact",
+                "schema" : {
+                  "type" : "integer"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Hash-Count" : {
+                "description" : "hashFunctionCount (k)",
+                "schema" : {
+                  "type" : "integer"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Scope" : {
+                "description" : "PUBLIC or TENANT",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              },
+              "X-Bloom-Version" : {
+                "description" : "bloomVersion of this artifact (0 for a full snapshot)",
+                "schema" : {
+                  "type" : "integer"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "PLAN_LIMIT_EXCEEDED — the plan does not include this Bloom layer"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "format" : "byte",
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "NOT_FOUND — no snapshot has been generated yet"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Download a full Bloom snapshot",
+        "tags" : [ "Sync" ]
+      }
+    },
+    "/api/v1/sync/delta" : {
+      "get" : {
+        "description" : "Returns every bit index added between `base` and the newest version of the current dataset, encoded as ascending-deduplicated LEB128 varint deltas in base64url without padding. Apply them, then verify `resultingChecksum`; on mismatch discard and download a full snapshot. 409 SNAPSHOT_REQUIRED when the chain is too long, when no snapshot exists yet, or when `base` is not part of the current dataset. 認證:需要 sync:delta(匿名不持有)。",
+        "operationId" : "delta",
+        "parameters" : [ {
+          "description" : "The caller's local bloomVersion",
+          "example" : 40,
+          "in" : "query",
+          "name" : "base",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "description" : "Which Bloom layer to sync",
+          "example" : "PUBLIC",
+          "in" : "query",
+          "name" : "scope",
+          "required" : false,
+          "schema" : {
+            "default" : "PUBLIC",
+            "enum" : [ "PUBLIC", "TENANT" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "addedBits" : "wYCBAsQF",
+                  "addedMemberCount" : 15320,
+                  "baseVersion" : 40,
+                  "checksum" : "9f2c1a7b3d5e0f4a8c6b2d1e3f5a7c9b0d2e4f6a8c1b3d5e7f9a0c2e4b6d8f1a",
+                  "datasetVersion" : 128,
+                  "resultingChecksum" : "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+                  "scope" : "PUBLIC",
+                  "targetVersion" : 42
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SyncDeltaDto"
+                }
+              }
+            },
+            "description" : "Bits added between base and target"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Missing sync:delta permission (FORBIDDEN) or plan without this Bloom layer"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "code" : "SNAPSHOT_REQUIRED",
+                  "message" : "Delta chain too long, download full snapshot",
+                  "path" : "/api/v1/sync/delta",
+                  "status" : 409,
+                  "timestamp" : "2026-08-21T08:00:00Z",
+                  "traceId" : "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "SNAPSHOT_REQUIRED — download a full snapshot instead"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Get the delta since a base version",
+        "tags" : [ "Sync" ]
+      }
+    },
+    "/api/v1/sync/manifest" : {
+      "get" : {
+        "description" : "Metadata for both Bloom layers plus the mandatory coverage disclosure. `checksum` is the SHA-256 the local bit array must have once fully synced, and `sizeBytes` is the uncompressed array length; `compression` is the transport encoding used by GET /sync/bloom. A layer is omitted when there is nothing to sync there (no snapshot yet, or the plan has no tenant Bloom). This endpoint is not rate-limited by min_sync_interval_seconds so clients can poll it cheaply. 認證:需要 sync:bloom(ANONYMOUS 角色亦持有)。",
+        "operationId" : "manifest",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "maxDeltaChain" : 24,
+                  "notCovered" : [ "TLP:GREEN" ],
+                  "public" : {
+                    "bitSize" : 143775880,
+                    "bloomVersion" : 42,
+                    "capacity" : 10000000,
+                    "checksum" : "3f5a1c9d0e2b4a6f8c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a7b9c1d3e5a",
+                    "compression" : "ZSTD",
+                    "coverage" : "TLP:CLEAR only",
+                    "datasetVersion" : 128,
+                    "falsePositiveRate" : 0.001,
+                    "fingerprintAlgorithm" : "SHA256",
+                    "generatedAt" : "2026-08-21T04:00:00Z",
+                    "hashFunctionCount" : 10,
+                    "memberCount" : 8342119,
+                    "scope" : "PUBLIC",
+                    "sizeBytes" : 17971985
+                  }
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SyncManifestDto"
+                }
+              }
+            },
+            "description" : "Manifest for the layers the caller may sync"
+          },
+          "403" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Missing sync:bloom permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Get the Bloom sync manifest",
+        "tags" : [ "Sync" ]
+      }
+    },
     "/api/v1/version" : {
       "get" : {
         "description" : "Returns the API contract version (v1) and the build version of the running application (dev when running from sources). 認證:匿名。",
@@ -3103,6 +3547,9 @@
   }, {
     "description" : "Liveness and version. Authentication: anonymous.",
     "name" : "System"
+  }, {
+    "description" : "Bloom filter manifest, snapshot download and delta sync (11 §11.5). A Bloom hit means MAYBE PRESENT and must be verified with POST /api/v1/iocs/lookup; a miss only means the value is not in that Bloom's member set — TLP:GREEN has no Bloom coverage.",
+    "name" : "Sync"
   }, {
     "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
     "name" : "IOC"

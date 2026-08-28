@@ -86,6 +86,52 @@ public final class TestPlans {
                 plan.maxImportRowsPerFile());
     }
 
+    /** 只改最小同步間隔(11 §11.6;0 = 不限制)。 */
+    public static UnaryOperator<Plan> minSyncIntervalSeconds(int value) {
+        return plan -> new Plan(
+                plan.id(),
+                plan.code(),
+                plan.name(),
+                plan.tier(),
+                plan.requestsPerMinute(),
+                plan.requestsPerDay(),
+                plan.maxPageSize(),
+                plan.maxBatchLookup(),
+                value,
+                plan.publicBloomEnabled(),
+                plan.tenantBloomCapacity(),
+                plan.websocketEnabled(),
+                plan.maxWebhooks(),
+                plan.maxApiKeys(),
+                plan.customFeedEnabled(),
+                plan.stixExportMaxObjects(),
+                plan.maxManualSubmissionsPerDay(),
+                plan.maxImportRowsPerFile());
+    }
+
+    /** 只改「是否可下載 public Bloom」(11 §11.5 的下載授權)。 */
+    public static UnaryOperator<Plan> publicBloomEnabled(boolean value) {
+        return plan -> new Plan(
+                plan.id(),
+                plan.code(),
+                plan.name(),
+                plan.tier(),
+                plan.requestsPerMinute(),
+                plan.requestsPerDay(),
+                plan.maxPageSize(),
+                plan.maxBatchLookup(),
+                plan.minSyncIntervalSeconds(),
+                value,
+                plan.tenantBloomCapacity(),
+                plan.websocketEnabled(),
+                plan.maxWebhooks(),
+                plan.maxApiKeys(),
+                plan.customFeedEnabled(),
+                plan.stixExportMaxObjects(),
+                plan.maxManualSubmissionsPerDay(),
+                plan.maxImportRowsPerFile());
+    }
+
     /** 只改每分鐘請求上限(限流測試用;真實值 60 打起來太慢)。 */
     public static UnaryOperator<Plan> requestsPerMinute(long value) {
         return plan -> new Plan(

@@ -48,6 +48,22 @@ public class BloomScopePlanner {
         return targets;
     }
 
+    /**
+     * 這個租戶有沒有 tenant Bloom(§11.2 的成員資格判定,<strong>唯一</strong>判定點)。
+     *
+     * <p>{@code /sync/manifest} 與 {@code /sync/bloom?scope=TENANT} 的授權也走這裡:
+     * 若生成端與下載端各寫一份判定,任一邊漂移就會出現「manifest 說有、下載回 403」
+     * 或更糟的「方案沒有 tenant Bloom 卻仍生成」。public tenant 恆為 false
+     * ——匿名綁在它身上,而它沒有也不得有訂閱(不變量 T3)。
+     */
+    public boolean hasTenantBloom(TenantId tenantId) {
+        if (tenantId.isPublic()) {
+            return false;
+        }
+        QuotaLimit entitlement = quotas.planFor(tenantId).tenantBloomCapacity();
+        return !entitlement.isUnlimited() && !entitlement.isDisabled();
+    }
+
     public BloomTarget publicTarget() {
         return new BloomTarget(
                 BloomScope.PUBLIC,
@@ -65,10 +81,10 @@ public class BloomScopePlanner {
      * fail-closed:只有正整數才產生 tenant bloom。
      */
     public Optional<BloomTarget> tenantTarget(TenantId tenantId) {
-        QuotaLimit entitlement = quotas.planFor(tenantId).tenantBloomCapacity();
-        if (entitlement.isUnlimited() || entitlement.isDisabled()) {
+        if (!hasTenantBloom(tenantId)) {
             return Optional.empty();
         }
+        QuotaLimit entitlement = quotas.planFor(tenantId).tenantBloomCapacity();
         long memberCount = members.countMembers(BloomScope.TENANT, tenantId);
         long sized = Math.max(settings.tenantDefaultCapacity(), memberCount);
         long capacity = Math.min(sized, entitlement.orElse(sized));

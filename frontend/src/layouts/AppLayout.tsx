@@ -32,6 +32,7 @@ import { cn } from '../utils/cn';
 const NAV_ITEMS = [
   { to: '/', label: '儀表板', end: true },
   { to: '/iocs', label: 'IOC 檢索', end: false },
+  { to: '/sync', label: 'Bloom 同步', end: false },
 ];
 
 /** 次要導覽連結(需權限者才會出現);窄螢幕收起,主導覽仍在。 */

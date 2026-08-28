@@ -193,10 +193,46 @@ k = max(1, round((m / n) * ln 2))       // hashFunctionCount
 
 `coverage` 與 `notCovered` 為**必填**——client 開發者必須在 manifest 就看到覆蓋範圍限制。
 
+> **實作回饋修訂（2026-08-28；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**——
+> 本節的欄位沒說 `checksum` 與 `sizeBytes` 屬於哪一個版本，而兩種讀法只有一種能用：
+>
+> | 欄位 | 定調 | 為什麼 |
+> |---|---|---|
+> | `checksum` | 「**完全同步後**你的陣列應有的 SHA-256」= `BloomVersion.arrayChecksum()`（full 用 artifact checksum、delta 用 `resultingChecksum`，不變量 L6） | 最新版本是 delta 時，artifact 的 checksum 算的是 varint payload 的雜湊，client 拿它驗自己的陣列**永遠不會相符** |
+> | `sizeBytes` | **未壓縮**陣列長度 `ceil(bitSize / 8)` | 本節範例的 17,971,985 正是 `143775880 / 8`，而同一範例的 `compression` 是 `ZSTD`——若指壓縮後大小，兩個數字不可能相等。壓縮後的位元組數由 `Content-Length` 表達 |
+> | `public` / `tenant` | 沒有可同步的那一層**整個欄位省略**（不是給 `null`） | springdoc 不會把 Java 端的 `Optional` 對應成 nullable；省略才讓 `openapi.json`（以及由它產生的 client 型別）與 wire 上的形狀一致 |
+>
+> 另:manifest **不受** `min_sync_interval_seconds` 限制。§11.6 的流程第 1 步就是它，client 得先讀
+> 才知道要不要同步、參數是否已作廢；ANONYMOUS 的 86,400 秒若套在 manifest 上，等於一天只能問一次
+> 「有沒有新版本」，而該省的是 18MB 的傳輸而不是幾百 bytes 的 metadata。
+
 ### `GET /api/v1/sync/bloom?scope=PUBLIC|TENANT`
 
 回 `302` 至簽章下載 URL，或直接回二進位串流（依 `storage_kind`）。
 下載授權依方案（`plans.public_bloom_enabled` / `tenant_bloom_capacity`）。
+
+> **實作回饋修訂（2026-08-28；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**
+>
+> 1. **採直接串流**：簽章 URL 需要一組簽章金鑰，而 [§5.4](05-environment.md#54-環境變數清單) 沒有
+>    任何對應的環境變數；目前只有 `FILESYSTEM` 一種 `storage_kind`，為它新增設定項屬預先建置（規則 18）。
+>    回應主體是**儲存體中的原始位元組**，即已依 `compression` 壓縮過的內容（§11.4「僅影響傳輸」）。
+> 2. **回應必須自報版本**（否則會產生 false negative）。manifest 的 `bloomVersion` 是
+>    「delta 可以到達的最新版本」，而本端點回的是該 dataset 的 **full snapshot**（`bloomVersion = 0`）。
+>    §11.6 第 4 步只寫「更新版本」，沒說更新成哪一個數字——照 manifest 記，client 的陣列會少掉那些
+>    delta 的位元卻自認最新。**強制標頭**：
+>
+>    | 標頭 | 內容 |
+>    |---|---|
+>    | `X-Bloom-Scope` | `PUBLIC` / `TENANT` |
+>    | `X-Bloom-Dataset-Version` / `X-Bloom-Version` | 這份 artifact 自己的版號 |
+>    | `X-Bloom-Checksum` | **未壓縮**位元陣列的 SHA-256 |
+>    | `X-Bloom-Compression` | 回應主體的編碼 |
+>    | `X-Bloom-Bit-Size` / `X-Bloom-Hash-Count` | `m` / `k` |
+>
+>    七個標頭必須列入 CORS 的 `exposedHeaders`——瀏覽器 client 讀不到未 expose 的標頭。
+> 3. 方案不含該層 Bloom 回 **403 `PLAN_LIMIT_EXCEEDED`**（非時間窗的能力上限，§9.7）;
+>    尚未產生任何 snapshot 回 **404**。匿名對 `scope=TENANT` 即落在前者
+>    （ANONYMOUS 的 `tenant_bloom_capacity` 為 `NULL` → §11.2 的 fail-closed）。
 
 ### `GET /api/v1/sync/delta?base=<n>&scope=`
 
@@ -222,6 +258,19 @@ k = max(1, round((m / n) * ln 2))       // hashFunctionCount
 
 `resultingChecksum` 讓 client 套用後可自我驗證。不符則丟棄並重下 full。
 
+> **實作回饋修訂（2026-08-28；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**
+>
+> 1. 請求參數只有 `base` 與 `scope`，沒有 dataset，因此 **`base` 一律解讀為「現行 dataset 內的
+>    `bloomVersion`」**。`base` 不在現行 dataset 的鏈上 → `409 SNAPSHOT_REQUIRED`
+>    （與「鏈太長」「尚無 snapshot」同一個出口——client 的動作三者相同）。
+> 2. `addedBits` 是 `base` 到最新版本之間各段 delta 的**併集**後重新編碼；位元只會由 0 變 1，
+>    併集與逐段依序套用對陣列的作用完全相同（§11.3），故 `resultingChecksum` 取最後一段的即可。
+> 3. **`base` 已是最新版本時回 `200` + 空的 `addedBits`，`resultingChecksum` 仍為必填**
+>    （full 用自己的 checksum）。那是唯一能讓「本地陣列其實不是這個版本」的 client 發現自己
+>    記錯版本的檢查，不得省略。
+> 4. `409` **不消耗** `min_sync_interval_seconds` 的額度：client 收到它必須改下載 full snapshot，
+>    若 409 也記帳，那一步會立刻撞上 `429`，整條復原路徑永遠走不完。
+
 > **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**——
 > 本節的 `checksum` 與 [04 表 23](04-data-dictionary.md) 的 `checksum` 對 delta 的說法相反
 > （表 23 寫「未壓縮**位元陣列**的 SHA-256」，本節寫「addedBits payload 的 SHA-256」）。
@@ -245,12 +294,24 @@ k = max(1, round((m / n) * ln 2))       // hashFunctionCount
               200 → 套用 → 驗證 resultingChecksum
                      符合 → 更新本地版本，結束
                      不符 → 丟棄，跳至 4
-4. GET /api/v1/sync/bloom → 驗證 checksum → 取代本地 → 更新版本
+4. GET /api/v1/sync/bloom → 依 X-Bloom-Compression 解壓 → 驗 X-Bloom-Checksum
+       → 取代本地 → 版本記為 X-Bloom-Dataset-Version / X-Bloom-Version
 ```
 
 Client 必須能保存自己最後成功同步的 `datasetVersion` 與 `bloomVersion`。
 
+> **實作回饋修訂（2026-08-28；[ADR 0025](../architecture/decisions/0025-phase16-sync-api-decisions.md)）**：
+> 第 4 步的「更新版本」**必須取下載回應的標頭**，不得取 manifest 的 `bloomVersion`——
+> 後者是「delta 可以到達的最新版本」，而下載到的是 full snapshot（`bloomVersion = 0`）。
+> 記錯的 client 會少掉那些 delta 的位元卻自認最新，而 Bloom 的 **false negative 是不可接受的錯誤**。
+> 第二道防線是第 3 步的自我驗證：記錯版本者下次要 delta 時 `resultingChecksum` 會對不上，於是重下 full。
+
 同步頻率受 `plans.min_sync_interval_seconds` 限制；過於頻繁回 `429`。
+**`GET /sync/manifest` 不在此限制內**（見 §11.5 的修訂）；`0` 表示不限制。
+記帳對象是呼叫者身分（API key → 使用者 → 匿名 IP，[§10.7](10-identity-plans.md#107-限流) 的維度順序），
+**不是 tenant**——匿名一律綁 public tenant，以 tenant 記帳會讓全體匿名 client 共用一個額度。
+狀態由 `SyncThrottlePort` 承載（M2 記憶體、Phase 17 起 Redis），刻意不建資料表：
+它是純節流狀態，遺失只會讓某個 client 早一點可以再同步一次。
 
 ### 精確驗證
 
@@ -275,6 +336,10 @@ Bloom 命中後以 `POST /api/v1/iocs/lookup` 精確驗證（**不是** `/sync/c
 | 5 | 套用 delta 後必須驗證 `resultingChecksum`，不符則重下 full |
 | 6 | 位元序為 LSB-first；索引算法見 11.4，**不得自行選用其他雜湊族** |
 
+已複製進 [`docs/api/sync-client-contract.md`](../api/sync-client-contract.md)（Phase 16 交付），
+並在 `openapi.json` 的 `Sync` tag 與各 operation 描述中重述前兩條——只寫在另一份文件裡的警告，
+對只看 generated client 的開發者等於不存在。
+
 ---
 
-*檔案結束。上次校對：2026-08-21。*
+*檔案結束。上次校對：2026-08-28（Phase 16 實作回饋）。*

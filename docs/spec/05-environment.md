@@ -36,7 +36,7 @@ CTIP/
 ├── backend/                        ← Maven multi-module，見 01-architecture.md
 ├── docs/
 │   ├── architecture/{overview.md,security.md,decisions/}
-│   ├── api/{openapi.json,events/}
+│   ├── api/{README.md,openapi.json,sync-client-contract.md,events/}
 │   ├── deployment/{licensing.md,privacy.md}
 │   ├── development/{getting-started.md,plugin-sdk.md,version-audit.md}
 │   └── spec/                       ← 本規格書（本版新增）
