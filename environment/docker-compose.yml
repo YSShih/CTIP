@@ -156,6 +156,14 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     volumes:
       - kafka-data:/var/lib/kafka/data
+    # 沒有 healthcheck 時,up.sh 只能看容器是否 running,無法判斷 broker 是否真的可用
+    # ——依賴它的服務會在「已啟動但還沒 ready」的窗口失敗(ADR 0018)
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
 
   elasticsearch:
     <<: *app-common
@@ -165,10 +173,14 @@ services:
       discovery.type: single-node
       ES_JAVA_OPTS: ${ES_JAVA_OPTS:--Xms1g -Xmx1g}
       xpack.security.enabled: ${ES_SECURITY_ENABLED:-false}
+      # security 開啟時 ES 需要 elastic 使用者的密碼;沒給的話它會自動產生並只印在日誌裡,
+      # 而 healthcheck 與應用都拿不到 → 容器 healthy 不了(ADR 0018)
+      ELASTIC_PASSWORD: ${ELASTICSEARCH_PASSWORD:-}
     volumes:
       - es-data:/usr/share/elasticsearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      # security 關閉時不帶憑證;開啟時必須帶,否則 _cluster/health 回 401
+      test: ["CMD-SHELL", "curl -fsS ${ELASTIC_PASSWORD:+-u elastic:$$ELASTIC_PASSWORD} http://localhost:9200/_cluster/health || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 15

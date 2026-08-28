@@ -1,0 +1,23 @@
+# CTIP Prometheus 設定(docs/spec/13-platform-ops.md §13.6)。
+#
+# 沒有這個檔案時,prom/prometheus 的預設 Cmd(--config.file=/etc/prometheus/prometheus.yml)
+# 會找不到檔案而立刻 ERROR 退出——而 compose 把整個目錄掛成 /etc/prometheus,
+# 連 image 內建的預設設定都被遮蔽。up.sh 對 exited 的服務直接 die,
+# 於是 `up.sh staging`(M2-25)與所有 full profile 的環境都起不來(ADR 0018)。
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: "${ENVIRONMENT:-unknown}"
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [ "localhost:9090" ]
+
+  # backend 的 actuator。注意:prod 的 ACTUATOR_EXPOSED_ENDPOINTS 必須含 prometheus,
+  # 否則這個 job 會一直 404(§13.6、§5.5 差異表)。
+  - job_name: ctip-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [ "backend:8080" ]

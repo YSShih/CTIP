@@ -1,0 +1,14 @@
+# Dashboard provider。path 指向本目錄本身——dashboard JSON 與 provider 設定同放,
+# 因為 /var/lib/grafana 是 named volume,JSON 無法經這個掛載進去。
+apiVersion: 1
+providers:
+  - name: CTIP
+    orgId: 1
+    folder: CTIP
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false

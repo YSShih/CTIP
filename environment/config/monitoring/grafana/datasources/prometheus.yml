@@ -1,0 +1,11 @@
+# Grafana datasource provisioning(docs/spec/13-platform-ops.md §13.6)。
+# compose 把 config/monitoring/grafana 直接掛成 /etc/grafana/provisioning,
+# 因此本檔的位置就是 provisioning/datasources/。
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

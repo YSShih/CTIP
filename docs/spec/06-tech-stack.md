@@ -27,6 +27,7 @@
 | **Maven 相依** | 由 Spring Boot BOM 納管者**不得**寫版本號；未納管者於 parent pom `<properties>` 精確指定 |
 | **npm 相依** | `package-lock.json` 鎖定，CI 用 `npm ci` |
 | **升版權限** | **Coding LLM 不得自行升版任何 Maven／npm 相依，只能回報過期。** major 升級須人工核准並寫 ADR |
+| **GitHub Action** | 用 **major 浮動 tag**（`actions/checkout@v4`）。安全掃描類 action（Gitleaks、Trivy）**必須釘 commit SHA**——它們能讀到 repo 內容與 token，浮動 tag 等於把供應鏈信任交給第三方 |
 
 > Maven 沒有 lockfile，因此後端必須以 `mvn versions:display-dependency-updates` 定期複查（見 6.4）。v1.1 對前端要求了 `npm ci`，對後端沒有等價要求——本節補上。
 
@@ -101,6 +102,20 @@
 | JWT（Nimbus JOSE+JWT） | 隨 Spring Security | 隨 Boot | `spring-security-oauth2-jose`，由 BOM 決定；HS256 簽發／驗證（[10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2)）。**不新增獨立 JWT 函式庫** |
 | Flyway Maven Plugin | 隨 Boot BOM（`${flyway.version}`） | 隨 Boot | 只供 `migrate.sh` 的「不啟動應用、只跑 migration」場景；宣告在 parent、無 `<executions>`，不綁 lifecycle |
 | networknt json-schema-validator | 1.5.x（**test scope**） | ~ | 以 vendored OASIS STIX 2.1 JSON Schema 離線驗證產出（[ADR 0005](../architecture/decisions/0005-phase8-stix-projection-decisions.md)）。**不進 runtime classpath** |
+| **[P15/16]** Bloom 位元實作 | **自行實作** | — | §11.4 的 layout(LSB-first + SHA-256 fingerprint 的 Kirsch-Mitzenmacher 雙雜湊)排除所有現成函式庫——Guava `BloomFilter` 用 murmur3_128 與自有 layout,產不出該格式。**不得引入 Bloom 函式庫** |
+| **[P15/16]** ZSTD 壓縮 | `com.github.luben:zstd-jni` **1.5.7-15** ✅ | ~ | Bloom artifact 的預設壓縮(§11.4、04 表 23)。**Boot BOM 未納管**,版本於 parent pom `<properties>` 定義。JDK 只內建 GZIP/Deflate |
+| **[P17]** Spring Data Redis | 隨 Boot BOM | 隨 Boot | 模組 `spring-boot-data-redis`(見 6.3.6 第 1 條);client 為 Lettuce,亦由 BOM 納管 |
+| **[P17]** Bucket4j Redis 後端 | `com.bucket4j:bucket4j-redis`(隨 `${bucket4j.version}`) | ~ | 與 `bucket4j-core` 同版。⚠️ 該 artifact 的 provided 相依編譯目標是 Lettuce 6.1.8,而 BOM 納管 7.5.2——已逐一比對其參照的 class/method 在 7.5.2 皆存在,但升級 Lettuce 時須重驗 |
+| **[P17]** Redis Testcontainers | `com.redis:testcontainers-redis` | 隨 Boot | ⚠️ `org.testcontainers` **沒有** redis module;BOM 納管的是這個第三方座標 |
+| **[P19]** Elasticsearch client | 隨 Boot BOM(`elasticsearch-client.version`) | 隨 Boot | 模組 `spring-boot-elasticsearch` / `spring-boot-data-elasticsearch`。⚠️ **BOM 的 client 版本落後 6.2.4 的 server image 一個 minor**(client 9.4.x vs server 9.5.x);ES 的 client 相容前後一個 minor,但複查日須重驗 |
+| **[P19]** ES Testcontainers | `org.testcontainers:testcontainers-elasticsearch` | 隨 Boot | L4 測試 |
+| **[P20]** Spring Kafka | 隨 Boot BOM | 隨 Boot | 模組 `spring-boot-kafka` |
+| **[P20]** Kafka Testcontainers | `org.testcontainers:testcontainers-kafka` | 隨 Boot | L4 測試 |
+| **[P20]** WebSocket | 隨 Boot BOM | 隨 Boot | `spring-boot-starter-websocket`;協定與端點定義見 [09 §9.10](09-api.md) |
+| **[P22]** Prometheus registry | 隨 Boot BOM | 隨 Boot | `io.micrometer:micrometer-registry-prometheus` |
+| **[P22]** OpenTelemetry | 隨 Boot BOM | 隨 Boot | `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`(**SDK 模式**,不使用 java agent) |
+| **[P22]** 結構化日誌 | `net.logstash.logback:logstash-logback-encoder` **9.0** ✅ | ~ | 13 §13.6 明文指名。**Boot BOM 未納管**,版本於 parent pom `<properties>` 定義 |
+| **[P23]** CycloneDX Maven plugin | `org.cyclonedx:cyclonedx-maven-plugin` **2.9.3** ✅ | ~ | SBOM(M3-20)。**Boot BOM 未納管**,版本於 parent pom `<properties>` 定義 |
 | ~~Lombok~~ | **不使用** | — | **見 6.3.1** |
 
 ### 6.2.3 Frontend
@@ -132,6 +147,17 @@
 | `eslint-plugin-import` | 2.x | ~ | `no-restricted-paths`（feature 依賴規則） |
 | openapi-typescript | 7.x | ~ | 型別產生 |
 | MSW | 2.x | ~ | 前端 API mock |
+
+### 6.2.3b 安全掃描工具（CI，非專案相依）`[Phase 23 · M3]`
+
+以 GitHub Action 執行，不進 `pom.xml` / `package.json`。依 §6.1.2 的 Action 規則釘 commit SHA。
+
+| 工具 | 用途 | 備註 |
+|---|---|---|
+| OWASP Dependency-Check 或 Dependabot alerts | 相依弱點 | 二擇一即可（[13 §13.9](13-platform-ops.md)） |
+| Gitleaks | secret 掃描 | **釘 commit SHA** |
+| Trivy | 容器映像掃描 | **釘 commit SHA** |
+| CycloneDX（Maven plugin）+ `npm sbom` | SBOM | plugin 版本見 6.2.2 |
 
 ### 6.2.4 Infrastructure Images
 
@@ -240,9 +266,25 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
    而缺 `org.springframework.boot:spring-boot-flyway` 時，Flyway 的 autoconfig 根本不存在——
    **migration 靜默不執行**、應用照常啟動。日後引入 Redis／Kafka／ES 等時，同樣要確認對應的
    `spring-boot-<tech>` 模組在 classpath 上（皆由 BOM 納管，不寫版本）。
+
+   > **座標對照（2026-08-28 補入；[ADR 0018](../architecture/decisions/0018-version-table-and-environment.md)）**——
+   > 後續 phase 要用到的模組，避免重蹈 Flyway 的覆轍：
+   >
+   > | 技術 | autoconfig 模組 | starter | test slice |
+   > |---|---|---|---|
+   > | Redis | `spring-boot-data-redis` | `spring-boot-starter-data-redis` | `spring-boot-data-redis-test` |
+   > | Cache 抽象 | `spring-boot-cache` | `spring-boot-starter-cache` | `spring-boot-cache-test` |
+   > | Kafka | `spring-boot-kafka` | `spring-boot-starter-kafka` | `spring-boot-kafka-test` |
+   > | Elasticsearch（低階 client） | `spring-boot-elasticsearch` | `spring-boot-starter-elasticsearch` | `spring-boot-elasticsearch-test` |
+   > | Spring Data Elasticsearch | `spring-boot-data-elasticsearch` | `spring-boot-starter-data-elasticsearch` | `spring-boot-data-elasticsearch-test` |
+   >
+   > ⚠️ **`application.yml` 目前已宣告 `spring.data.redis.*`，但 classpath 上沒有任何 Redis autoconfig
+   > ——那些屬性現在完全惰性**。這正是本條地雷的活體樣本。
 2. **Testcontainers 2.x（Boot 4 BOM 納管）改了座標與套件**：artifact 一律帶 `testcontainers-` 前綴
    （`testcontainers-junit-jupiter`、`testcontainers-postgresql`……）；`PostgreSQLContainer` 移至
    `org.testcontainers.postgresql` 且**不再是泛型**。
+   ⚠️ **例外:Redis**。`org.testcontainers` 2.x **沒有** redis module（已逐一核對 2.0.5 BOM 的
+   64 個 artifact）；BOM 納管的是第三方 `com.redis:testcontainers-redis`（2026-08-28 補入）。
 3. **Boot 的 `spring.sql.init` script initializer 預設在 Flyway 之前執行**——對 Flyway 建立的表種資料
    必然失敗。本專案以自定義 initializer bean + `@DependsOn("flywayInitializer")` 修正
    （`ctip-app` 的 `SeedDataConfig`），勿退回 Boot 預設行為。
