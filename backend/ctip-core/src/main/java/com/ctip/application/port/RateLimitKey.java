@@ -20,6 +20,15 @@ public record RateLimitKey(String scope, String subject, Window window) {
         return new RateLimitKey("ip", normalizedIp, window);
     }
 
+    /**
+     * 手動提交的每日配額(§10.6 {@code max_manual_submissions_per_day})。
+     * 它是「時間窗內的計數」,依 §9.7 的三種語意走 429 + Retry-After,
+     * 因此與請求限流共用同一套視窗機制,而非另做一張計數表(ADR 0023)。
+     */
+    public static RateLimitKey manualSubmissions(java.util.UUID tenantId) {
+        return new RateLimitKey("submit", tenantId.toString(), Window.DAY);
+    }
+
     public String asString() {
         return "ratelimit:" + scope + ":" + subject + ":" + window.name().toLowerCase(java.util.Locale.ROOT);
     }

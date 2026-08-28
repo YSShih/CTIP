@@ -492,7 +492,7 @@ CONSTRAINT ux_permissions_code UNIQUE (code)
 CONSTRAINT ck_permissions_fmt  CHECK (code ~ '^[a-z]+:[a-z-]+$')
 ```
 
-完整權限清單（種子資料，共 21 項）：
+完整權限清單（種子資料，共 22 項）：
 
 ```text
 ioc:read      ioc:export     ioc:submit      ioc:import      ioc:report-fp   ioc:publish
@@ -501,6 +501,7 @@ source:read   stats:read
 sync:bloom    sync:delta
 apikey:create apikey:revoke
 webhook:manage
+subscription:read
 tenant:manage user:manage
 audit:read
 source:manage source:sync
@@ -514,6 +515,11 @@ system:admin
 > `ioc:publish`，已補回。另新增 `source:read`、`stats:read` 兩個唯讀權限（`GET /sources`、`GET /stats`
 > 原本完全沒有授權宣告，而 filter chain 對路徑一律 `permitAll`），種子由
 > `V27__seed_rbac_read_permissions.sql` 補入。合計 21 項。
+>
+> **實作回饋修訂（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> 新增 `subscription:read`（`GET /subscription`、`/subscription/usage` 的授權碼，
+> [ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md) 第 9 節定調，歸屬 `LOGGED_IN`），
+> 種子由 `V29__seed_plans_and_permissions.sql` 補入。合計 **22 項**。
 
 **`role_permissions`**（關聯）
 
@@ -1158,7 +1164,7 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V20__create_users_and_rbac.sql` | `users`、`roles`、`permissions`、`role_permissions`、`tenant_users` | 10–14 |
 | `V21__create_auth_tokens.sql` | `refresh_tokens`、`api_keys` | 15, 16 |
 | `V28__create_plans.sql` | `plans`、`subscriptions`、`import_jobs` + `ingestion_rejections.import_job_id` | 17, 18, 18b |
-| `V29__seed_plans.sql` | 四個方案（冪等） | — |
+| `V29__seed_plans_and_permissions.sql` | 四個方案 + `subscription:read` 權限（皆冪等） | — |
 | `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
 | `V31__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
 | `V30__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |

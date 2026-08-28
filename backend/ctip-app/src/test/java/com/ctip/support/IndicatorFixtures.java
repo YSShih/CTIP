@@ -49,7 +49,8 @@ public final class IndicatorFixtures {
                 fixture.policy(),
                 1,
                 SourceRecordStatus.ACTIVE,
-                Set.of("security-test"));
+                Set.of("security-test"),
+                java.util.Map.of());
         indicators.save(Indicator.create(
                 new NewIndicatorCommand(
                         fixture.id(),

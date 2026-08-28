@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import tools.jackson.databind.ObjectMapper;
@@ -36,7 +35,6 @@ import tools.jackson.databind.ObjectMapper;
  * 另含 §10.5 的每租戶數量上限,以及「更新 last_used_at 不得沖掉撤銷」。
  */
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "ctip.api-key.max-per-tenant=2")
 class CredentialRevocationTest extends AbstractPostgresIntegrationTest {
 
     private static final String CLIENT_IP = "10.20.0.21";
@@ -115,14 +113,14 @@ class CredentialRevocationTest extends AbstractPostgresIntegrationTest {
     /** §10.5:每租戶數量上限。原本完全沒有檢查,{@code countActive} 是無呼叫端的死程式。 */
     @Test
     void apiKeyQuotaIsEnforced() throws Exception {
+        // 上限自 Phase 14 起讀 plans.max_api_keys;自助註冊的租戶沒有訂閱 = FREE = 1 把(不變量 B4)
         AuthSession session = register("apikey-quota");
         issueKey(session, "first");
-        issueKey(session, "second");
 
         mvc.perform(asClient(post("/api/v1/api-keys")
                         .header("Authorization", TestIdentities.bearer(session))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"third\",\"scopes\":[\"ioc:read\"]}")))
+                        .content("{\"name\":\"second\",\"scopes\":[\"ioc:read\"]}")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PLAN_LIMIT_EXCEEDED"));
     }

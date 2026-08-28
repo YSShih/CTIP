@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 class RejectionRuleTest {
 
     private static final UUID SYNC_ID = UUID.fromString("00000000-0000-0000-0000-00000000c1d0");
+    private static final IngestionRun RUN = IngestionRun.forSourceSync(SYNC_ID);
 
     private final InMemoryIndicatorRepository indicators = new InMemoryIndicatorRepository();
     private final List<RejectedRecord> rejections = new ArrayList<>();
@@ -106,7 +107,7 @@ class RejectionRuleTest {
                 new Reputation(70),
                 false);
         BatchOutcome outcome =
-                processor.process(redSource, SYNC_ID, List.of(record("red-feed.example.com", IocType.DOMAIN)));
+                processor.process(redSource, RUN, List.of(record("red-feed.example.com", IocType.DOMAIN)));
         assertThat(outcome.accepted()).isZero();
         assertThat(outcome.rejected()).isEqualTo(1);
         assertThat(rejections.getLast().reason()).isEqualTo(RejectionReason.MALFORMED_VALUE);
@@ -120,7 +121,7 @@ class RejectionRuleTest {
         IngestionBatchProcessor sloppyProcessor =
                 new IngestionBatchProcessor(sloppyAllowlist, rejections::add, new IngestionSettings(true, 500));
         BatchOutcome outcome = sloppyProcessor.process(
-                sourceContext(), SYNC_ID, List.of(record("allowlisted.example.com", IocType.DOMAIN)));
+                sourceContext(), RUN, List.of(record("allowlisted.example.com", IocType.DOMAIN)));
         assertThat(outcome.rejected()).isEqualTo(1);
         assertThat(rejections.getLast().reason()).isEqualTo(RejectionReason.ALLOWLISTED_DOMAIN);
     }
@@ -149,7 +150,7 @@ class RejectionRuleTest {
     void duplicateInBatchRejectsSecondOccurrenceOnly() {
         BatchOutcome outcome = processor.process(
                 sourceContext(),
-                SYNC_ID,
+                RUN,
                 List.of(record("dup.example.com", IocType.DOMAIN), record("DUP.example.com.", IocType.DOMAIN)));
         assertThat(outcome.accepted()).isEqualTo(1);
         assertThat(outcome.rejected()).isEqualTo(1);
@@ -181,7 +182,7 @@ class RejectionRuleTest {
         IngestionBatchProcessor exploding = new IngestionBatchProcessor(
                 new IngestionPipeline(List.of(bomb)), rejections::add, new IngestionSettings(true, 500));
         BatchOutcome outcome =
-                exploding.process(sourceContext(), SYNC_ID, List.of(record("ok.example.com", IocType.DOMAIN)));
+                exploding.process(sourceContext(), RUN, List.of(record("ok.example.com", IocType.DOMAIN)));
         assertThat(outcome.rejected()).isEqualTo(1);
         assertThat(rejections.getLast().reason()).isEqualTo(RejectionReason.MALFORMED_VALUE);
         assertThat(rejections.getLast().detail()).contains("stage exploded");
@@ -190,7 +191,7 @@ class RejectionRuleTest {
     /** 跑單筆;接受回 null,拒絕回 reason(同時驗證拒絕都寫入了 rejection log)。 */
     private RejectionReason runOne(RawThreatRecord raw) {
         int before = rejections.size();
-        BatchOutcome outcome = processor.process(sourceContext(), SYNC_ID, List.of(raw));
+        BatchOutcome outcome = processor.process(sourceContext(), RUN, List.of(raw));
         if (outcome.rejected() == 0) {
             assertThat(rejections).hasSize(before);
             return null;

@@ -1,4 +1,15 @@
-import { KeyRound, LogIn, LogOut, Menu, Monitor, Moon, Radar, Sun } from 'lucide-react';
+import {
+  CreditCard,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  Radar,
+  Sun,
+  Upload,
+} from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Toaster } from '../components/Toaster/Toaster';
 import { Button } from '../components/ui/button';
@@ -22,6 +33,10 @@ const NAV_ITEMS = [
   { to: '/', label: '儀表板', end: true },
   { to: '/iocs', label: 'IOC 檢索', end: false },
 ];
+
+/** 次要導覽連結(需權限者才會出現);窄螢幕收起,主導覽仍在。 */
+const secondaryLinkClass =
+  'hidden items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground sm:inline-flex';
 
 const THEME_CYCLE: Record<ThemePreference, ThemePreference> = {
   light: 'dark',
@@ -60,6 +75,9 @@ export function AppLayout() {
   const authenticated = useIsAuthenticated();
   const user = useCurrentUser();
   const canManageApiKeys = useHasPermission('apikey:create');
+  const canSubmitIocs = useHasPermission('ioc:submit');
+  const canImportIocs = useHasPermission('ioc:import');
+  const canReadSubscription = useHasPermission('subscription:read');
   const logout = useLogout();
 
   async function handleLogout() {
@@ -90,11 +108,26 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-1">
             {authenticated ? (
               <>
+                {canSubmitIocs ? (
+                  <NavLink to="/iocs/new" className={secondaryLinkClass}>
+                    <Radar aria-hidden className="size-4" />
+                    提交 IOC
+                  </NavLink>
+                ) : null}
+                {canImportIocs ? (
+                  <NavLink to="/iocs/import" className={secondaryLinkClass}>
+                    <Upload aria-hidden className="size-4" />
+                    匯入
+                  </NavLink>
+                ) : null}
+                {canReadSubscription ? (
+                  <NavLink to="/settings/subscription" className={secondaryLinkClass}>
+                    <CreditCard aria-hidden className="size-4" />
+                    方案
+                  </NavLink>
+                ) : null}
                 {canManageApiKeys ? (
-                  <NavLink
-                    to="/settings/api-keys"
-                    className="hidden items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
-                  >
+                  <NavLink to="/settings/api-keys" className={secondaryLinkClass}>
                     <KeyRound aria-hidden className="size-4" />
                     API Key
                   </NavLink>

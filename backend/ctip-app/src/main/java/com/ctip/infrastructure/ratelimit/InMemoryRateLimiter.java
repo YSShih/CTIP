@@ -4,6 +4,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.domain.plan.QuotaLimit;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -18,39 +19,41 @@ import java.util.concurrent.atomic.AtomicReference;
  * RATE_LIMIT_BACKEND=memory,僅單一實例正確;Phase 17 提供 Redis 後端。
  * 視窗以 interval refill 對齊,resetAt 取自 bucket 的重置時距。
  *
+ * <p>限額隨呼叫傳入(Phase 14):同一把鍵在方案變更後限額會不同,故 bucket 記住建立時的限額,
+ * 限額改變即重建——否則升級方案的租戶會被舊 bucket 的容量綁住到視窗結束。
+ *
  * <p>bucket map 會逐出:鍵含 client IP(IPv6 取 /64),長時間執行下不逐出就是一條隨流量成長、
  * 永不回收的記憶體洩漏路徑。滿桶(未被消耗過或已回滿)且閒置超過視窗長度的項目可安全移除——
  * 重建出來的新 bucket 與被移除的那個狀態相同,因此逐出不會放寬任何配額(ADR 0015)。
  */
 public class InMemoryRateLimiter implements RateLimiterPort {
 
-    private final long perMinute;
-    private final long perDay;
-    private final ClockPort clock;
     /** 超過此數量才觸發清掃。 */
     private static final int SWEEP_THRESHOLD = 10_000;
 
     /** 清掃是 O(n),再以時間節流一次,避免高流量下每個請求都掃整個 map。 */
     private static final Duration SWEEP_INTERVAL = Duration.ofMinutes(10);
 
+    private final ClockPort clock;
     private final Map<String, Entry> buckets = new ConcurrentHashMap<>();
     private final AtomicReference<Instant> lastSweep = new AtomicReference<>(Instant.EPOCH);
 
-    public InMemoryRateLimiter(long perMinute, long perDay, ClockPort clock) {
-        this.perMinute = perMinute;
-        this.perDay = perDay;
+    public InMemoryRateLimiter(ClockPort clock) {
         this.clock = clock;
     }
 
     private record Entry(Bucket bucket, long capacity, AtomicReference<Instant> lastUsed) {}
 
     @Override
-    public RateLimitResult tryConsume(RateLimitKey key, int tokens) {
-        long limit = limitFor(key.window());
+    public RateLimitResult tryConsume(RateLimitKey key, int tokens, QuotaLimit limit) {
         Instant now = clock.now();
-        Entry entry = buckets.computeIfAbsent(
-                key.asString(), k -> new Entry(newBucket(limit, key), limit, new AtomicReference<>(now)));
-        entry.lastUsed().set(now);
+        if (limit.isUnlimited()) {
+            return RateLimitResult.unlimited(windowEnd(now, key));
+        }
+        if (limit.isDisabled()) {
+            return RateLimitResult.disabled(windowEnd(now, key));
+        }
+        Entry entry = entryFor(key, limit, now);
         ConsumptionProbe probe = entry.bucket().tryConsumeAndReturnRemaining(tokens);
         evictIdleFullBuckets(now);
         return new RateLimitResult(
@@ -58,6 +61,36 @@ public class InMemoryRateLimiter implements RateLimiterPort {
                 limit,
                 Math.max(0, probe.getRemainingTokens()),
                 now.plusNanos(probe.getNanosToWaitForReset()));
+    }
+
+    @Override
+    public RateLimitResult peek(RateLimitKey key, QuotaLimit limit) {
+        Instant now = clock.now();
+        if (limit.isUnlimited()) {
+            return RateLimitResult.unlimited(windowEnd(now, key));
+        }
+        if (limit.isDisabled()) {
+            return RateLimitResult.disabled(windowEnd(now, key));
+        }
+        Entry entry = entryFor(key, limit, now);
+        long remaining = entry.bucket().getAvailableTokens();
+        return new RateLimitResult(remaining > 0, limit, remaining, windowEnd(now, key));
+    }
+
+    /** 限額變動時重建 bucket——舊 bucket 的容量是建立當下的方案值,不會自己跟著調整。 */
+    private Entry entryFor(RateLimitKey key, QuotaLimit limit, Instant now) {
+        long capacity = limit.orElse(0);
+        Entry entry = buckets.compute(
+                key.asString(),
+                (k, existing) -> existing != null && existing.capacity() == capacity
+                        ? existing
+                        : new Entry(newBucket(capacity, key), capacity, new AtomicReference<>(now)));
+        entry.lastUsed().set(now);
+        return entry;
+    }
+
+    private static Instant windowEnd(Instant now, RateLimitKey key) {
+        return now.plus(key.window().duration());
     }
 
     /**
@@ -76,13 +109,6 @@ public class InMemoryRateLimiter implements RateLimiterPort {
         buckets.values()
                 .removeIf(entry -> entry.lastUsed().get().isBefore(idleBefore)
                         && entry.bucket().getAvailableTokens() >= entry.capacity());
-    }
-
-    private long limitFor(RateLimitKey.Window window) {
-        return switch (window) {
-            case MINUTE -> perMinute;
-            case DAY -> perDay;
-        };
     }
 
     private static Bucket newBucket(long limit, RateLimitKey key) {

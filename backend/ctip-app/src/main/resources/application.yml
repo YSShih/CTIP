@@ -62,16 +62,13 @@ ctip:
     # 刻意不開環境變數:compose 與 .env 樣板不宣告的變數不得在此使用(§5.5 對稱性)。
     login-max-failed-attempts: 10
     login-lock-minutes: 15
-  api-key:
-    # §10.5「數量上限 plans.max_api_keys」;plans 表在 Phase 14 才有,
-    # 先以固定值承載(§10.6 PREMIUM 列 = 10),Phase 14 改為依方案查表。
-    max-per-tenant: 10
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     backend: ${RATE_LIMIT_BACKEND:redis}
-    # 匿名配額(10-identity-plans.md §10.6);M2 起由 plans 表依方案查表
-    anonymous-per-minute: ${RATE_LIMIT_ANONYMOUS_PER_MINUTE:60}
-    anonymous-per-day: ${RATE_LIMIT_ANONYMOUS_PER_DAY:1000}
+  plan:
+    # 方案配額一律讀 plans 表(10-identity-plans.md §10.6)。部署期覆寫以單一 JSON 變數承載,
+    # 例:{"PREMIUM":{"maxApiKeys":20}}。逐項環境變數的命名慣例綁不到屬性(ADR 0019)。
+    overrides: ${CTIP_PLAN_OVERRIDES:}
   ingestion:
     enabled: ${INGESTION_ENABLED:true}
     batch-size: ${INGESTION_BATCH_SIZE:500}
@@ -83,14 +80,9 @@ ctip:
     ingestion-retry-cron: "${INGESTION_RETRY_CRON:0 */15 * * * *}"
   normalization:
     strip-www: ${NORMALIZATION_STRIP_WWW:false}
-  stix:
-    # bundle 物件數上限(07 §7.8.5);M1 以 property 承載(預設取 FREE 方案值),Phase 14 移入 plans 表
-    export-max-objects: ${STIX_EXPORT_MAX_OBJECTS:1000}
   api:
-    # 匿名讀取配額(09 §9.3、10 §10.6);Phase 14 起依方案查 plans 表
+    # 預設分頁大小(09 §9.3);上限與批次上限依方案查 plans 表,不在此宣告
     default-page-size: ${API_DEFAULT_PAGE_SIZE:50}
-    max-page-size: ${API_MAX_PAGE_SIZE:50}
-    max-batch-lookup: ${API_MAX_BATCH_LOOKUP:20}
   data-quality:
     domain-allowlist: ${DOMAIN_ALLOWLIST:}
   bloom:

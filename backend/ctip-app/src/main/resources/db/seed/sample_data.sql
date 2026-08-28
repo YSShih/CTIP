@@ -127,3 +127,14 @@ SELECT 'relationship--' || substr(h, 1, 8) || '-' || substr(h, 9, 4) || '-' || s
        'related-to', source_ref, target_ref, owner_tenant_id, tlp, stix_created, stix_modified
 FROM pairs
 ON CONFLICT DO NOTHING;
+
+-- 方案／訂閱樣本(docs/spec/14-testing.md §14.7;Phase 14)。
+-- 四個方案定義本身由 V29__seed_plans_and_permissions.sql 種入(所有環境皆需要);
+-- 此處只補 demo tenant 的有效訂閱——需要方案配額的整合測試以此為 fixture。
+-- demo tenant 給 PREMIUM:那是唯一同時具備 tenant bloom 容量、手動提交與匯入配額的方案,
+-- 涵蓋度最高。provider = MANUAL(M2 不串接金流,方案由 SYSTEM_ADMIN 手動指派)。
+INSERT INTO subscriptions (tenant_id, plan_id, status, provider, current_period_start, current_period_end)
+SELECT '00000000-0000-0000-0000-000000000001', p.id, 'ACTIVE', 'MANUAL', now(), now() + interval '365 days'
+FROM plans p
+WHERE p.code = 'PREMIUM'
+ON CONFLICT DO NOTHING;

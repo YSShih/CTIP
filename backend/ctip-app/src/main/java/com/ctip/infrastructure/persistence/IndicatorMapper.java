@@ -62,7 +62,10 @@ interface IndicatorMapper {
                 RedistributionPolicy.valueOf(r.redistributionPolicy),
                 r.reportCount,
                 SourceRecordStatus.valueOf(r.status),
-                Set.of());
+                Set.of(),
+                // raw_payload 只寫不讀(見 IndicatorSourceSnapshot):聚合不解讀它,
+                // 讀回來只會在下一次寫入時原樣寫回,徒增一次 JSON 反序列化
+                java.util.Map.of());
     }
 
     default HashRecord toHashRecord(HashRecordEntity h) {
@@ -125,6 +128,9 @@ interface IndicatorMapper {
             target.redistributionPolicy = r.redistributionPolicy().name();
             target.reportCount = r.reportCount();
             target.status = r.status().name();
+            if (!r.rawPayload().isEmpty()) {
+                target.rawPayload = JsonPayloads.toJson(r.rawPayload());
+            }
         }
     }
 

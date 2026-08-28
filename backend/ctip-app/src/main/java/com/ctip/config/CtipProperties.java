@@ -23,12 +23,11 @@ public record CtipProperties(
         @NotNull @Valid Jwt jwt,
         @NotNull @Valid Security security,
         @NotNull @Valid RateLimit rateLimit,
+        @NotNull @Valid Plan plan,
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
         @NotNull @Valid Normalization normalization,
         @NotNull @Valid Api api,
-        @NotNull @Valid ApiKey apiKey,
-        @NotNull @Valid Stix stix,
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
         @NotNull @Valid Retention retention) {
@@ -58,20 +57,27 @@ public record CtipProperties(
             @Positive int loginMaxFailedAttempts, @Positive int loginLockMinutes) {}
 
     /**
-     * 匿名限流數值依 10-identity-plans.md §10.6(60/min、1000/day);
-     * M1 為 property 預設值,M2 起移入 plans 表依方案查表。
+     * 匿名限流數值原為 property 預設值(60/min、1000/day);Phase 14 起改由 plans 表的
+     * ANONYMOUS 方案查表(§10.7 明文「Phase 14 移入 plans 表」),故此處只剩開關與後端選擇。
      */
-    public record RateLimit(
-            boolean enabled,
-            @NotNull Backend backend,
-            @Positive long anonymousPerMinute,
-            @Positive long anonymousPerDay) {
+    public record RateLimit(boolean enabled, @NotNull Backend backend) {
 
         public enum Backend {
             MEMORY,
             REDIS
         }
     }
+
+    /**
+     * 方案配額的部署期覆寫(§10.6;ADR 0019)。
+     *
+     * <p>單一 JSON 字串而非逐項環境變數:{@code CTIP_PLAN_PREMIUM_MAX_API_KEYS} 會被
+     * relaxed binding 對到 {@code ctip.plan.premium.max.api.keys}(底線一律變成點,
+     * 不會變成連字號),永遠綁不到目標屬性。空字串 = 不覆寫。
+     *
+     * @param overrides 形如 {@code {"PREMIUM":{"maxApiKeys":20}}}
+     */
+    public record Plan(String overrides) {}
 
     public record Ingestion(boolean enabled, @Positive int batchSize) {}
 
@@ -85,23 +91,11 @@ public record CtipProperties(
     /** `www.` 前綴去除需可設定且預設不去除(docs/spec/07-domain-intel.md §7.2)。 */
     public record Normalization(boolean stripWww) {}
 
-    /** bundle 匯出上限(07 §7.8.5);M1 property 承載,Phase 14 移入 plans 表。 */
-    public record Stix(@Positive int exportMaxObjects) {}
-
     /**
-     * API 讀取配額(09 §9.3、10 §10.6 匿名列):M1 只有匿名身分,以 property 預設承載
-     * (分頁上限 50、批次驗證上限 20);Phase 14 起依方案查 plans 表。
+     * 預設分頁大小(09 §9.3)。分頁上限、批次驗證上限、bundle 物件數、API key 數量
+     * 一律讀 plans 表(§10.6「不得 hard-code」),Phase 14 起不再有 property 版本。
      */
-    public record Api(
-            @Positive int defaultPageSize,
-            @Positive int maxPageSize,
-            @Positive int maxBatchLookup) {}
-
-    /**
-     * 每租戶 API key 數量上限(§10.5「數量上限 plans.max_api_keys」)。
-     * plans 表在 Phase 14 才存在,比照 ADR 0004 匿名限流的前例先以此承載(ADR 0013)。
-     */
-    public record ApiKey(@Positive int maxPerTenant) {}
+    public record Api(@Positive int defaultPageSize) {}
 
     /** 良性網域 allowlist(§7.3:僅 DOMAIN、exact match;預設為空)。 */
     public record DataQuality(@NotNull java.util.List<String> domainAllowlist) {}

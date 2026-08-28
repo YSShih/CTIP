@@ -63,7 +63,7 @@ status: ACTIVE
 ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN
 ```
 
-### 權限（21 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
+### 權限（22 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
 
 ```text
 ioc:read       ioc:export      ioc:submit    ioc:import    ioc:report-fp   ioc:publish
@@ -71,7 +71,7 @@ threat:read    stix:export
 source:read    stats:read
 sync:bloom     sync:delta
 apikey:create  apikey:revoke
-webhook:manage
+webhook:manage subscription:read
 tenant:manage  user:manage
 audit:read
 source:manage  source:sync
@@ -80,7 +80,8 @@ system:admin
 
 ### 角色與權限矩陣
 
-種子資料由 `V24__seed_rbac.sql` 與 `V27__seed_rbac_read_permissions.sql` 寫入（皆冪等）。
+種子資料由 `V24__seed_rbac.sql`、`V27__seed_rbac_read_permissions.sql` 與
+`V29__seed_plans_and_permissions.sql` 寫入（皆冪等）。
 
 | 權限 | ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN |
 |---|---|---|---|---|---|
@@ -98,6 +99,7 @@ system:admin
 | `ioc:publish` | — | — | — | — | ✓ |
 | `apikey:create` / `apikey:revoke` | — | ✓ | ✓ | ✓ | ✓ |
 | `webhook:manage` | — | — | ✓ | ✓ | ✓ |
+| `subscription:read` | — | ✓ | ✓ | ✓ | ✓ |
 | `user:manage` | — | — | — | ✓ | ✓ |
 | `tenant:manage` | — | — | — | ✓ | ✓ |
 | `audit:read` | — | — | — | ✓ | ✓ |
@@ -108,14 +110,11 @@ system:admin
 > `GET /notifications` 與 `PATCH /notifications/{id}/read` 原本也沒有權限碼。
 > 同樣三處同步（本節清單與矩陣、seed migration、`RbacMatrix` 常數）。建議歸屬 `LOGGED_IN`。
 >
-> > **Phase 14 必須新增 `subscription:read`（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**：
+> **`subscription:read` 已於 Phase 14 加入（2026-08-28；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
 > [09 §9.1](09-api.md#91-端點清單) 的 `GET /subscription` 與 `/subscription/usage` 原本沒有權限欄，
-> 而本節的權限清單也沒有對應碼——但下方「實作要求」明訂**每一個 handler 都必須宣告授權**，
-> 且 `EndpointAuthorizationTest` 會擋下沒有 `@PreAuthorize` 的新端點。
-> 新增時**三處必須同步**：本節的清單與矩陣、Phase 14 的 seed migration、
-> `RbacMatrix` 測試常數——`RbacMatrixTest.theSpecificationMatrixMatchesTheSeededMatrix`
-> 會逐格比對這三者（[ADR 0017](../architecture/decisions/0017-gate-credibility.md)）。
-> 建議歸屬：`LOGGED_IN`（USER 以上皆可看自己的方案）。
+> 而本節的權限清單也沒有對應碼——但下方「實作要求」明訂**每一個 handler 都必須宣告授權**。
+> 三處已同步：本節的清單與矩陣、`V29__seed_plans_and_permissions.sql`、`RbacMatrix` 測試常數。
+> 歸屬 `LOGGED_IN`（USER 以上皆可看自己的方案；匿名沒有訂閱可看）。
 >
 > `ioc:publish`（把自己提交的 IOC 標為 `CLEAR`/`GREEN`）只給 `SYSTEM_ADMIN`——把租戶資料推入公開情資池是平台營運決策，不是租戶自助操作。
 
@@ -258,6 +257,12 @@ Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms
 
 所有數值必須可由 `.env` 覆寫，啟動時載入並更新 `plans` 表。
 
+> **匯入與每日提交配額的關係（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> `max_import_rows_per_file` 是**單檔尺寸**上限，`max_manual_submissions_per_day` 是**每日總量**。
+> 匯入的每一筆都扣減後者——否則每日上限可被「改用匯入端點」完全繞過。
+> 兩者的數值關係因此有意義：PREMIUM 一次匯入 10,000 筆時，當日只有 1,000 筆會被接受，
+> 其餘逐筆記為 `QUOTA_EXCEEDED`（[09 §9.7](09-api.md#97-寫入端點細節-m2)）。
+
 > **實作回饋修訂（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**——
 > 原本的 `CTIP_PLAN_<CODE>_<FIELD>` 命名慣例**到不了容器,也綁不上屬性**,兩個獨立的問題:
 >
@@ -380,6 +385,11 @@ Retry-After: 42
 ```
 
 `X-RateLimit-*` 三個標頭在**所有**回應（含成功）都必須帶上，反映當下最緊的維度。
+
+> **無上限的表達（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> ENTERPRISE 的 `requests_per_day` 是 `null`（依合約），而標頭必須有值。
+> `X-RateLimit-Limit` 與 `X-RateLimit-Remaining` 以字面值 `unlimited` 表達
+> ——印 `-1` 或某個巨大數字都會被 client 當成真實配額。數值型的方案格式不變。
 
 ### 實作方式
 

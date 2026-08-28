@@ -1,12 +1,18 @@
 package com.ctip.interfaces.rest.error;
 
-import com.ctip.application.identity.ApiKeyLimitExceededException;
 import com.ctip.application.identity.ApiKeyNotFoundException;
 import com.ctip.application.identity.AuthenticationFailedException;
 import com.ctip.application.identity.EmailAlreadyRegisteredException;
 import com.ctip.application.identity.InvalidRefreshTokenException;
+import com.ctip.application.indicator.PublicIntelNotReportableException;
+import com.ctip.application.ingestion.PublishNotPermittedException;
+import com.ctip.application.plan.PlanLimitExceededException;
+import com.ctip.application.plan.QuotaExhaustedException;
+import com.ctip.application.plan.RequestSizeLimitExceededException;
 import com.ctip.application.port.ClockPort;
+import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.stix.StixExportLimitExceededException;
+import com.ctip.infrastructure.ratelimit.RateLimitHeaders;
 import com.ctip.interfaces.rest.dto.common.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -53,10 +59,50 @@ public class ApiExceptionHandler {
         return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, "Bundle exceeds plan object limit", List.of(), request);
     }
 
-    /** §10.5 的每租戶 API key 數量上限(ADR 0013)。 */
-    @ExceptionHandler(ApiKeyLimitExceededException.class)
-    ResponseEntity<ErrorResponse> apiKeyLimitExceeded(ApiKeyLimitExceededException e, HttpServletRequest request) {
-        return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, "API key quota exhausted", List.of(), request);
+    /**
+     * 非時間窗的方案能力上限(§9.7 三種語意之一):API key 數量、webhook 數量、
+     * bundle 物件數、方案未開放的能力。403——不會自己恢復,等待無用。
+     */
+    @ExceptionHandler(PlanLimitExceededException.class)
+    ResponseEntity<ErrorResponse> planLimitExceeded(PlanLimitExceededException e, HttpServletRequest request) {
+        return respond(ErrorCode.PLAN_LIMIT_EXCEEDED, e.getMessage(), List.of(), request);
+    }
+
+    /** 單次請求的尺寸上限(§9.7):413——拆小就能過。 */
+    @ExceptionHandler(RequestSizeLimitExceededException.class)
+    ResponseEntity<ErrorResponse> requestTooLarge(RequestSizeLimitExceededException e, HttpServletRequest request) {
+        return respond(ErrorCode.PAYLOAD_TOO_LARGE, e.getMessage(), List.of(), request);
+    }
+
+    /**
+     * 時間窗內的計數用罄(§9.7):429 + X-RateLimit-* + Retry-After。
+     * 標頭與 {@code RateLimitFilter} 同一套語意——client 得知何時可再試。
+     */
+    @ExceptionHandler(QuotaExhaustedException.class)
+    ResponseEntity<ErrorResponse> quotaExhausted(QuotaExhaustedException e, HttpServletRequest request) {
+        RateLimitResult result = e.result();
+        long retryAfter = Math.max(
+                1, java.time.Duration.between(clock.now(), result.resetAt()).getSeconds());
+        return ResponseEntity.status(ErrorCode.RATE_LIMIT_EXCEEDED.status())
+                .header("X-RateLimit-Limit", RateLimitHeaders.value(result.limit()))
+                .header("X-RateLimit-Remaining", RateLimitHeaders.remaining(result))
+                .header("X-RateLimit-Reset", Long.toString(result.resetAt().getEpochSecond()))
+                .header("Retry-After", Long.toString(retryAfter))
+                .body(body(
+                        ErrorCode.RATE_LIMIT_EXCEEDED.status().value(),
+                        ErrorCode.RATE_LIMIT_EXCEEDED.name(),
+                        e.getMessage(),
+                        List.of(),
+                        request));
+    }
+
+    /**
+     * 寫入端點的兩種「權限不足」(§9.7):要求 CLEAR/GREEN 但沒有 {@code ioc:publish}、
+     * 對公開情資做誤判回報。都是授權問題而非方案能力上限,故 FORBIDDEN 而非 PLAN_LIMIT_EXCEEDED。
+     */
+    @ExceptionHandler({PublishNotPermittedException.class, PublicIntelNotReportableException.class})
+    ResponseEntity<ErrorResponse> writeForbidden(RuntimeException e, HttpServletRequest request) {
+        return respond(ErrorCode.FORBIDDEN, e.getMessage(), List.of(), request);
     }
 
     /** 認證失敗、無效／重用的 refresh token:一律 401,不揭露細節(避免帳號列舉)。 */

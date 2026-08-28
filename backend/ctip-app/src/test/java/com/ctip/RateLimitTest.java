@@ -5,10 +5,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ctip.application.port.ClockPort;
+import com.ctip.application.port.IdGeneratorPort;
+import com.ctip.application.port.PlanRepository;
+import com.ctip.application.port.SubscriptionRepository;
+import com.ctip.domain.plan.Plan;
+import com.ctip.domain.plan.PlanCode;
+import com.ctip.support.TestPlans;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -16,13 +24,45 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 記憶體限流(docs/spec/10-identity-plans.md §10.7,Phase 6):套用全端點、
  * 匿名超限回 429 + Retry-After;X-RateLimit-* 於所有回應(含成功)帶上。
  * 以縮小的 per-minute 配額測試,避免真實打 60 次。
+ *
+ * <p>配額自 Phase 14 起讀 {@code plans} 表的 ANONYMOUS 方案,不再是 property——
+ * 因此改寫的是<strong>資料</strong>,測完必須還原:plans 是全域參考資料,
+ * 整合測試共用同一個 context,留著被改小的配額會讓後續測試莫名 429。
  */
 @AutoConfigureMockMvc
-@TestPropertySource(properties = {"ctip.rate-limit.anonymous-per-minute=3", "ctip.rate-limit.anonymous-per-day=1000"})
 class RateLimitTest extends AbstractPostgresIntegrationTest {
+
+    private static final int TEST_PER_MINUTE = 3;
 
     @Autowired
     private MockMvc mvc;
+
+    @Autowired
+    private PlanRepository plans;
+
+    @Autowired
+    private SubscriptionRepository subscriptions;
+
+    @Autowired
+    private IdGeneratorPort idGenerator;
+
+    @Autowired
+    private ClockPort clock;
+
+    private TestPlans planAdmin;
+    private Plan originalAnonymous;
+
+    @BeforeEach
+    void shrinkAnonymousQuota() {
+        planAdmin = new TestPlans(plans, subscriptions, idGenerator, clock);
+        originalAnonymous = planAdmin.plan(PlanCode.ANONYMOUS);
+        planAdmin.save(TestPlans.requestsPerMinute(TEST_PER_MINUTE).apply(originalAnonymous));
+    }
+
+    @AfterEach
+    void restoreAnonymousQuota() {
+        planAdmin.save(originalAnonymous);
+    }
 
     /**
      * 每個測試方法綁不同的 client IP。限流是 per-IP 的,若共用 127.0.0.1,

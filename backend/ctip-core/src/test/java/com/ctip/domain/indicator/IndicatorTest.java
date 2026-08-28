@@ -127,15 +127,33 @@ class IndicatorTest {
 
         // 規則 2:誤判且無其他 ACTIVE 來源 → FALSE_POSITIVE
         Indicator fp = activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
-        fp.reportFalsePositive(SOURCE_A);
+        fp.reportFalsePositive(report(SOURCE_A).build(), new Reputation(50));
         assertThat(fp.status()).isEqualTo(IndicatorStatus.FALSE_POSITIVE);
 
         // 規則 2 反例:仍有其他 ACTIVE 來源 → ACTIVE
         Indicator stillActive =
                 activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
         stillActive.mergeFrom(new IndicatorSource(report(SOURCE_B).build()), new Reputation(50));
-        stillActive.reportFalsePositive(SOURCE_A);
+        stillActive.reportFalsePositive(report(SOURCE_A).build(), new Reputation(50));
         assertThat(stillActive.status()).isEqualTo(IndicatorStatus.ACTIVE);
+    }
+
+    /**
+     * §9.7:誤判回報時該來源的記錄<strong>不存在則建立</strong>。原本會丟
+     * IllegalArgumentException,而被回報的 IOC 幾乎都不是 MANUAL 來源回報的(ADR 0019)。
+     */
+    @Test
+    void falsePositiveCreatesTheSourceRecordWhenAbsent() {
+        Indicator indicator = activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
+
+        indicator.reportFalsePositive(report(SOURCE_B).build(), new Reputation(50));
+
+        assertThat(indicator.snapshot().sources())
+                .filteredOn(record -> record.sourceId().equals(SOURCE_B))
+                .singleElement()
+                .satisfies(record -> assertThat(record.status()).isEqualTo(SourceRecordStatus.FALSE_POSITIVE));
+        // SOURCE_A 仍為 ACTIVE,故整體狀態不變(I11 規則 2 由合併規則決定,非呼叫端指定)
+        assertThat(indicator.status()).isEqualTo(IndicatorStatus.ACTIVE);
     }
 
     @Test

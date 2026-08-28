@@ -213,6 +213,31 @@ export async function apiPost<P extends OpsOf<'post'>>(
   );
 }
 
+/**
+ * 原始本文的 POST(§9.7 的 {@code POST /iocs/import}:{@code text/csv} 或 STIX bundle 原文)。
+ *
+ * <p>與 {@link apiPost} 分開,因為那支一律 {@code JSON.stringify} 後送 —— 對 CSV 會送出
+ * 一個被引號包起來的字串,對 STIX bundle 則會多一層轉義,兩者後端都解不開。
+ */
+export async function apiPostRaw<P extends OpsOf<'post'>>(
+  path: P,
+  body: string,
+  contentType: string,
+  options: PostOptions = {},
+): Promise<OkJson<Op<P, 'post'>>> {
+  const url = buildUrl(path, options.path, undefined);
+  return request(
+    url,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': contentType },
+      body,
+      signal: options.signal ?? null,
+    },
+    options.autoRefresh ?? true,
+  );
+}
+
 interface DeleteOptions {
   path?: Record<string, string>;
   signal?: AbortSignal;

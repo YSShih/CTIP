@@ -2,6 +2,7 @@ package com.ctip.application.source;
 
 import com.ctip.application.ingestion.BatchOutcome;
 import com.ctip.application.ingestion.IngestionBatchExecutor;
+import com.ctip.application.ingestion.IngestionRun;
 import com.ctip.application.ingestion.SourceContext;
 import com.ctip.application.port.AdapterRegistryPort;
 import com.ctip.application.port.ClockPort;
@@ -15,7 +16,6 @@ import com.ctip.sdk.ThreatSourceAdapter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +80,7 @@ public class SourceSyncService {
         SyncRun run = recorder.started(source.id());
         RunTotals totals = new RunTotals();
         try {
-            String finalCursor = fetchAndIngest(source, run.syncId(), totals);
+            String finalCursor = fetchAndIngest(source, IngestionRun.forSourceSync(run.syncId()), totals);
             recorder.completed(source, run, totals.fetched, totals.batches, finalCursor);
             return SourceSyncOutcome.success(source.id(), totals.fetched, totals.batches);
         } catch (RuntimeException e) {
@@ -91,7 +91,7 @@ public class SourceSyncService {
     }
 
     /** fetch 分頁迴圈(交易外);滿一批即進 pipeline。回傳應保存的續抓游標(抓到底為 null)。 */
-    private String fetchAndIngest(Source source, UUID syncId, RunTotals totals) {
+    private String fetchAndIngest(Source source, IngestionRun run, RunTotals totals) {
         ThreatSourceAdapter adapter = adapters.find(source.snapshot().sourceType())
                 .orElseThrow(() -> new IllegalStateException(
                         "來源沒有對應的 adapter:" + source.snapshot().sourceType()));
@@ -104,7 +104,7 @@ public class SourceSyncService {
             totals.fetched += page.records().size();
             buffer.addAll(page.records());
             while (buffer.size() >= batchExecutor.batchSize()) {
-                totals.add(batchExecutor.execute(sourceContext, syncId, drain(buffer, batchExecutor.batchSize())));
+                totals.add(batchExecutor.execute(sourceContext, run, drain(buffer, batchExecutor.batchSize())));
             }
             if (!page.hasMore() || pages >= MAX_PAGES_PER_RUN) {
                 break;
@@ -114,7 +114,7 @@ public class SourceSyncService {
             pages++;
         }
         if (!buffer.isEmpty()) {
-            totals.add(batchExecutor.execute(sourceContext, syncId, drain(buffer, buffer.size())));
+            totals.add(batchExecutor.execute(sourceContext, run, drain(buffer, buffer.size())));
         }
         return page.hasMore() ? page.nextCursor() : null;
     }

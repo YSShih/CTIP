@@ -22,6 +22,9 @@ class IngestionRejectionEntity {
     @Column(name = "source_sync_id")
     UUID sourceSyncId;
 
+    @Column(name = "import_job_id")
+    UUID importJobId;
+
     @Column(name = "raw_value", nullable = false, length = 4096)
     String rawValue;
 

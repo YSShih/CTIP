@@ -74,4 +74,38 @@ describe('routes', () => {
     });
     expect(await screen.findByRole('heading', { name: 'API Key 管理' })).toBeInTheDocument();
   });
+
+  /**
+   * /iocs/new 是靜態段,必須贏過 /iocs/:id。react-router 依評分而非宣告順序決定,
+   * 但那是相依函式庫的行為——用測試釘住,升版改了排序規則才不會變成一個看起來像
+   * 「詳情頁查無此 IOC」的謎樣 404。
+   */
+  it('renders IocSubmitPage at /iocs/new instead of the detail page', async () => {
+    renderRoute({ routes, initialEntry: '/iocs/new', store: storeWith(['ioc:submit']) });
+    expect(await screen.findByRole('heading', { name: '提交 IOC' })).toBeInTheDocument();
+  });
+
+  it('renders IocImportPage at /iocs/import instead of the detail page', async () => {
+    renderRoute({ routes, initialEntry: '/iocs/import', store: storeWith(['ioc:import']) });
+    expect(await screen.findByRole('heading', { name: '批次匯入 IOC' })).toBeInTheDocument();
+  });
+
+  it('blocks /iocs/new when ioc:submit is missing', async () => {
+    renderRoute({ routes, initialEntry: '/iocs/new', store: storeWith(['ioc:read']) });
+    expect(await screen.findByText('權限不足')).toBeInTheDocument();
+  });
+
+  it('renders SubscriptionPage at /settings/subscription with subscription:read', async () => {
+    renderRoute({
+      routes,
+      initialEntry: '/settings/subscription',
+      store: storeWith(['subscription:read']),
+    });
+    expect(await screen.findByRole('heading', { name: '方案與用量' })).toBeInTheDocument();
+  });
+
+  it('blocks /settings/subscription for anonymous visitors', async () => {
+    renderRoute({ routes, initialEntry: '/settings/subscription' });
+    expect(await screen.findByText('需要登入')).toBeInTheDocument();
+  });
 });

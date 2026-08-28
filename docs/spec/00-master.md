@@ -539,4 +539,21 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.19）。*
+## 0.20 實作回饋修訂（2026-08-28，Phase 14）
+
+方案／配額與 IOC 寫入端點的實作回饋，逐項見
+[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | 配額值 `0`（停用）若照 §9.7 回 `429 + Retry-After`，等於告訴 client「等一下再試就會過」，而那永遠不會發生 | 同一欄位依值分流：`0` → **403 PLAN_LIMIT_EXCEEDED**、正整數在視窗內用罄 → **429** | [09 §9.7](09-api.md#97-寫入端點細節-m2) |
+| 2 | 只做 [ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md) 的擁有權轉移，**發布出去的 IOC 仍然沒有任何人看得到**（I14：全來源 `INTERNAL_ONLY` 不得對非擁有租戶輸出，而擁有租戶豁免刻意不適用於 public tenant） | 發布時該筆 MANUAL 來源記錄記為 `PUBLIC_REDISTRIBUTABLE`——「發布」本身就是租戶對再散布的授權 | [09 §9.7](09-api.md#97-寫入端點細節-m2) |
+| 3 | 匯入若不計入每日提交配額，每日上限可被「改用匯入端點」完全繞過 | 匯入的每一筆都扣減 `max_manual_submissions_per_day`，越界者逐筆 `QUOTA_EXCEEDED` | [10 §10.6](10-identity-plans.md#106-方案) |
+| 4 | ENTERPRISE 的 `requests_per_day` 為 `null`，而 §10.7 要求標頭出現在所有回應 | `X-RateLimit-Limit`／`-Remaining` 以字面值 `unlimited` 表達無上限 | [10 §10.7](10-identity-plans.md#107-限流) |
+| 5 | 「放寬三處配額型別」的那三處在改讀 `plans` 表後**完全沒有呼叫端**，留著就是第二個真相來源 | 直接移除，連同五個環境變數（compose、五份樣板、§5.4 同步）；`API_DEFAULT_PAGE_SIZE` 保留（不是配額） | [05 §5.4](05-environment.md) |
+| 6 | `indicator_sources.raw_payload` 自 M1 就存在、有 GC 索引，卻**從未被寫入**；而 §9.7 的 `note`／`reason` 沒有其他欄位可放 | 改為真的寫入（只寫不讀；新快照無內容時不覆寫既有值） | [04 表 5](04-data-dictionary.md) |
+| 7 | §8.3 要求 adapter 從 `FetchContext.config` 取批次，但 STIX bundle 需要 JSON 解析器，而 `ctip-adapters`／`ctip-core` 都沒有 JSON 相依 | 新增 port `ImportPayloadParserPort`：CSV 走 adapter（§8.3 字面實作）、bundle 在 ctip-app 解；兩者之後走**同一條 pipeline** | [08 §8.3](08-ingestion-sdk.md) |
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.20）。*

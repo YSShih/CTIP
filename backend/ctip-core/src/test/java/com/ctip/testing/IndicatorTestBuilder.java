@@ -120,7 +120,8 @@ public final class IndicatorTestBuilder {
                     policy,
                     1,
                     status,
-                    tags);
+                    tags,
+                    java.util.Map.of());
         }
     }
 }

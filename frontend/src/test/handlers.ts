@@ -140,6 +140,62 @@ export const issuedApiKey = {
   apiKey: sampleApiKey,
 } satisfies ApiSchemas['IssuedApiKeyDto'];
 
+export const sampleSubscription = {
+  planCode: 'PREMIUM',
+  planName: 'Premium',
+  tier: 2,
+  status: 'ACTIVE',
+  provider: 'MANUAL',
+  currentPeriodStart: '2026-08-01T00:00:00Z',
+  currentPeriodEnd: '2027-08-01T00:00:00Z',
+  cancelledAt: undefined,
+  quotas: {
+    requestsPerMinute: 1200,
+    requestsPerDay: 500000,
+    maxPageSize: 500,
+    maxBatchLookup: 1000,
+    minSyncIntervalSeconds: 300,
+    publicBloomEnabled: true,
+    tenantBloomCapacity: 1000000,
+    websocketEnabled: true,
+    maxWebhooks: 5,
+    maxApiKeys: 10,
+    customFeedEnabled: false,
+    stixExportMaxObjects: 50000,
+    maxManualSubmissionsPerDay: 1000,
+    maxImportRowsPerFile: 10000,
+  },
+} satisfies ApiSchemas['SubscriptionDto'];
+
+export const sampleUsage = {
+  planCode: 'PREMIUM',
+  manualSubmissionsToday: { used: 12, limit: 1000, resetAt: '2026-08-29T00:00:00Z' },
+  apiKeys: { used: 2, limit: 10, resetAt: undefined },
+} satisfies ApiSchemas['SubscriptionUsageDto'];
+
+export const sampleImportJob = {
+  importJobId: '0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90',
+  status: 'PENDING',
+  format: 'CSV',
+  totalRows: 3,
+  acceptedCount: 0,
+  mergedCount: 0,
+  rejectedCount: 0,
+  errorMessage: undefined,
+  startedAt: undefined,
+  finishedAt: undefined,
+  createdAt: '2026-08-28T09:00:00Z',
+} satisfies ApiSchemas['ImportJobDto'];
+
+export const finishedImportJob = {
+  ...sampleImportJob,
+  status: 'PARTIAL',
+  acceptedCount: 2,
+  rejectedCount: 1,
+  startedAt: '2026-08-28T09:00:01Z',
+  finishedAt: '2026-08-28T09:00:05Z',
+} satisfies ApiSchemas['ImportJobDto'];
+
 const unauthenticatedError = {
   timestamp: '2026-08-27T08:00:00Z',
   status: 401,
@@ -186,4 +242,10 @@ export const handlers = [
   http.get('*/api/v1/api-keys', () => HttpResponse.json([sampleApiKey])),
   http.post('*/api/v1/api-keys', () => HttpResponse.json(issuedApiKey, { status: 201 })),
   http.delete('*/api/v1/api-keys/:id', () => new HttpResponse(null, { status: 204 })),
+  http.post('*/api/v1/iocs', () => HttpResponse.json(sampleIoc, { status: 201 })),
+  http.post('*/api/v1/iocs/import', () => HttpResponse.json(sampleImportJob, { status: 202 })),
+  http.get('*/api/v1/iocs/import/:jobId', () => HttpResponse.json(finishedImportJob)),
+  http.post('*/api/v1/iocs/:id/report-false-positive', () => HttpResponse.json(sampleIoc)),
+  http.get('*/api/v1/subscription', () => HttpResponse.json(sampleSubscription)),
+  http.get('*/api/v1/subscription/usage', () => HttpResponse.json(sampleUsage)),
 ];

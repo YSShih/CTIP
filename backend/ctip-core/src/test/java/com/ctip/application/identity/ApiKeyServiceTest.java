@@ -3,11 +3,18 @@ package com.ctip.application.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.ctip.application.plan.PlanLimitExceededException;
+import com.ctip.application.plan.QuotaService;
 import com.ctip.application.rbac.RoleCode;
 import com.ctip.domain.event.ApiKeyEvents;
 import com.ctip.domain.identity.ApiKeyFormat;
 import com.ctip.domain.identity.IssuedApiKey;
 import com.ctip.domain.identity.ScopeSet;
+import com.ctip.domain.plan.BillingPeriod;
+import com.ctip.domain.plan.PlanCode;
+import com.ctip.domain.plan.Subscription;
+import com.ctip.domain.plan.SubscriptionId;
+import com.ctip.domain.plan.SubscriptionProvider;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.domain.user.EmailAddress;
 import com.ctip.domain.user.PasswordHash;
@@ -15,14 +22,19 @@ import com.ctip.domain.user.User;
 import com.ctip.domain.user.UserId;
 import com.ctip.domain.user.UserSnapshot;
 import com.ctip.domain.user.UserStatus;
+import com.ctip.testing.CountingRateLimiter;
 import com.ctip.testing.FixedClockPort;
 import com.ctip.testing.InMemoryApiKeyRepository;
+import com.ctip.testing.InMemoryPlanRepository;
+import com.ctip.testing.InMemorySubscriptionRepository;
 import com.ctip.testing.InMemoryTenantMemberships;
 import com.ctip.testing.InMemoryUserRepository;
+import com.ctip.testing.PlanFixtures;
 import com.ctip.testing.RecordingEventPublisher;
 import com.ctip.testing.SequentialIdGenerator;
 import com.ctip.testing.SequentialTokenGenerator;
 import com.ctip.testing.StubRolePermissions;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
@@ -51,10 +63,13 @@ class ApiKeyServiceTest {
 
     @BeforeEach
     void setUp() {
-        ApiKeySettings settings = new ApiKeySettings("mvp", MAX_KEYS_PER_TENANT);
+        ApiKeySettings settings = new ApiKeySettings("mvp");
         ApiKeyFactory factory = new ApiKeyFactory(
                 new SequentialTokenGenerator(), new SequentialIdGenerator(), clock, settings, rolePermissions);
-        service = new ApiKeyService(apiKeyRepository, settings, factory, events, clock);
+        // 數量上限自 Phase 14 起讀 plans.max_api_keys;PREMIUM 為 10(§10.6)
+        QuotaService quotas = new QuotaService(
+                new InMemoryPlanRepository(), premiumSubscription(), new CountingRateLimiter(clock), clock);
+        service = new ApiKeyService(apiKeyRepository, quotas, factory, events, clock);
         users.save(owner(UserStatus.ACTIVE));
         authenticator = new ApiKeyAuthenticator(
                 apiKeyRepository, new AccountAccessPolicy(users, memberships), rolePermissions, clock);
@@ -83,6 +98,18 @@ class ApiKeyServiceTest {
         assertThat(authenticator.authenticate(issued.plaintext())).isEmpty();
     }
 
+    /** 測試租戶固定為 PREMIUM(max_api_keys = 10),與 MAX_KEYS_PER_TENANT 對齊。 */
+    private InMemorySubscriptionRepository premiumSubscription() {
+        InMemorySubscriptionRepository subscriptions = new InMemorySubscriptionRepository();
+        subscriptions.save(Subscription.subscribe(
+                new SubscriptionId(java.util.UUID.nameUUIDFromBytes("sub".getBytes(StandardCharsets.UTF_8))),
+                TENANT,
+                PlanFixtures.of(PlanCode.PREMIUM),
+                SubscriptionProvider.MANUAL,
+                BillingPeriod.openEnded(FixedClockPort.DEFAULT_NOW)));
+        return subscriptions;
+    }
+
     /** §10.5 的每租戶數量上限;countActive 原本是無呼叫端的死程式。 */
     @Test
     void quotaIsEnforcedPerTenant() {
@@ -90,7 +117,7 @@ class ApiKeyServiceTest {
             issue("key-" + i, Set.of("ioc:read"), RoleCode.TENANT_ADMIN);
         }
         assertThatThrownBy(() -> issue("one-too-many", Set.of("ioc:read"), RoleCode.TENANT_ADMIN))
-                .isInstanceOf(ApiKeyLimitExceededException.class);
+                .isInstanceOf(PlanLimitExceededException.class);
     }
 
     /** 金鑰的建立者。API key 驗證會查它的狀態與成員資格(ADR 0013 fail-closed)。 */
@@ -203,9 +230,8 @@ class ApiKeyServiceTest {
 
     @Test
     void environmentSegmentIsValidated() {
-        assertThatThrownBy(() -> new ApiKeySettings("production", 1)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new ApiKeySettings("prod", 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThat(new ApiKeySettings("prod", 10).environment()).isEqualTo("prod");
+        assertThatThrownBy(() -> new ApiKeySettings("production")).isInstanceOf(IllegalArgumentException.class);
+        assertThat(new ApiKeySettings("prod").environment()).isEqualTo("prod");
     }
 
     @Test

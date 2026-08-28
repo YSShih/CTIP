@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * DoD M2-04:§10.3 角色與權限矩陣的<strong>每一格</strong>(21 權限 × 5 角色 = 105 格),
+ * DoD M2-04:§10.3 角色與權限矩陣的<strong>每一格</strong>(22 權限 × 5 角色 = 110 格),
  * 以及 {@code @PreAuthorize} 於端點層確實生效。
  *
  * <p>「端點 → 需要哪個權限」是另一條軸,由 {@link EndpointAuthorizationTest} 守門。

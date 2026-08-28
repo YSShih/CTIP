@@ -151,9 +151,24 @@ public final class Indicator {
         pendingEvents.record(new IndicatorRevoked(id, ownerTenantId, by));
     }
 
-    /** I11 規則 2:標記誤判後由判定順序決定最終狀態,非呼叫端指定。 */
-    public void reportFalsePositive(SourceId by) {
-        requireRecord(by).markFalsePositive();
+    /**
+     * I11 規則 2:標記誤判後由判定順序決定最終狀態,非呼叫端指定。
+     *
+     * <p>§9.7:該來源的記錄<strong>不存在則建立</strong>——誤判回報的來源是 MANUAL,
+     * 而被回報的 IOC 通常來自別的來源,要求記錄必先存在會讓端點對絕大多數 IOC 直接失敗
+     * (ADR 0019 附註)。新建的記錄一開始就是 FALSE_POSITIVE。
+     *
+     * @param report 該來源的記錄快照;已存在時只取 sourceId,其餘欄位忽略
+     * @param reputation 回報來源的信譽,參與 I11 的狀態判定
+     */
+    public void reportFalsePositive(IndicatorSourceSnapshot report, Reputation reputation) {
+        SourceId by = report.sourceId();
+        reputations.put(by, reputation);
+        sources.stream()
+                .filter(r -> r.sourceId().equals(by))
+                .findFirst()
+                .ifPresentOrElse(
+                        IndicatorSource::markFalsePositive, () -> sources.add(IndicatorSource.falsePositive(report)));
         recompute();
         if (status == IndicatorStatus.FALSE_POSITIVE) {
             pendingEvents.record(new IndicatorFalsePositiveReported(id, ownerTenantId, by));

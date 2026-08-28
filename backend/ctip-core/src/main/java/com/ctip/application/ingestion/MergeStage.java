@@ -85,6 +85,7 @@ public final class MergeStage implements IngestionStage {
                 context.source().redistributionPolicy(),
                 1,
                 context.retracted() ? SourceRecordStatus.RETRACTED : SourceRecordStatus.ACTIVE,
-                context.raw().tags());
+                context.raw().tags(),
+                context.raw().rawPayload());
     }
 }

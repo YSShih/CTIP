@@ -9,6 +9,7 @@ import com.ctip.sdk.Tlp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -31,6 +32,7 @@ public final class IndicatorSource {
     private int reportCount;
     private SourceRecordStatus status;
     private final Set<String> tags;
+    private Map<String, Object> rawPayload;
 
     public IndicatorSource(IndicatorSourceSnapshot s) {
         this.sourceId = Objects.requireNonNull(s.sourceId(), "sourceId 不得為 null");
@@ -45,6 +47,7 @@ public final class IndicatorSource {
         this.reportCount = s.reportCount();
         this.status = Objects.requireNonNull(s.status(), "status 不得為 null");
         this.tags = s.tags() == null ? new HashSet<>() : new HashSet<>(s.tags());
+        this.rawPayload = s.rawPayload();
         if (sourceLastSeen.isBefore(sourceFirstSeen)) {
             throw new IllegalArgumentException("sourceLastSeen 不得早於 sourceFirstSeen");
         }
@@ -83,6 +86,11 @@ public final class IndicatorSource {
         this.sourceTlp = newer.sourceTlp;
         this.sourceValidUntil = newer.sourceValidUntil;
         this.tags.addAll(newer.tags);
+        // 新回報沒帶 payload 時保留既有的:重建後的聚合 rawPayload 恆為空(只寫不讀),
+        // 無條件覆寫會在下一次同來源回報時把已落庫的 payload 抹掉
+        if (!newer.rawPayload.isEmpty()) {
+            this.rawPayload = newer.rawPayload;
+        }
         this.reportCount++;
         if (newer.status == SourceRecordStatus.RETRACTED) {
             this.status = SourceRecordStatus.RETRACTED;
@@ -93,6 +101,13 @@ public final class IndicatorSource {
 
     void retract() {
         this.status = SourceRecordStatus.RETRACTED;
+    }
+
+    /** 誤判回報時新建的記錄:status 一律由此決定,不信任呼叫端傳入的值(§9.7)。 */
+    static IndicatorSource falsePositive(IndicatorSourceSnapshot report) {
+        IndicatorSource created = new IndicatorSource(report);
+        created.markFalsePositive();
+        return created;
     }
 
     void markFalsePositive() {
@@ -118,7 +133,8 @@ public final class IndicatorSource {
                 redistributionPolicy,
                 reportCount,
                 status,
-                Set.copyOf(tags));
+                Set.copyOf(tags),
+                rawPayload);
     }
 
     public SourceId sourceId() {

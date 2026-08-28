@@ -200,6 +200,7 @@ class StixSchemaValidationTest {
                 RedistributionPolicy.PUBLIC_REDISTRIBUTABLE,
                 1,
                 SourceRecordStatus.ACTIVE,
-                tags);
+                tags,
+                java.util.Map.of());
     }
 }

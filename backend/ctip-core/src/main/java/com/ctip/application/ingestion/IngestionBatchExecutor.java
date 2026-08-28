@@ -3,7 +3,6 @@ package com.ctip.application.ingestion;
 import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.sdk.RawThreatRecord;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /**
@@ -27,9 +26,18 @@ public class IngestionBatchExecutor {
         return processor.batchSize();
     }
 
-    public BatchOutcome execute(SourceContext source, UUID sourceSyncId, List<RawThreatRecord> batch) {
-        BatchOutcome outcome = processor.process(source, sourceSyncId, batch);
+    public BatchOutcome execute(SourceContext source, IngestionRun run, List<RawThreatRecord> batch) {
+        BatchOutcome outcome = processor.process(source, run, batch);
         projections.writeAll(outcome.projections());
+        return outcome;
+    }
+
+    /** 單筆(手動提交):交易內攝取,提交後寫出 STIX 投影,規則與批次相同。 */
+    public RecordOutcome executeOne(SourceContext source, IngestionRun run, RawThreatRecord record) {
+        RecordOutcome outcome = processor.processOne(source, run, record);
+        if (outcome.projection() != null) {
+            projections.writeAll(List.of(outcome.projection()));
+        }
         return outcome;
     }
 }

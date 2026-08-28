@@ -29,6 +29,7 @@ class RejectionLogAdapter implements RejectionLogPort {
         entity.id = idGenerator.nextId();
         entity.sourceId = rejected.sourceId().value();
         entity.sourceSyncId = rejected.sourceSyncId();
+        entity.importJobId = rejected.importJobId();
         entity.rawValue = truncate(rejected.rawValue());
         entity.declaredType =
                 rejected.declaredType() == null ? null : rejected.declaredType().name();

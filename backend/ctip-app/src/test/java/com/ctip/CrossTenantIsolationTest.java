@@ -9,11 +9,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ctip.application.identity.AuthService;
 import com.ctip.application.identity.AuthSession;
+import com.ctip.application.port.ClockPort;
+import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.IndicatorRepository;
+import com.ctip.application.port.PlanRepository;
 import com.ctip.application.port.SourceRepository;
+import com.ctip.application.port.SubscriptionRepository;
 import com.ctip.application.port.TenantMembershipRepository;
 import com.ctip.application.rbac.RoleCode;
 import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.plan.PlanCode;
 import com.ctip.domain.source.SourceId;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.sdk.RedistributionPolicy;
@@ -21,6 +26,7 @@ import com.ctip.sdk.SourceType;
 import com.ctip.sdk.Tlp;
 import com.ctip.support.IndicatorFixtures;
 import com.ctip.support.TestIdentities;
+import com.ctip.support.TestPlans;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,6 +76,18 @@ class CrossTenantIsolationTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private SourceRepository sources;
 
+    @Autowired
+    private PlanRepository plans;
+
+    @Autowired
+    private SubscriptionRepository subscriptions;
+
+    @Autowired
+    private IdGeneratorPort idGenerator;
+
+    @Autowired
+    private ClockPort clock;
+
     private AuthSession owner;
     private AuthSession intruder;
     private String ownedApiKeyId;
@@ -79,6 +97,11 @@ class CrossTenantIsolationTest extends AbstractPostgresIntegrationTest {
         TestIdentities identities = new TestIdentities(authService, memberships);
         owner = identities.register("xtenant-owner@example.org", RoleCode.TENANT_ADMIN);
         intruder = identities.register("xtenant-intruder@example.org", RoleCode.TENANT_ADMIN);
+        // 每個測試方法各發一把 owner 的金鑰,而 API key 數量上限自 Phase 14 起依方案查表
+        // (FREE 只有 1 把)。這裡測的是租戶隔離,不是配額,故給足額度的方案。
+        TestPlans planAdmin = new TestPlans(plans, subscriptions, idGenerator, clock);
+        planAdmin.assign(owner.identity().tenantId(), PlanCode.ENTERPRISE);
+        planAdmin.assign(intruder.identity().tenantId(), PlanCode.ENTERPRISE);
         seedOwnedIndicator(owner.identity().tenantId());
     }
 

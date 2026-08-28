@@ -4,6 +4,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.domain.plan.Plan;
 import com.ctip.infrastructure.web.FilterErrorWriter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,24 +15,36 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.time.Duration;
 import java.util.HexFormat;
+import java.util.function.Supplier;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * 限流套用點(docs/spec/10-identity-plans.md §10.7):單一 filter,禁止 Decorator 堆疊。
- * M1 為匿名 IP 維度(minute + day,任一超限即 429);X-RateLimit-* 於所有回應帶上,
+ * 維度 4(匿名 IP,minute + day,任一超限即 429);X-RateLimit-* 於所有回應帶上,
  * 反映當下最緊的維度;429 另帶 Retry-After。IPv6 取 /64 前綴。
  * /actuator 為基礎設施探針(容器 healthcheck),不套用。
  * 由 RateLimitConfig 以 @Bean 建立——infrastructure 不得反向依賴 config(ArchUnit 規則 5)。
+ *
+ * <p>配額值自 Phase 14 起讀 plans 表的 ANONYMOUS 方案(§10.7「Phase 14 移入 plans 表」),
+ * 不再有 property 版本。本 filter 排在認證之前,因此只認得匿名身分;
+ * 維度 1–3(apiKey / user / tenant)需要已解析的身分,屬 Phase 17,
+ * <strong>屆時不得把維度 4 一起搬到認證之後</strong>(ADR 0012 決策 16)。
  */
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RateLimiterPort limiter;
+    private final Supplier<Plan> anonymousPlan;
     private final boolean enabled;
     private final ClockPort clock;
     private final FilterErrorWriter errorWriter;
 
-    public RateLimitFilter(RateLimiterPort limiter, boolean enabled, ClockPort clock) {
+    /**
+     * @param anonymousPlan ANONYMOUS 方案的取得方式;傳 supplier 而非整個 QuotaService,
+     *     是因為本 filter 只需要兩個數字,而它排在認證之前、對每個請求都跑
+     */
+    public RateLimitFilter(RateLimiterPort limiter, Supplier<Plan> anonymousPlan, boolean enabled, ClockPort clock) {
         this.limiter = limiter;
+        this.anonymousPlan = anonymousPlan;
         this.enabled = enabled;
         this.clock = clock;
         this.errorWriter = new FilterErrorWriter(clock);
@@ -61,15 +74,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String subject = normalizeIp(request.getRemoteAddr());
+        Plan plan = anonymousPlan.get();
         // §10.7 依序檢查,任一超限即拒絕:minute 超限的請求不再消耗 day 配額,
         // 否則被 429 的猛打流量會燒光整個 IP 的日配額
-        RateLimitResult minute = limiter.tryConsume(RateLimitKey.anonymousIp(subject, RateLimitKey.Window.MINUTE), 1);
+        RateLimitResult minute = limiter.tryConsume(
+                RateLimitKey.anonymousIp(subject, RateLimitKey.Window.MINUTE), 1, plan.requestsPerMinute());
         if (!minute.allowed()) {
             writeRateLimitHeaders(response, minute);
             reject(request, response, minute);
             return;
         }
-        RateLimitResult day = limiter.tryConsume(RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY), 1);
+        RateLimitResult day = limiter.tryConsume(
+                RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY), 1, plan.requestsPerDay());
         RateLimitResult tightest = minute.remaining() <= day.remaining() ? minute : day;
         writeRateLimitHeaders(response, tightest);
         if (!day.allowed()) {
@@ -80,8 +96,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private static void writeRateLimitHeaders(HttpServletResponse response, RateLimitResult result) {
-        response.setHeader("X-RateLimit-Limit", Long.toString(result.limit()));
-        response.setHeader("X-RateLimit-Remaining", Long.toString(result.remaining()));
+        response.setHeader("X-RateLimit-Limit", RateLimitHeaders.value(result.limit()));
+        response.setHeader("X-RateLimit-Remaining", RateLimitHeaders.remaining(result));
         response.setHeader("X-RateLimit-Reset", Long.toString(result.resetAt().getEpochSecond()));
     }
 

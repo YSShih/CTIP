@@ -1,5 +1,6 @@
 package com.ctip.interfaces.rest;
 
+import com.ctip.application.plan.QuotaService;
 import com.ctip.application.stix.StixExportService;
 import com.ctip.application.stix.StixQueryService;
 import com.ctip.infrastructure.security.TenantContext;
@@ -27,23 +28,27 @@ class StixController implements StixApi {
     private final StixExportService export;
     private final StixBundleWriter bundleWriter;
     private final TenantContext tenantContext;
+    private final QuotaService quotas;
 
     StixController(
             StixQueryService query,
             StixExportService export,
             StixBundleWriter bundleWriter,
-            TenantContext tenantContext) {
+            TenantContext tenantContext,
+            QuotaService quotas) {
         this.query = query;
         this.export = export;
         this.bundleWriter = bundleWriter;
         this.tenantContext = tenantContext;
+        this.quotas = quotas;
     }
 
     @Override
     @GetMapping(value = "/bundle", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('stix:export')")
     public ResponseEntity<String> bundle() {
-        String json = bundleWriter.toJson(export.exportBundle(tenantContext.visibility()));
+        String json = bundleWriter.toJson(
+                export.exportBundle(tenantContext.visibility(), quotas.stixExportLimit(tenantContext.tenantId())));
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(json);
     }
 

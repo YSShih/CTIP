@@ -159,7 +159,51 @@ export interface paths {
          * List IOCs (cursor pagination)
          * @description Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp, tags (repeat the parameter; all must match), sourceId, confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。
          */
-        get: operations["list_1"];
+        get: operations["list"];
+        put?: never;
+        /**
+         * Submit a single IOC
+         * @description Runs the full ingestion pipeline (validation, normalisation, deduplication, merge) — no stage is bypassed. The owning tenant is always the submitter's; it cannot be chosen. TLP defaults to AMBER; CLEAR/GREEN additionally require ioc:publish and transfer ownership to the public tenant. Returns 201 for a new IOC, 200 when merged into an existing one. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:submit。
+         */
+        post: operations["submitIoc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/iocs/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk import IOCs
+         * @description Accepts text/csv or a STIX 2.1 bundle (application/json). Processed asynchronously: returns 202 with an importJobId, poll GET /iocs/import/{jobId} for progress. Imported IOCs are always private to the tenant (TLP:AMBER). Rows beyond the plan's daily quota are recorded individually as QUOTA_EXCEEDED rather than failing the whole file. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:import。
+         */
+        post: operations["importIocs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/iocs/import/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get import progress
+         * @description Jobs of another tenant are reported as not found rather than forbidden. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:import。
+         */
+        get: operations["importStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -228,6 +272,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/iocs/{id}/report-false-positive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a false positive
+         * @description Marks the MANUAL source record of the IOC as FALSE_POSITIVE and re-runs the merge policy — the resulting status is decided by that policy, never by the caller. Only the caller tenant's own IOCs are accepted; reports against public intelligence go through the platform appeal process. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:report-fp。
+         */
+        post: operations["reportFalsePositive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/iocs/{id}/sources": {
         parameters: {
             query?: never;
@@ -259,7 +323,7 @@ export interface paths {
          * List threat sources
          * @description All configured threat sources with their TLP defaults, redistribution policy snapshot basis and health status. 認證:匿名。
          */
-        get: operations["list"];
+        get: operations["list_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -388,6 +452,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the current plan
+         * @description Returns the plan in effect for the caller's tenant together with all quota values. A tenant without an active subscription is on FREE (invariant B4). 認證:需要 Bearer JWT 或 X-API-Key,權限 subscription:read。
+         */
+        get: operations["subscription"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subscription/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get quota usage
+         * @description Current consumption against the plan's quotas. A null limit means unlimited; 0 means the capability is disabled on this plan. 認證:需要 Bearer JWT 或 X-API-Key,權限 subscription:read。
+         */
+        get: operations["subscriptionUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -486,12 +590,66 @@ export interface components {
             timestamp?: string;
             traceId?: string;
         };
+        FalsePositiveRequest: {
+            /** @example null */
+            evidenceUrl?: string;
+            /** @example legitimate CDN endpoint */
+            reason: string;
+        };
         FieldIssue: {
             field?: string;
             issue?: string;
         };
         HealthDto: {
             status?: string;
+        };
+        ImportJobDto: {
+            /**
+             * Format: int32
+             * @example 1150
+             */
+            acceptedCount?: number;
+            /**
+             * Format: date-time
+             * @example 2026-08-28T09:00:00Z
+             */
+            createdAt?: string;
+            /** @example null */
+            errorMessage?: string;
+            /**
+             * Format: date-time
+             * @example null
+             */
+            finishedAt?: string;
+            /** @example CSV */
+            format?: string;
+            /**
+             * Format: uuid
+             * @example 0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90
+             */
+            importJobId?: string;
+            /**
+             * Format: int32
+             * @example 40
+             */
+            mergedCount?: number;
+            /**
+             * Format: int32
+             * @example 10
+             */
+            rejectedCount?: number;
+            /**
+             * Format: date-time
+             * @example 2026-08-28T09:00:00Z
+             */
+            startedAt?: string;
+            /** @example RUNNING */
+            status?: string;
+            /**
+             * Format: int32
+             * @example 1200
+             */
+            totalRows?: number;
         };
         IocDto: {
             attribution?: components["schemas"]["AttributionDto"][];
@@ -536,6 +694,43 @@ export interface components {
             sourceValidUntil?: string;
             status?: string;
         };
+        IocSubmitRequest: {
+            /**
+             * Format: int32
+             * @example 80
+             */
+            confidence?: number;
+            /**
+             * @example null
+             * @enum {string}
+             */
+            hashType?: "MD5" | "SHA1" | "SHA256" | "SHA512";
+            /** @example observed in phishing campaign */
+            note?: string;
+            /**
+             * @example HIGH
+             * @enum {string}
+             */
+            severity?: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            tags?: string[];
+            /**
+             * @example AMBER
+             * @enum {string}
+             */
+            tlp?: "CLEAR" | "GREEN" | "AMBER" | "AMBER_STRICT" | "RED";
+            /**
+             * @example IPV4
+             * @enum {string}
+             */
+            type?: "IPV4" | "IPV6" | "DOMAIN" | "URL" | "FILE_HASH" | "EMAIL";
+            /**
+             * Format: date-time
+             * @example null
+             */
+            validUntil?: string;
+            /** @example 203.0.113.5 */
+            value: string;
+        };
         IssuedApiKeyDto: {
             apiKey?: components["schemas"]["ApiKeyDto"];
             /** @example ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e */
@@ -557,6 +752,69 @@ export interface components {
             hasMore?: boolean;
             items?: unknown[];
             nextCursor?: string;
+        };
+        PlanQuotasDto: {
+            /** @example false */
+            customFeedEnabled?: boolean;
+            /**
+             * Format: int64
+             * @example 10
+             */
+            maxApiKeys?: number;
+            /**
+             * Format: int64
+             * @example 1000
+             */
+            maxBatchLookup?: number;
+            /**
+             * Format: int64
+             * @example 10000
+             */
+            maxImportRowsPerFile?: number;
+            /**
+             * Format: int64
+             * @example 1000
+             */
+            maxManualSubmissionsPerDay?: number;
+            /**
+             * Format: int32
+             * @example 500
+             */
+            maxPageSize?: number;
+            /**
+             * Format: int64
+             * @example 5
+             */
+            maxWebhooks?: number;
+            /**
+             * Format: int32
+             * @example 300
+             */
+            minSyncIntervalSeconds?: number;
+            /** @example true */
+            publicBloomEnabled?: boolean;
+            /**
+             * Format: int64
+             * @example 500000
+             */
+            requestsPerDay?: number;
+            /**
+             * Format: int64
+             * @example 1200
+             */
+            requestsPerMinute?: number;
+            /**
+             * Format: int64
+             * @example 50000
+             */
+            stixExportMaxObjects?: number;
+            /**
+             * Format: int64
+             * @example 1000000
+             */
+            tenantBloomCapacity?: number;
+            /** @example true */
+            websocketEnabled?: boolean;
         };
         RefreshRequest: {
             /** @example 0G2f... */
@@ -674,6 +932,60 @@ export interface components {
             /** Format: int64 */
             totalActive?: number;
             trend?: components["schemas"]["DailyCountDto"][];
+        };
+        SubscriptionDto: {
+            /**
+             * Format: date-time
+             * @example null
+             */
+            cancelledAt?: string;
+            /**
+             * Format: date-time
+             * @example 2027-08-01T00:00:00Z
+             */
+            currentPeriodEnd?: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-01T00:00:00Z
+             */
+            currentPeriodStart?: string;
+            /** @example PREMIUM */
+            planCode?: string;
+            /** @example Premium */
+            planName?: string;
+            /** @example MANUAL */
+            provider?: string;
+            quotas?: components["schemas"]["PlanQuotasDto"];
+            /** @example ACTIVE */
+            status?: string;
+            /**
+             * Format: int32
+             * @example 2
+             */
+            tier?: number;
+        };
+        SubscriptionUsageDto: {
+            apiKeys?: components["schemas"]["UsageItem"];
+            manualSubmissionsToday?: components["schemas"]["UsageItem"];
+            /** @example PREMIUM */
+            planCode?: string;
+        };
+        UsageItem: {
+            /**
+             * Format: int64
+             * @example 1000
+             */
+            limit?: number;
+            /**
+             * Format: date-time
+             * @example 2026-08-29T00:00:00Z
+             */
+            resetAt?: string;
+            /**
+             * Format: int64
+             * @example 12
+             */
+            used?: number;
         };
         VersionDto: {
             apiVersion?: string;
@@ -1190,7 +1502,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list: {
         parameters: {
             query?: {
                 cursor?: string;
@@ -1265,6 +1577,256 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    submitIoc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IocSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Merged into an existing IOC */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description IOC created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "attribution": [],
+                     *       "confidence": 80,
+                     *       "firstSeen": "2026-08-28T09:00:00Z",
+                     *       "hashType": null,
+                     *       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                     *       "lastSeen": "2026-08-28T09:00:00Z",
+                     *       "score": 72,
+                     *       "severity": "HIGH",
+                     *       "sourceCount": 1,
+                     *       "status": "ACTIVE",
+                     *       "tags": [
+                     *         "internal-incident-2026-08"
+                     *       ],
+                     *       "tlp": "AMBER",
+                     *       "type": "IPV4",
+                     *       "validUntil": null,
+                     *       "value": "203.0.113.5"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description Rejected by the pipeline, e.g. private IP (INVALID_IOC_FORMAT) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description Missing ioc:submit / ioc:publish, or the plan disables manual submission (FORBIDDEN / PLAN_LIMIT_EXCEEDED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    importIocs: {
+        parameters: {
+            query?: never;
+            header: {
+                "Content-Type": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": string;
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description Import accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "acceptedCount": 0,
+                     *       "createdAt": "2026-08-28T09:00:00Z",
+                     *       "errorMessage": null,
+                     *       "finishedAt": null,
+                     *       "format": "CSV",
+                     *       "importJobId": "0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90",
+                     *       "mergedCount": 0,
+                     *       "rejectedCount": 0,
+                     *       "startedAt": null,
+                     *       "status": "PENDING",
+                     *       "totalRows": 1200
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description Undecodable payload (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description Plan does not allow importing (PLAN_LIMIT_EXCEEDED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description File exceeds the plan's row limit (PAYLOAD_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description Unsupported Content-Type (UNSUPPORTED_MEDIA_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    importStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "acceptedCount": 0,
+                     *       "createdAt": "2026-08-28T09:00:00Z",
+                     *       "errorMessage": null,
+                     *       "finishedAt": null,
+                     *       "format": "CSV",
+                     *       "importJobId": "0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90",
+                     *       "mergedCount": 0,
+                     *       "rejectedCount": 0,
+                     *       "startedAt": null,
+                     *       "status": "PENDING",
+                     *       "totalRows": 1200
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ImportJobDto"];
+                };
+            };
+            /** @description Unknown job or another tenant's job (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportJobDto"];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
@@ -1567,6 +2129,89 @@ export interface operations {
             };
         };
     };
+    reportFalsePositive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FalsePositiveRequest"];
+            };
+        };
+        responses: {
+            /** @description Report recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "attribution": [],
+                     *       "confidence": 80,
+                     *       "firstSeen": "2026-08-28T09:00:00Z",
+                     *       "hashType": null,
+                     *       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                     *       "lastSeen": "2026-08-28T09:00:00Z",
+                     *       "score": 72,
+                     *       "severity": "HIGH",
+                     *       "sourceCount": 1,
+                     *       "status": "ACTIVE",
+                     *       "tags": [
+                     *         "internal-incident-2026-08"
+                     *       ],
+                     *       "tlp": "AMBER",
+                     *       "type": "IPV4",
+                     *       "validUntil": null,
+                     *       "value": "203.0.113.5"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description The IOC belongs to the public intelligence pool (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description Unknown or invisible IOC (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IocDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     sources_1: {
         parameters: {
             query?: never;
@@ -1633,7 +2278,7 @@ export interface operations {
             };
         };
     };
-    list: {
+    list_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -2019,6 +2664,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    subscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan in effect */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "cancelledAt": null,
+                     *       "currentPeriodEnd": "2027-08-01T00:00:00Z",
+                     *       "currentPeriodStart": "2026-08-01T00:00:00Z",
+                     *       "planCode": "PREMIUM",
+                     *       "planName": "Premium",
+                     *       "provider": "MANUAL",
+                     *       "quotas": {
+                     *         "customFeedEnabled": false,
+                     *         "maxApiKeys": 10,
+                     *         "maxBatchLookup": 1000,
+                     *         "maxImportRowsPerFile": 10000,
+                     *         "maxManualSubmissionsPerDay": 1000,
+                     *         "maxPageSize": 500,
+                     *         "maxWebhooks": 5,
+                     *         "minSyncIntervalSeconds": 300,
+                     *         "publicBloomEnabled": true,
+                     *         "requestsPerDay": 500000,
+                     *         "requestsPerMinute": 1200,
+                     *         "stixExportMaxObjects": 50000,
+                     *         "tenantBloomCapacity": 1000000,
+                     *         "websocketEnabled": true
+                     *       },
+                     *       "status": "ACTIVE",
+                     *       "tier": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SubscriptionDto"];
+                };
+            };
+            /** @description Missing subscription:read permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    subscriptionUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage against the plan's quotas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "apiKeys": {
+                     *         "limit": 10,
+                     *         "resetAt": null,
+                     *         "used": 2
+                     *       },
+                     *       "manualSubmissionsToday": {
+                     *         "limit": 1000,
+                     *         "resetAt": "2026-08-29T00:00:00Z",
+                     *         "used": 12
+                     *       },
+                     *       "planCode": "PREMIUM"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SubscriptionUsageDto"];
+                };
+            };
+            /** @description Missing subscription:read permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionUsageDto"];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */

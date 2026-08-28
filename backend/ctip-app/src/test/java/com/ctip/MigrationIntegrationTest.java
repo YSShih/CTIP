@@ -105,6 +105,26 @@ class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
                         "api_keys");
     }
 
+    /** Phase 14 交付表 17、18、18b(V28);方案種子與 subscription:read 權限由 V29 寫入。 */
+    @Test
+    void phase14PlanTablesExist() {
+        List<String> tables =
+                jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = 'public'", String.class);
+        assertThat(tables).contains("plans", "subscriptions", "import_jobs");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM plans", Integer.class))
+                .as("V29 必須種入四個方案")
+                .isEqualTo(4);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM permissions WHERE code = 'subscription:read'", Integer.class))
+                .isEqualTo(1);
+        // ingestion_rejections 的匯入關聯欄位(表 7 + 表 18b)
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM information_schema.columns"
+                                + " WHERE table_name = 'ingestion_rejections' AND column_name = 'import_job_id'",
+                        Integer.class))
+                .isEqualTo(1);
+    }
+
     /**
      * 每一張表都必須由某支 migration 建立——不得有「schema 裡有、migration 裡沒有」的表。
      *

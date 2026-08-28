@@ -983,3 +983,73 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 - **Phase 14 開工前必讀** `phase-14.md` 新增的交付物:`subscription:read` 權限、
   放寬三處配額型別(0/null)、`RateLimiterPort` 改簽章、`import_jobs` 表、seed 補方案樣本
 - ArchUnit 現在有 **10 條**規則
+
+---
+
+## Phase 14 — Plan · Subscription · 配額 ＋ IOC 寫入端點
+
+- **狀態**:done(2026-08-28)
+- **執行單**:`docs/spec/phases/phase-14.md`
+- **Commit**:(見 git log,message `Phase 14: plans, quotas and IOC write endpoints`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest='QuotaEnforcementTest,ManualSubmissionTest,FalsePositiveReportTest'`
+    (逐字)✅ **24/24**(Quota 12 + ManualSubmission 8 + FalsePositive 4)
+  - `clean verify -Ptest-integration` 無過濾 ✅ **644 tests**(sdk 13 + core 263 + adapters 33 + app 335;
+    Spotless / Checkstyle / JaCoCo 全過,含 domain/application 的套件覆蓋門檻)
+  - frontend ✅ `tsc --noEmit`、`eslint --max-warnings 0`、`build`、`test`、`format:check`、`api:check`
+  - `dod.sh mvp` 回歸 ✅ **38/38**(commit 前 M1-10 `api:check` 會因為重新產生的
+    `schema.d.ts` 尚未進版控而 FAIL,那是 `git diff --exit-code` 的預期行為;commit 後複跑全綠)
+- **交付物**:
+  - migration:`V28`(plans / subscriptions / import_jobs + `ingestion_rejections.import_job_id`)、
+    `V29__seed_plans_and_permissions.sql`(四個方案 + `subscription:read` 權限,皆冪等)。
+    **兩組種子併入 V29**:phase-14 只配到 V28–V29,另開 V30 會推移 Phase 15/18/20/21 已指派的號碼
+  - core/domain `plan/`:`Plan`(14 個配額維度的唯讀投影)、`QuotaLimit`(0 = 停用 / null = 無限制)、
+    `Subscription` 聚合(B1–B5)、`BillingPeriod`、`PlanCode`/`SubscriptionStatus`/`SubscriptionProvider`;
+    事件 `SubscriptionChanged`
+  - core/application `plan/`:**`QuotaService` 是配額的單一判定點**,三種超限語意各有例外型別
+    (`QuotaExhaustedException` → 429、`PlanLimitExceededException` → 403、
+    `RequestSizeLimitExceededException` → 413);port `PlanRepository`/`SubscriptionRepository`/
+    `ImportJobRepository`/`ImportPayloadParserPort`
+  - core/application `ingestion/`:`ManualSubmissionService`、`ImportService` + `ImportJobRunner`(`@Async`)
+    + `ImportJobFactory`、`ImportJob`/`ImportJobStatus`/`ImportFormat`、`IngestionRun`(取代裸 `sourceSyncId`)、
+    `RecordOutcome`(單筆路徑);`indicator/FalsePositiveReportService`
+  - adapters:`manual/ManualSubmissionAdapter` + `ManualSubmissionCsv`(CSV 解碼,無 JSON 相依)
+  - app:`PlanEntity`/`SubscriptionEntity`/`ImportJobEntity` + adapter/mapper(`PlanRepositoryAdapter`
+    對 plans 有 60 秒 TTL 快取,**訂閱不快取**——降級要立即生效)、`ImportPayloadParser`(bundle 用 Jackson)、
+    `ImportAsyncConfig`(有界執行緒池 + CallerRunsPolicy)、`PlanOverridesInitializer`(`CTIP_PLAN_OVERRIDES`)、
+    `IocWriteController`、`SubscriptionController`、`PageSizePolicy`、`RateLimitHeaders`
+  - frontend:`/iocs/new`、`/iocs/import`、`/settings/subscription` 三頁 + `features/subscription`、
+    `apiPostRaw`(CSV / bundle 原文直送)、header 依權限顯示的次要導覽
+- **偏離事項 / ADR**:10 項見 `docs/architecture/decisions/0023-phase14-plans-and-write-endpoints.md`;
+  規格回寫 `00 §0.20`(09 §9.7、10 §10.6/§10.7、08 §8.3、04 表 5/12/17/§4.7、05 §5.4)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **`ioc:publish` 光做擁有權轉移仍然沒有作用**——ADR 0019 已定調要把 owner 轉成 public tenant,
+     但手動提交的來源記錄是 `INTERNAL_ONLY`,而 I14 規定「全來源皆 INTERNAL_ONLY 者不得出現在
+     非擁有租戶的回應」+「擁有租戶豁免不適用於 public」,結果是**一筆誰都看不到的公開情資**。
+     測試(匿名讀得到)先紅才發現。發布時該筆來源記錄改記 `PUBLIC_REDISTRIBUTABLE`
+  2. **匯入若不計入每日提交配額,每日上限可被完全繞過**(改用匯入端點即可)。已改為扣同一個配額;
+     副作用是 PREMIUM 一次匯入 10,000 筆當日只會接受 1,000 筆(§10.6 兩個欄位的數值關係使然)
+  3. **配額 `0` 回 429 是在騙 client**:`Retry-After` 說「等一下再試」,但停用的配額永遠不會恢復。
+     改為 `0` → 403、正整數用罄 → 429
+  4. **`indicator_sources.raw_payload` 從 M1 起就沒有任何程式碼寫入**,卻有 GC 索引與保留天數設定。
+     Phase 14 的 `note` / 誤判 `reason` 正好需要它,改為真的寫入(只寫不讀,新快照無內容時不覆寫)
+  5. **`@Async` + 外層 `@Transactional` 會撞主鍵**:PENDING 列尚未提交,背景執行緒查不到、
+     以同一個 id 再 INSERT 一次。`ImportService.submit` 因此刻意不加 `@Transactional`
+  6. **配額必須跨批遞減**:`BatchState` 是一批一個,沿用同一個 `IngestionRun` 會讓每批都拿到
+     完整餘額,上限形同虛設
+  7. **STIX pattern 反解用 `(.*)` 會把複合 pattern 當成單一值**——
+     `[a:value = 'x'] AND [b:value = 'y']` 會解出一個假 IOC。改為只吃「非引號或跳脫序列」
+- **給下一 session 的注意事項(Phase 15 = Bloom Filter)**:
+  - **配額一律經 `QuotaService`**,不得在任何地方寫死數值;`plans.tenant_bloom_capacity` 已可讀
+  - **發布的 IOC 其來源記錄是 `PUBLIC_REDISTRIBUTABLE`**,`eligibleForBloom()` 對它成立
+    ——ADR 0019「沒有動的」那一項(tenant bloom 恆為空)只剩「租戶私有提交」那一半仍需 Phase 15 定調
+  - `RateLimiterPort` 已是 `tryConsume(key, tokens, QuotaLimit)` + `peek`;
+    **維度 1–3 仍未做(Phase 17)**,且 `RateLimitFilter` 必須留在認證之前
+  - 新增整合測試若要建立 API key,注意**數量上限依方案**(FREE = 1);需要多把就用
+    `support/TestPlans` 指派 PREMIUM/ENTERPRISE,測完 `withPlan` 會自動還原
+  - `plans` 是**全域參考資料**,整合測試共用同一個 context:改配額一定要還原
+    (`TestPlans.withPlan` 走 finally;`RateLimitTest` 用 `@AfterEach`)
+  - 新增 migration 前先看現有最大版本號(目前 **V29**);Phase 15 的 bloom 是 `V30`
+  - `IngestionBatchExecutor.execute` 的第二個參數已改為 `IngestionRun`(不再是裸 `UUID sourceSyncId`)
+  - 前端 `/iocs/new`、`/iocs/import` 是靜態段,靠 react-router 的評分贏過 `/iocs/:id`
+    ——`router.test.tsx` 有案例釘住,升版若改了排序規則會先紅

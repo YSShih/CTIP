@@ -393,6 +393,16 @@ OpenAPI JSON: /v3/api-docs
 | **單次分頁上限**（`max_page_size`） | 夾到上限，**不報錯** | §9.3 既有行為 |
 | **批次處理中途跨越每日配額** | 請求本身成功（`202`/`200`），越界的記錄逐筆寫入 `ingestion_rejections`，reason = `QUOTA_EXCEEDED` | 已接受的部分不該因為後半超額而整批失敗 |
 
+> **實作回饋修訂（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> 上表把「手動提交／日」歸在 429，但配額值 `0` 的語意是**停用**而非「用完」
+> （[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）。
+> 回 `429` + `Retry-After` 等於告訴 client「等一下再試就會過」，而配額不會隨視窗恢復。
+> **同一個欄位依值分流**：`0` → `403 PLAN_LIMIT_EXCEEDED`；正整數在視窗內用罄 → `429`。
+>
+> **匯入的每一筆也扣減 `max_manual_submissions_per_day`**：否則每日上限可被「改用匯入端點」
+> 完全繞過（PREMIUM 的每日 1,000 筆會變成每天無限次 × 每檔 10,000 筆）。
+> 越界的記錄逐筆 `QUOTA_EXCEEDED`，請求本身仍回 `202`——即上表最後一列描述的行為。
+
 ### `ioc:publish` 的語意 `[2026-08-28 定調]`
 
 > 照原文字面實作會產生「`owner_tenant_id` = 某租戶、`tlp` = `CLEAR`」的 Indicator，而它：
@@ -404,6 +414,13 @@ OpenAPI JSON: /v3/api-docs
 > **定調**：`ioc:publish` 是**擁有權轉移**——把 `owner_tenant_id` 設為 public tenant 並套用
 > `CLEAR`／`GREEN`。轉移後該 IOC 依 §7.9 的一般規則對所有人可見，且進入 public bloom。
 > 原租戶的來源記錄保留（`indicator_sources` 不變），attribution 因此仍然成立。
+>
+> **實作回饋修訂（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> 只做擁有權轉移**仍然沒有任何人看得到**那筆 IOC——上表規定手動提交的來源記錄是
+> `INTERNAL_ONLY`，而不變量 I14「全來源皆 `INTERNAL_ONLY` 者不得出現在非擁有租戶的任何回應中」
+> 加上「擁有租戶豁免不適用於 public tenant」，等於對所有人隱藏。
+> 因此**發布時該筆 MANUAL 來源記錄記為 `PUBLIC_REDISTRIBUTABLE`**：
+> 上表的 `INTERNAL_ONLY` 說的是**私有提交**，而「發布」這個動作本身就是租戶對再散布的授權。
 
 ### 誤判回報的作用域 `[2026-08-28 定調]`
 

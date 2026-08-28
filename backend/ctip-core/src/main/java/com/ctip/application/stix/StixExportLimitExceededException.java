@@ -6,7 +6,7 @@ public class StixExportLimitExceededException extends RuntimeException {
     @java.io.Serial
     private static final long serialVersionUID = 1L;
 
-    public StixExportLimitExceededException(int maxObjects) {
+    public StixExportLimitExceededException(long maxObjects) {
         super("bundle 物件數超過上限 " + maxObjects + "(PLAN_LIMIT_EXCEEDED)");
     }
 }

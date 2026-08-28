@@ -222,6 +222,19 @@ M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`——**只
 
 這樣手動提交自動獲得完整的驗證、正規化、去重、合併與稽核，**不需要第二套資料品質邏輯**。
 
+> **實作回饋修訂（2026-08-28，Phase 14；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
+> `fetch()` 只解 **CSV**——[09 §9.7](09-api.md#97-寫入端點細節-m2) 的另一種格式 STIX 2.1 bundle
+> 需要 JSON 解析器，而 `ctip-adapters` 刻意不依賴任何 JSON 函式庫（「只認識 SDK 契約」），
+> `ctip-core` 亦無 JSON 相依。故新增 port `ImportPayloadParserPort`：CSV 分支呼叫本 adapter
+> 的 `fetch()`（本節的字面實作），bundle 分支在 `ctip-app` 解碼；
+> **兩者產生同一種 `RawThreatRecord`、之後走完全相同的 pipeline**，本節的保證不受影響。
+>
+> `config` 的三個鍵:`format`(目前僅 `CSV`)、`payload`(CSV 文字)、
+> `submittedAt`(ISO-8601;CSV 未給 `observedAt` 的列以此為觀測時間,由呼叫端以 `ClockPort` 提供,
+> adapter 因此保持確定性)。CSV 格式:必須有表頭、欄名不分大小寫、**未知欄名一律拒絕**、
+> 只有 `value` 必填。單筆提交不走 CSV——一筆記錄直接建構 `RawThreatRecord` 即可,
+> 繞道文字編碼只會多出引號跳脫這種失敗模式。
+
 ---
 
 ## 8.4 未來的真實 Adapter

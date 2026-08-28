@@ -10,6 +10,7 @@ import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.plan.QuotaLimit;
 import com.ctip.domain.shared.Cursor;
 import com.ctip.domain.shared.CursorPage;
 import com.ctip.domain.shared.Visibility;
@@ -41,9 +42,9 @@ class StixExportServiceTest {
     void bundleContainsOnlyReferencedMarkingsAndVisibleIndicators() {
         Indicator clear = indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
         Indicator green = indicator(Tlp.GREEN, RedistributionPolicy.ATTRIBUTION_REQUIRED);
-        StixExportService service = service(List.of(clear, green), 1000);
+        StixExportService service = service(List.of(clear, green));
 
-        StixBundle bundle = service.exportBundle(Visibility.authenticated(DEMO_TENANT));
+        StixBundle bundle = service.exportBundle(Visibility.authenticated(DEMO_TENANT), QuotaLimit.of(1000L));
 
         assertThat(bundle.bundleId()).isEqualTo("bundle--" + BUNDLE_UUID);
         assertThat(bundle.markings())
@@ -56,10 +57,10 @@ class StixExportServiceTest {
     @Test
     void allInternalOnlyIndicatorIsExcludedForNonOwner() {
         Indicator internalOnly = indicator(Tlp.CLEAR, RedistributionPolicy.INTERNAL_ONLY);
-        StixExportService service = service(List.of(internalOnly), 1000);
+        StixExportService service = service(List.of(internalOnly));
 
         // viewer(DEMO_TENANT)≠ owner(public tenant):I14 → 不得出現(§7.9 規則 3)
-        StixBundle bundle = service.exportBundle(Visibility.authenticated(DEMO_TENANT));
+        StixBundle bundle = service.exportBundle(Visibility.authenticated(DEMO_TENANT), QuotaLimit.of(1000L));
 
         assertThat(bundle.indicatorContents()).isEmpty();
         assertThat(bundle.markings()).isEmpty();
@@ -72,19 +73,36 @@ class StixExportServiceTest {
                 indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE),
                 indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE));
         // 3 indicator + 1 marking = 4 > 3
-        StixExportService service = service(three, 3);
+        StixExportService service = service(three);
 
-        assertThatThrownBy(() -> service.exportBundle(Visibility.authenticated(DEMO_TENANT)))
+        assertThatThrownBy(() -> service.exportBundle(Visibility.authenticated(DEMO_TENANT), QuotaLimit.of(3L)))
                 .isInstanceOf(StixExportLimitExceededException.class);
     }
 
-    private static StixExportService service(List<Indicator> visible, int maxObjects) {
+    /** ANONYMOUS 的 stix_export_max_objects = 0,語意是「停用」而非「上限 0」(ADR 0019)。 */
+    @Test
+    void disabledPlanQuotaRejectsBeforeScanning() {
+        StixExportService service = service(List.of(indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE)));
+
+        assertThatThrownBy(() -> service.exportBundle(Visibility.authenticated(DEMO_TENANT), QuotaLimit.disabled()))
+                .isInstanceOf(StixExportLimitExceededException.class);
+    }
+
+    /** ENTERPRISE 為 null = 無限制:不得因為沒有數值而被當成 0 擋掉。 */
+    @Test
+    void unlimitedPlanQuotaExportsEverything() {
+        List<Indicator> two = List.of(
+                indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE),
+                indicator(Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE));
+
+        StixBundle bundle = service(two).exportBundle(Visibility.authenticated(DEMO_TENANT), QuotaLimit.unlimited());
+
+        assertThat(bundle.indicatorContents()).hasSize(2);
+    }
+
+    private static StixExportService service(List<Indicator> visible) {
         return new StixExportService(
-                repositoryOf(visible),
-                new InMemoryStixObjects(visible),
-                new RedistributionFilter(),
-                () -> BUNDLE_UUID,
-                new StixExportSettings(maxObjects));
+                repositoryOf(visible), new InMemoryStixObjects(visible), new RedistributionFilter(), () -> BUNDLE_UUID);
     }
 
     /** 兩頁分頁(每頁 2 筆)驗證 collectExportable 的迴圈;findVisible 之外的方法不會被呼叫。 */

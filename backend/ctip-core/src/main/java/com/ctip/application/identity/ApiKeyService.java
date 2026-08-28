@@ -1,5 +1,6 @@
 package com.ctip.application.identity;
 
+import com.ctip.application.plan.QuotaService;
 import com.ctip.application.port.ApiKeyRepository;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.EventPublisherPort;
@@ -19,19 +20,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApiKeyService {
 
     private final ApiKeyRepository apiKeys;
-    private final ApiKeySettings settings;
+    private final QuotaService quotas;
     private final ApiKeyFactory factory;
     private final EventPublisherPort events;
     private final ClockPort clock;
 
     public ApiKeyService(
             ApiKeyRepository apiKeys,
-            ApiKeySettings settings,
+            QuotaService quotas,
             ApiKeyFactory factory,
             EventPublisherPort events,
             ClockPort clock) {
         this.apiKeys = apiKeys;
-        this.settings = settings;
+        this.quotas = quotas;
         this.factory = factory;
         this.events = events;
         this.clock = clock;
@@ -42,11 +43,9 @@ public class ApiKeyService {
         if (!request.tenantId().equals(creator.tenantId())) {
             throw new IllegalArgumentException("不得為其他租戶建立 API key");
         }
-        // §10.5 的數量上限。沒有這道檢查,任何具 apikey:create 的身分可無限量鑄造金鑰,
-        // 而一把帶該 scope 的金鑰還能自我複製出更多金鑰(ADR 0013)
-        if (apiKeys.countActive(request.tenantId()) >= settings.maxPerTenant()) {
-            throw new ApiKeyLimitExceededException("API key quota exhausted");
-        }
+        // §10.5 的數量上限,依方案查 plans.max_api_keys(Phase 14)。沒有這道檢查,
+        // 任何具 apikey:create 的身分可無限量鑄造金鑰,而一把帶該 scope 的金鑰還能自我複製出更多金鑰(ADR 0013)
+        quotas.requireApiKeyHeadroom(request.tenantId(), apiKeys.countActive(request.tenantId()));
         IssuedApiKey issued = factory.create(request, creator.permissions());
         ApiKey saved = apiKeys.save(issued.apiKey());
         issued.apiKey().pullEvents().forEach(events::publish);

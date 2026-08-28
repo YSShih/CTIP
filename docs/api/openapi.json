@@ -151,6 +151,24 @@
         },
         "type" : "object"
       },
+      "FalsePositiveRequest" : {
+        "properties" : {
+          "evidenceUrl" : {
+            "example" : "null",
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "reason" : {
+            "example" : "legitimate CDN endpoint",
+            "maxLength" : 1024,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "reason" ],
+        "type" : "object"
+      },
       "FieldIssue" : {
         "properties" : {
           "field" : {
@@ -166,6 +184,63 @@
         "properties" : {
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ImportJobDto" : {
+        "properties" : {
+          "acceptedCount" : {
+            "example" : 1150,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "example" : "2026-08-28T09:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "errorMessage" : {
+            "example" : "null",
+            "type" : "string"
+          },
+          "finishedAt" : {
+            "example" : "null",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "format" : {
+            "example" : "CSV",
+            "type" : "string"
+          },
+          "importJobId" : {
+            "example" : "0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90",
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "mergedCount" : {
+            "example" : 40,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "rejectedCount" : {
+            "example" : 10,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startedAt" : {
+            "example" : "2026-08-28T09:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "example" : "RUNNING",
+            "type" : "string"
+          },
+          "totalRows" : {
+            "example" : 1200,
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -278,6 +353,66 @@
         },
         "type" : "object"
       },
+      "IocSubmitRequest" : {
+        "properties" : {
+          "confidence" : {
+            "example" : 80,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "hashType" : {
+            "enum" : [ "MD5", "SHA1", "SHA256", "SHA512" ],
+            "example" : "null",
+            "type" : "string"
+          },
+          "note" : {
+            "example" : "observed in phishing campaign",
+            "maxLength" : 1024,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "severity" : {
+            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
+            "example" : "HIGH",
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "example" : "internal-incident-2026-08",
+              "maxLength" : 64,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "tlp" : {
+            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
+            "example" : "AMBER",
+            "type" : "string"
+          },
+          "type" : {
+            "enum" : [ "IPV4", "IPV6", "DOMAIN", "URL", "FILE_HASH", "EMAIL" ],
+            "example" : "IPV4",
+            "type" : "string"
+          },
+          "validUntil" : {
+            "example" : "null",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "value" : {
+            "example" : "203.0.113.5",
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "value" ],
+        "type" : "object"
+      },
       "IssuedApiKeyDto" : {
         "properties" : {
           "apiKey" : {
@@ -343,6 +478,78 @@
           },
           "nextCursor" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PlanQuotasDto" : {
+        "properties" : {
+          "customFeedEnabled" : {
+            "example" : false,
+            "type" : "boolean"
+          },
+          "maxApiKeys" : {
+            "example" : 10,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maxBatchLookup" : {
+            "example" : 1000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maxImportRowsPerFile" : {
+            "example" : 10000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maxManualSubmissionsPerDay" : {
+            "example" : 1000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "maxPageSize" : {
+            "example" : 500,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "maxWebhooks" : {
+            "example" : 5,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minSyncIntervalSeconds" : {
+            "example" : 300,
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "publicBloomEnabled" : {
+            "example" : true,
+            "type" : "boolean"
+          },
+          "requestsPerDay" : {
+            "example" : 500000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "requestsPerMinute" : {
+            "example" : 1200,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "stixExportMaxObjects" : {
+            "example" : 50000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "tenantBloomCapacity" : {
+            "example" : 1000000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "websocketEnabled" : {
+            "example" : true,
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -625,6 +832,85 @@
               "$ref" : "#/components/schemas/DailyCountDto"
             },
             "type" : "array"
+          }
+        },
+        "type" : "object"
+      },
+      "SubscriptionDto" : {
+        "properties" : {
+          "cancelledAt" : {
+            "example" : "null",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currentPeriodEnd" : {
+            "example" : "2027-08-01T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "currentPeriodStart" : {
+            "example" : "2026-08-01T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "planCode" : {
+            "example" : "PREMIUM",
+            "type" : "string"
+          },
+          "planName" : {
+            "example" : "Premium",
+            "type" : "string"
+          },
+          "provider" : {
+            "example" : "MANUAL",
+            "type" : "string"
+          },
+          "quotas" : {
+            "$ref" : "#/components/schemas/PlanQuotasDto"
+          },
+          "status" : {
+            "example" : "ACTIVE",
+            "type" : "string"
+          },
+          "tier" : {
+            "example" : 2,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SubscriptionUsageDto" : {
+        "properties" : {
+          "apiKeys" : {
+            "$ref" : "#/components/schemas/UsageItem"
+          },
+          "manualSubmissionsToday" : {
+            "$ref" : "#/components/schemas/UsageItem"
+          },
+          "planCode" : {
+            "example" : "PREMIUM",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "UsageItem" : {
+        "properties" : {
+          "limit" : {
+            "example" : 1000,
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "resetAt" : {
+            "example" : "2026-08-29T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "used" : {
+            "example" : 12,
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1219,7 +1505,7 @@
     "/api/v1/iocs" : {
       "get" : {
         "description" : "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp, tags (repeat the parameter; all must match), sourceId, confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。",
-        "operationId" : "list_1",
+        "operationId" : "list",
         "parameters" : [ {
           "in" : "query",
           "name" : "cursor",
@@ -1418,6 +1704,306 @@
         "security" : [ ],
         "summary" : "List IOCs (cursor pagination)",
         "tags" : [ "IOC" ]
+      },
+      "post" : {
+        "description" : "Runs the full ingestion pipeline (validation, normalisation, deduplication, merge) — no stage is bypassed. The owning tenant is always the submitter's; it cannot be chosen. TLP defaults to AMBER; CLEAR/GREEN additionally require ioc:publish and transfer ownership to the public tenant. Returns 201 for a new IOC, 200 when merged into an existing one. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:submit。",
+        "operationId" : "submitIoc",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/IocSubmitRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "Merged into an existing IOC"
+          },
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "attribution" : [ ],
+                  "confidence" : 80,
+                  "firstSeen" : "2026-08-28T09:00:00Z",
+                  "hashType" : null,
+                  "id" : "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                  "lastSeen" : "2026-08-28T09:00:00Z",
+                  "score" : 72,
+                  "severity" : "HIGH",
+                  "sourceCount" : 1,
+                  "status" : "ACTIVE",
+                  "tags" : [ "internal-incident-2026-08" ],
+                  "tlp" : "AMBER",
+                  "type" : "IPV4",
+                  "validUntil" : null,
+                  "value" : "203.0.113.5"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "IOC created"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "Rejected by the pipeline, e.g. private IP (INVALID_IOC_FORMAT)"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "Missing ioc:submit / ioc:publish, or the plan disables manual submission (FORBIDDEN / PLAN_LIMIT_EXCEEDED)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Submit a single IOC",
+        "tags" : [ "IOC Write" ]
+      }
+    },
+    "/api/v1/iocs/import" : {
+      "post" : {
+        "description" : "Accepts text/csv or a STIX 2.1 bundle (application/json). Processed asynchronously: returns 202 with an importJobId, poll GET /iocs/import/{jobId} for progress. Imported IOCs are always private to the tenant (TLP:AMBER). Rows beyond the plan's daily quota are recorded individually as QUOTA_EXCEEDED rather than failing the whole file. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:import。",
+        "operationId" : "importIocs",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "Content-Type",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "format" : "byte",
+                "type" : "string"
+              }
+            },
+            "text/csv" : {
+              "schema" : {
+                "format" : "byte",
+                "type" : "string"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "202" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "acceptedCount" : 0,
+                  "createdAt" : "2026-08-28T09:00:00Z",
+                  "errorMessage" : null,
+                  "finishedAt" : null,
+                  "format" : "CSV",
+                  "importJobId" : "0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90",
+                  "mergedCount" : 0,
+                  "rejectedCount" : 0,
+                  "startedAt" : null,
+                  "status" : "PENDING",
+                  "totalRows" : 1200
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Import accepted"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Undecodable payload (INVALID_REQUEST)"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Plan does not allow importing (PLAN_LIMIT_EXCEEDED)"
+          },
+          "413" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "File exceeds the plan's row limit (PAYLOAD_TOO_LARGE)"
+          },
+          "415" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Unsupported Content-Type (UNSUPPORTED_MEDIA_TYPE)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Bulk import IOCs",
+        "tags" : [ "IOC Write" ]
+      }
+    },
+    "/api/v1/iocs/import/{jobId}" : {
+      "get" : {
+        "description" : "Jobs of another tenant are reported as not found rather than forbidden. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:import。",
+        "operationId" : "importStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "jobId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "acceptedCount" : 0,
+                  "createdAt" : "2026-08-28T09:00:00Z",
+                  "errorMessage" : null,
+                  "finishedAt" : null,
+                  "format" : "CSV",
+                  "importJobId" : "0f2d7b3c-9a41-4a7e-8b2f-1c5d6e7f8a90",
+                  "mergedCount" : 0,
+                  "rejectedCount" : 0,
+                  "startedAt" : null,
+                  "status" : "PENDING",
+                  "totalRows" : 1200
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Job status"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ImportJobDto"
+                }
+              }
+            },
+            "description" : "Unknown job or another tenant's job (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Get import progress",
+        "tags" : [ "IOC Write" ]
       }
     },
     "/api/v1/iocs/lookup" : {
@@ -1697,6 +2283,107 @@
         "tags" : [ "IOC" ]
       }
     },
+    "/api/v1/iocs/{id}/report-false-positive" : {
+      "post" : {
+        "description" : "Marks the MANUAL source record of the IOC as FALSE_POSITIVE and re-runs the merge policy — the resulting status is decided by that policy, never by the caller. Only the caller tenant's own IOCs are accepted; reports against public intelligence go through the platform appeal process. 認證:需要 Bearer JWT 或 X-API-Key,權限 ioc:report-fp。",
+        "operationId" : "reportFalsePositive",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/FalsePositiveRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "attribution" : [ ],
+                  "confidence" : 80,
+                  "firstSeen" : "2026-08-28T09:00:00Z",
+                  "hashType" : null,
+                  "id" : "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                  "lastSeen" : "2026-08-28T09:00:00Z",
+                  "score" : 72,
+                  "severity" : "HIGH",
+                  "sourceCount" : 1,
+                  "status" : "ACTIVE",
+                  "tags" : [ "internal-incident-2026-08" ],
+                  "tlp" : "AMBER",
+                  "type" : "IPV4",
+                  "validUntil" : null,
+                  "value" : "203.0.113.5"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "Report recorded"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "The IOC belongs to the public intelligence pool (FORBIDDEN)"
+          },
+          "404" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IocDto"
+                }
+              }
+            },
+            "description" : "Unknown or invisible IOC (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Report a false positive",
+        "tags" : [ "IOC Write" ]
+      }
+    },
     "/api/v1/iocs/{id}/sources" : {
       "get" : {
         "description" : "Per-source observations for one indicator. Redistribution policy is enforced: for non-owner viewers only PUBLIC_REDISTRIBUTABLE and ATTRIBUTION_REQUIRED records are returned (DERIVED_ONLY and INTERNAL_ONLY are masked). 認證:匿名。",
@@ -1776,7 +2463,7 @@
     "/api/v1/sources" : {
       "get" : {
         "description" : "All configured threat sources with their TLP defaults, redistribution policy snapshot basis and health status. 認證:匿名。",
-        "operationId" : "list",
+        "operationId" : "list_1",
         "responses" : {
           "200" : {
             "content" : {
@@ -2202,6 +2889,155 @@
         "tags" : [ "STIX" ]
       }
     },
+    "/api/v1/subscription" : {
+      "get" : {
+        "description" : "Returns the plan in effect for the caller's tenant together with all quota values. A tenant without an active subscription is on FREE (invariant B4). 認證:需要 Bearer JWT 或 X-API-Key,權限 subscription:read。",
+        "operationId" : "subscription",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "cancelledAt" : null,
+                  "currentPeriodEnd" : "2027-08-01T00:00:00Z",
+                  "currentPeriodStart" : "2026-08-01T00:00:00Z",
+                  "planCode" : "PREMIUM",
+                  "planName" : "Premium",
+                  "provider" : "MANUAL",
+                  "quotas" : {
+                    "customFeedEnabled" : false,
+                    "maxApiKeys" : 10,
+                    "maxBatchLookup" : 1000,
+                    "maxImportRowsPerFile" : 10000,
+                    "maxManualSubmissionsPerDay" : 1000,
+                    "maxPageSize" : 500,
+                    "maxWebhooks" : 5,
+                    "minSyncIntervalSeconds" : 300,
+                    "publicBloomEnabled" : true,
+                    "requestsPerDay" : 500000,
+                    "requestsPerMinute" : 1200,
+                    "stixExportMaxObjects" : 50000,
+                    "tenantBloomCapacity" : 1000000,
+                    "websocketEnabled" : true
+                  },
+                  "status" : "ACTIVE",
+                  "tier" : 2
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriptionDto"
+                }
+              }
+            },
+            "description" : "Plan in effect"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriptionDto"
+                }
+              }
+            },
+            "description" : "Missing subscription:read permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Get the current plan",
+        "tags" : [ "Subscription" ]
+      }
+    },
+    "/api/v1/subscription/usage" : {
+      "get" : {
+        "description" : "Current consumption against the plan's quotas. A null limit means unlimited; 0 means the capability is disabled on this plan. 認證:需要 Bearer JWT 或 X-API-Key,權限 subscription:read。",
+        "operationId" : "subscriptionUsage",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "apiKeys" : {
+                    "limit" : 10,
+                    "resetAt" : null,
+                    "used" : 2
+                  },
+                  "manualSubmissionsToday" : {
+                    "limit" : 1000,
+                    "resetAt" : "2026-08-29T00:00:00Z",
+                    "used" : 12
+                  },
+                  "planCode" : "PREMIUM"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriptionUsageDto"
+                }
+              }
+            },
+            "description" : "Usage against the plan's quotas"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SubscriptionUsageDto"
+                }
+              }
+            },
+            "description" : "Missing subscription:read permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Get quota usage",
+        "tags" : [ "Subscription" ]
+      }
+    },
     "/api/v1/version" : {
       "get" : {
         "description" : "Returns the API contract version (v1) and the build version of the running application (dev when running from sources). 認證:匿名。",
@@ -2262,6 +3098,9 @@
     "description" : "Threat source catalog and health. Authentication: anonymous.",
     "name" : "Source"
   }, {
+    "description" : "The caller tenant's plan and quota usage.",
+    "name" : "Subscription"
+  }, {
     "description" : "Liveness and version. Authentication: anonymous.",
     "name" : "System"
   }, {
@@ -2270,6 +3109,9 @@
   }, {
     "description" : "Machine-to-machine credentials scoped to the caller's tenant.",
     "name" : "API Keys"
+  }, {
+    "description" : "Manual submission, bulk import and false-positive reporting.",
+    "name" : "IOC Write"
   }, {
     "description" : "STIX 2.1 objects and bundle export (07 §7.8).",
     "name" : "STIX"

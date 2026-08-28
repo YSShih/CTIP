@@ -4,7 +4,6 @@ import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.indicator.IndicatorQueryService;
 import com.ctip.application.indicator.IntRange;
 import com.ctip.application.indicator.TimeRange;
-import com.ctip.config.CtipProperties;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
 import com.ctip.domain.indicator.IndicatorStatus;
@@ -37,7 +36,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * IOC 讀取端點(docs/spec/09-api.md §9.1,皆匿名可用)。
+ * 寫入端點在 {@link IocWriteController}。
  * 業務規則不在 controller(規則 10):可見度過濾在 Specification 層(不手動傳 tenantId)、
+ * 配額一律經 {@link ReadQuotaPolicy} 查 plans 表(§10.6 不得 hard-code)、
  * 再散布遮罩在 {@link IocResponseAssembler}(經 RedistributionFilter 單點)。
  * limit 超過上限夾到上限不報錯(§9.3);offset 僅供頁碼 UI,上限 10000。
  */
@@ -51,19 +52,19 @@ class IocController implements IocApi {
     private final TenantContext tenantContext;
     private final IocResponseAssembler assembler;
     private final CursorCodec cursorCodec;
-    private final CtipProperties.Api api;
+    private final ReadQuotaPolicy readQuotas;
 
     IocController(
             IndicatorQueryService query,
             TenantContext tenantContext,
             IocResponseAssembler assembler,
             CursorCodec cursorCodec,
-            CtipProperties properties) {
+            ReadQuotaPolicy readQuotas) {
         this.query = query;
         this.tenantContext = tenantContext;
         this.assembler = assembler;
         this.cursorCodec = cursorCodec;
-        this.api = properties.api();
+        this.readQuotas = readQuotas;
     }
 
     @Override
@@ -136,10 +137,8 @@ class IocController implements IocApi {
     @PostMapping("/lookup")
     @PreAuthorize("hasAuthority('ioc:read')")
     public LookupResponse lookup(@Valid @RequestBody LookupRequest request) {
-        if (request.values().size() > api.maxBatchLookup()) {
-            throw new ApiException(
-                    ErrorCode.PAYLOAD_TOO_LARGE, "Batch lookup exceeds limit of " + api.maxBatchLookup());
-        }
+        readQuotas.requireBatchLookupWithin(
+                tenantContext.tenantId(), request.values().size());
         List<LookupResponse.Result> results = query.lookup(request.values(), tenantContext.visibility()).stream()
                 .map(r -> new LookupResponse.Result(
                         r.value(),
@@ -154,12 +153,8 @@ class IocController implements IocApi {
         return query.byId(new IndicatorId(id), tenantContext.visibility()).orElseThrow(ApiException::notFound);
     }
 
-    /** §9.3:limit 超過上限夾到上限,不報錯;未給用預設。 */
     private int clampLimit(Integer limit) {
-        if (limit == null) {
-            return api.defaultPageSize();
-        }
-        return Math.max(1, Math.min(limit, api.maxPageSize()));
+        return readQuotas.clampPageSize(tenantContext.tenantId(), limit);
     }
 
     private static <E extends Enum<E>> E parseEnum(Class<E> type, String value, String field) {

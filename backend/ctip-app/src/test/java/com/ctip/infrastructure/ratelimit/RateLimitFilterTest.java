@@ -6,6 +6,10 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.domain.plan.Plan;
+import com.ctip.domain.plan.PlanCode;
+import com.ctip.domain.plan.PlanId;
+import com.ctip.domain.plan.QuotaLimit;
 import com.ctip.infrastructure.web.FilterErrorWriter;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -27,22 +31,48 @@ class RateLimitFilterTest {
     private static final Instant NOW = Instant.parse("2026-08-27T12:00:00Z");
     private static final ClockPort CLOCK = () -> NOW;
 
+    /** §10.6 匿名列:60/min、1000/day。Phase 14 起這兩個值來自 plans 表,不再是 property。 */
+    private static final Plan ANONYMOUS_PLAN = new Plan(
+            new PlanId(java.util.UUID.nameUUIDFromBytes("anonymous".getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+            PlanCode.ANONYMOUS,
+            "Anonymous",
+            0,
+            QuotaLimit.of(60L),
+            QuotaLimit.of(1000L),
+            50,
+            QuotaLimit.of(20L),
+            86400,
+            true,
+            QuotaLimit.unlimited(),
+            false,
+            QuotaLimit.disabled(),
+            QuotaLimit.disabled(),
+            false,
+            QuotaLimit.disabled(),
+            QuotaLimit.disabled(),
+            QuotaLimit.disabled());
+
     /** 記錄每次消耗的 window;minute 一律拒絕。 */
     private static final class MinuteRejectingLimiter implements RateLimiterPort {
         private final List<RateLimitKey.Window> consumed = new ArrayList<>();
 
         @Override
-        public RateLimitResult tryConsume(RateLimitKey key, int tokens) {
+        public RateLimitResult tryConsume(RateLimitKey key, int tokens, QuotaLimit limit) {
             consumed.add(key.window());
             boolean minute = key.window() == RateLimitKey.Window.MINUTE;
-            return new RateLimitResult(!minute, 60, minute ? 0 : 999, NOW.plusSeconds(30));
+            return new RateLimitResult(!minute, limit, minute ? 0 : 999, NOW.plusSeconds(30));
+        }
+
+        @Override
+        public RateLimitResult peek(RateLimitKey key, QuotaLimit limit) {
+            throw new UnsupportedOperationException("filter 不使用 peek");
         }
     }
 
     @Test
     void minuteRejectionDoesNotConsumeDayQuota() throws Exception {
         MinuteRejectingLimiter limiter = new MinuteRejectingLimiter();
-        RateLimitFilter filter = new RateLimitFilter(limiter, true, CLOCK);
+        RateLimitFilter filter = new RateLimitFilter(limiter, () -> ANONYMOUS_PLAN, true, CLOCK);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request("/api/v1/iocs"), response, new MockFilterChain());
@@ -55,7 +85,7 @@ class RateLimitFilterTest {
 
     @Test
     void rejectionBodyEscapesClientControlledPath() throws Exception {
-        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), true, CLOCK);
+        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, CLOCK);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request("/api/v1/\"},\\evil"), response, new MockFilterChain());
@@ -73,7 +103,7 @@ class RateLimitFilterTest {
 
     @Test
     void actuatorExemptionIsNotBypassableByPathTraversal() {
-        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), true, CLOCK);
+        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, CLOCK);
         assertThat(filter.shouldNotFilter(request("/actuator/health"))).isTrue();
         assertThat(filter.shouldNotFilter(request("/actuator/../api/v1/iocs"))).isFalse();
     }

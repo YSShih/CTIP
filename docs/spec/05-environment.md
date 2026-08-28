@@ -269,8 +269,7 @@ JWT_REFRESH_TOKEN_EXPIRATION   # 秒，預設 2592000
 CORS_ALLOWED_ORIGINS
 RATE_LIMIT_ENABLED
 RATE_LIMIT_BACKEND             # memory | redis
-RATE_LIMIT_ANONYMOUS_PER_MINUTE  # 預設 60（§10.6 匿名列；Phase 14 起改由 plans 表查表）
-RATE_LIMIT_ANONYMOUS_PER_DAY     # 預設 1000（同上）
+CTIP_PLAN_OVERRIDES            # 方案配額的部署期覆寫（單一 JSON，選填；空 = 完全依 plans 表）
 
 BLOOM_PUBLIC_CAPACITY
 BLOOM_PUBLIC_FALSE_POSITIVE_RATE
@@ -290,10 +289,7 @@ INGESTION_BATCH_SIZE           # 預設 500
 NORMALIZATION_STRIP_WWW        # 預設 false（07 §7.2）
 DOMAIN_ALLOWLIST               # 逗號分隔，預設空（07 §7.3）
 
-STIX_EXPORT_MAX_OBJECTS        # 預設 1000（07 §7.8.5；Phase 14 起改由 plans 表查表）
-API_DEFAULT_PAGE_SIZE          # 預設 50（09 §9.3）
-API_MAX_PAGE_SIZE              # 預設 50（同上；Phase 14 起改由 plans 表查表）
-API_MAX_BATCH_LOOKUP           # 預設 20（同上）
+API_DEFAULT_PAGE_SIZE          # 預設 50（09 §9.3；上限與批次上限改由 plans 表查表，Phase 14）
 
 SWAGGER_ENABLED
 ACTUATOR_EXPOSED_ENDPOINTS
@@ -312,8 +308,11 @@ INDICATOR_CLEANUP_CRON         # 預設 0 20 2 * * *（同上）
 >
 > **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
 > 同一項缺陷在 Phase 6/8/9 又復發——`application.yml` 使用了 **11 個**本清單、compose 與
-> 四份 `.env.*.example` 都沒有宣告的變數（`RATE_LIMIT_ANONYMOUS_PER_*`、三個 cron、
-> `NORMALIZATION_STRIP_WWW`、`DOMAIN_ALLOWLIST`、`STIX_EXPORT_MAX_OBJECTS`、`API_*` 三個）。
+> 四份 `.env.*.example` 都沒有宣告的變數（三個 cron、
+> `NORMALIZATION_STRIP_WWW`、`DOMAIN_ALLOWLIST`、`STIX_EXPORT_MAX_OBJECTS`、`API_*` 三個；
+> 其中 `STIX_EXPORT_MAX_OBJECTS`、`API_MAX_PAGE_SIZE`、`API_MAX_BATCH_LOOKUP` 與
+> `RATE_LIMIT_ANONYMOUS_PER_*` 已於 Phase 14 移除——那些值一律讀 `plans` 表，
+> 留著 property 就是第二個真相來源）。
 > 諷刺的是 `application.yml` 自己在兩處註解裡引用 §5.5 對稱性規則來拒絕開放其他變數，
 > 卻同時違反它。本次三處補齊；**新增 `ctip.*` 屬性時，compose、四份樣板、本清單必須同步。**
 

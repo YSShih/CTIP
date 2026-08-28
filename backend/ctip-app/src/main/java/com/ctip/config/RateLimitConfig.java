@@ -1,7 +1,9 @@
 package com.ctip.config;
 
+import com.ctip.application.plan.QuotaService;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.RateLimiterPort;
+import com.ctip.domain.plan.PlanCode;
 import com.ctip.infrastructure.ratelimit.InMemoryRateLimiter;
 import com.ctip.infrastructure.ratelimit.RateLimitFilter;
 import org.slf4j.Logger;
@@ -27,7 +29,7 @@ public class RateLimitConfig {
         if (rateLimit.backend() == CtipProperties.RateLimit.Backend.REDIS) {
             log.warn("RATE_LIMIT_BACKEND=redis:RedisRateLimiter 於 Phase 17(M2)提供,暫以記憶體實作代替(僅單一實例正確)");
         }
-        return new InMemoryRateLimiter(rateLimit.anonymousPerMinute(), rateLimit.anonymousPerDay(), clock);
+        return new InMemoryRateLimiter(clock);
     }
 
     /**
@@ -39,14 +41,17 @@ public class RateLimitConfig {
      * 這同時是暴力破解與資源耗盡的入口。Boot 對 Filter bean 的預設順序是 LOWEST_PRECEDENCE,
      * 故此處以 FilterRegistrationBean 明確排在 security chain(SecurityFilterProperties.DEFAULT_FILTER_ORDER = -100)之前。
      *
-     * <p>Phase 14 加入 key/user/tenant 維度時,那些維度需要已解析的身分、只能在認證之後檢查;
+     * <p>Phase 17 加入 key/user/tenant 維度時,那些維度需要已解析的身分、只能在認證之後檢查;
      * 但 <strong>IP 維度必須留在認證之前</strong>,否則這個繞過會回來。
      */
     @Bean
     FilterRegistrationBean<RateLimitFilter> rateLimitFilter(
-            RateLimiterPort limiter, CtipProperties properties, ClockPort clock) {
-        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(
-                new RateLimitFilter(limiter, properties.rateLimit().enabled(), clock));
+            RateLimiterPort limiter, QuotaService quotas, CtipProperties properties, ClockPort clock) {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(new RateLimitFilter(
+                limiter,
+                () -> quotas.byCode(PlanCode.ANONYMOUS),
+                properties.rateLimit().enabled(),
+                clock));
         registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1);
         return registration;
     }

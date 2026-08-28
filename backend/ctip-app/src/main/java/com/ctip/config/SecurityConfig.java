@@ -84,8 +84,7 @@ public class SecurityConfig {
                     case DEV -> "dev";
                     case STAGING -> "stg";
                     case PROD -> "prod";
-                },
-                properties.apiKey().maxPerTenant());
+                });
     }
 
     @Bean
