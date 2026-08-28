@@ -1142,7 +1142,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-28)
 - **執行單**:`docs/spec/phases/phase-16.md`
-- **Commit**:(見 git log,message `Phase 16: incremental sync API and client contract`)
+- **Commit**:`eab3780`(`Phase 16: incremental sync API and client contract`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest=SyncEndToEndTest`(逐字)✅ **4/4**
     (完整流程、manifest coverage、鏈過長 409、base 不在現行 dataset 409)
@@ -1154,7 +1154,8 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - `npx playwright test` ✅ **3/3**(匿名搜尋、Bloom 說明頁、登入→建 API key→提交 IOC)
   - `dod.sh phase2 --only M2-10/13/14/15/16/17` ✅ 6/6;`--only M2-26` ✅ 1/1;
     `dod.sh full --only M3-24` ✅(規格回寫後複跑)
-  - `dod.sh mvp` 回歸 ✅ **38/38**
+  - `dod.sh mvp` 回歸 ✅ **37/38 → 38/38**:M1-10(`npm run api:check`)比對的是 **committed** 的
+    generated 型別,commit 前必然紅;commit 後單獨複跑 `--only M1-10` ✅
 - **交付物**:
   - core/application `sync/`:`SyncService`(manifest / download / delta 的唯一判定點)、
     `SyncManifest`/`SyncDelta`/`BloomDownload`、`SnapshotRequiredException`、`SyncTooFrequentException`;
