@@ -798,7 +798,7 @@ actuator 四環境皆 `health,info`。
 ## Flyway 版本號 — 廢除區段預留,改依實作順序遞增
 
 - **狀態**:done(2026-08-28)。使用者指示:把 Phase 13 稽核留給 Phase 14 的 Flyway 地雷先處理掉。
-- **Commit**:(見 git log,message `Flyway: monotonic migration versions + working migrate.sh (ADR 0014)`)
+- **Commit**:`fa18e24`(`Flyway: monotonic migration versions + working migrate.sh (ADR 0014)`)
 - **完成判準結果**:全綠 —
   - `clean verify -Ptest-integration` 無過濾 ✅ **532 tests**(Spotless / Checkstyle / JaCoCo 全過)
   - `dod.sh full M3-24` ✅;全部 `.sh` 過 `bash -n`;四環境 `compose config -q` ✅
