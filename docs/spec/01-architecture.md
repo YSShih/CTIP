@@ -107,7 +107,8 @@ backend/ctip-core/src/main/java/com/ctip/
 └── application/
     ├── indicator/      IndicatorQueryService、IndicatorSubmissionService [M2]
     ├── ingestion/      IngestionPipeline、IngestionStage 與各 stage
-    ├── search/         SearchService
+    ├── search/         （M1 實際由 indicator/IndicatorQueryService 承擔；
+    │                    獨立的 search/ 套件待 Phase 19 的 ES 降級邏輯才成立，見 ADR 0016）
     ├── source/         SourceSyncService、SourceHealthService
     ├── stix/           StixExportService
     ├── sync/           BloomSyncService                                       [M2]

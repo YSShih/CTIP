@@ -245,6 +245,7 @@ GRAFANA_ADMIN_PASSWORD         # 僅 full profile 需要
 ```text
 SPRING_PROFILES_ACTIVE
 BACKEND_PORT  FRONTEND_PORT
+SERVER_PORT                    # 容器內的 backend 監聽埠;compose 由 BACKEND_PORT 供給
 
 JWT_SECRET                     # >= 32 bytes，prod 必須來自 secret manager
 JWT_ACCESS_TOKEN_EXPIRATION    # 秒，預設 900
@@ -253,6 +254,8 @@ JWT_REFRESH_TOKEN_EXPIRATION   # 秒，預設 2592000
 CORS_ALLOWED_ORIGINS
 RATE_LIMIT_ENABLED
 RATE_LIMIT_BACKEND             # memory | redis
+RATE_LIMIT_ANONYMOUS_PER_MINUTE  # 預設 60（§10.6 匿名列；Phase 14 起改由 plans 表查表）
+RATE_LIMIT_ANONYMOUS_PER_DAY     # 預設 1000（同上）
 
 BLOOM_PUBLIC_CAPACITY
 BLOOM_PUBLIC_FALSE_POSITIVE_RATE
@@ -262,8 +265,18 @@ BLOOM_DELTA_CRON
 BLOOM_MAX_DELTA_CHAIN          # 預設 24
 
 SCHEDULER_ENABLED
+SOURCE_SYNC_CRON               # 預設 0 */5 * * * *（08 §8.7）
+IOC_EXPIRY_CRON                # 預設 0 0 3 * * *
+INGESTION_RETRY_CRON           # 預設 0 */15 * * * *
 INGESTION_ENABLED
 INGESTION_BATCH_SIZE           # 預設 500
+NORMALIZATION_STRIP_WWW        # 預設 false（07 §7.2）
+DOMAIN_ALLOWLIST               # 逗號分隔，預設空（07 §7.3）
+
+STIX_EXPORT_MAX_OBJECTS        # 預設 1000（07 §7.8.5；Phase 14 起改由 plans 表查表）
+API_DEFAULT_PAGE_SIZE          # 預設 50（09 §9.3）
+API_MAX_PAGE_SIZE              # 預設 50（同上；Phase 14 起改由 plans 表查表）
+API_MAX_BATCH_LOOKUP           # 預設 20（同上）
 
 SWAGGER_ENABLED
 ACTUATOR_EXPOSED_ENDPOINTS
@@ -277,6 +290,13 @@ BLOOM_ARTIFACT_KEEP            # 預設 30
 ```
 
 > 後六個保留政策變數在 v1.1 只出現於 §55.3，變數清單裡沒有——本版補齊。這是第三項缺陷（變數宣告與使用不對稱）。
+>
+> **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
+> 同一項缺陷在 Phase 6/8/9 又復發——`application.yml` 使用了 **11 個**本清單、compose 與
+> 四份 `.env.*.example` 都沒有宣告的變數（`RATE_LIMIT_ANONYMOUS_PER_*`、三個 cron、
+> `NORMALIZATION_STRIP_WWW`、`DOMAIN_ALLOWLIST`、`STIX_EXPORT_MAX_OBJECTS`、`API_*` 三個）。
+> 諷刺的是 `application.yml` 自己在兩處註解裡引用 §5.5 對稱性規則來拒絕開放其他變數，
+> 卻同時違反它。本次三處補齊；**新增 `ctip.*` 屬性時，compose、四份樣板、本清單必須同步。**
 
 ### 5.4.6 前端（公開）
 

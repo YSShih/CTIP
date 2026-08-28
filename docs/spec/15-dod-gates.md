@@ -147,6 +147,11 @@
 
 **25 項，全部可執行。**
 
+> **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
+> 「全部可執行」有兩項前置未在此註明——**M3-17** 需要 `environment/.env.prod`（真實檔，
+> 依 `.gitignore` 不進版控，須由操作者先從樣板建立）；**M3-19** 需要本機安裝 `gh` 並已推上 GitHub 跑過 CI。
+> 兩者都不是腳本能自備的，執行 `dod.sh full` 前必須先備妥。
+
 M3-23 檢查的 12 份文件：`README.md`、`SECURITY.md`、`CONTRIBUTING.md`、`LICENSE`、`docs/architecture/overview.md`、`docs/architecture/security.md`、`docs/deployment/licensing.md`、`docs/deployment/privacy.md`、`docs/development/getting-started.md`、`docs/development/plugin-sdk.md`、`docs/development/version-audit.md`、`docs/api/openapi.json`。
 
 ---

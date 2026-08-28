@@ -30,6 +30,13 @@
 
 > Maven 沒有 lockfile，因此後端必須以 `mvn versions:display-dependency-updates` 定期複查（見 6.4）。v1.1 對前端要求了 `npm ci`，對後端沒有等價要求——本節補上。
 
+> **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
+> 「major 浮動 tag」只適用於**資料面**元件（`postgres`、`redis`、`nginx`）——它們的 patch
+> 升級不改變行為，且吃到安全修補的價值高。**Kafka、Elasticsearch、Prometheus、Grafana
+> 這四個維持精確 patch pin**（compose 與 §5.6 骨架的現況即如此）：它們的 minor/patch 會改變
+> API、預設設定或 dashboard schema，浮動 tag 會讓「昨天能跑、今天不能跑」變成常態。
+> 本表原本只寫了浮動規則，未區分這兩類，與 compose 實際不一致——本次明確化。
+
 ### 6.1.3 其他規則
 
 1. 凡 Spring Boot BOM 已納管的相依（Flyway、Testcontainers、Jackson、Hibernate、PostgreSQL JDBC、Lettuce、Micrometer、spring-kafka…），**不得**在 pom 硬寫版本號。刻意覆寫時必須加註解說明原因

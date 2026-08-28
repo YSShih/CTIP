@@ -15,6 +15,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
@@ -49,7 +50,10 @@ class ArchitectureTest {
                         "org.springframework..",
                         "jakarta.persistence..",
                         "org.hibernate..",
+                        // Boot 4 的 Jackson 是 3.x,套件是 tools.jackson..(06 §6.3.6 第 6 條)。
+                        // 只擋 com.fasterxml 等於這條防線是空的——IDE 自動 import 會直接放行
                         "com.fasterxml.jackson..",
+                        "tools.jackson..",
                         "org.apache.kafka..",
                         "io.lettuce..",
                         "redis.clients..",
@@ -161,5 +165,40 @@ class ArchitectureTest {
                         .or(target(owner(JavaClass.Predicates.belongToAnyOf(UUID.class))
                                 .and(name("randomUUID")))))
                 .check(classes);
+    }
+
+    /**
+     * 規則 10:Ubiquitous Language 詞彙表(02 §2.1)「常見誤用」欄的命名不得出現在類別名。
+     *
+     * <p>{@code 15 §15.5} 對人工項 P-02 明文要求「**可自動化部分必須實作**(列為 ArchUnit
+     * 規則的擴充)」——這條規則自 M1 就該存在,一直沒有實作,也沒有任何 DoD 項目檢查它(ADR 0016)。
+     * 語意層的詞彙遵守仍屬人工項;這裡只擋詞彙表已明文列為禁止的具體類別名。
+     */
+    @Test
+    void rule10ClassNamesMustNotUseForbiddenVocabulary() {
+        for (String forbidden : List.of(
+                "Ioc",
+                "IocEntity",
+                "Observable",
+                "SourceRecord",
+                "Observation",
+                "Feed",
+                "Provider",
+                "Vendor",
+                "HashType",
+                "HashAlgorithm",
+                "Organization",
+                "Account",
+                "Workspace",
+                "Tier",
+                "Classification")) {
+            noClasses()
+                    .that()
+                    .resideInAnyPackage("com.ctip.domain..", "com.ctip.sdk..")
+                    .should()
+                    .haveSimpleName(forbidden)
+                    .because("02 §2.1 詞彙表把 " + forbidden + " 列為禁止的命名")
+                    .check(classes);
+        }
     }
 }

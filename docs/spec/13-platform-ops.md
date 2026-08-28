@@ -16,6 +16,12 @@ M3:     聚合 → DomainEvent → ApplicationEventPublisher → 程序內 liste
                                                        ↘ KafkaForwardingListener → Kafka
 ```
 
+> **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**
+> 「M1–M2 有程序內 listener」目前**不成立**：`SpringEventPublisherAdapter` 發佈的
+> `DomainEventEnvelope` 至今沒有任何消費者（全庫 `@EventListener` 零命中）。
+> 發佈端已就位、消費端尚無需求，這是刻意的——但本圖不得讀成「已有 listener 在運作」。
+> Phase 20 的 `KafkaForwardingListener` 會是**第一個**消費者。
+
 M3 只新增一個 `@TransactionalEventListener(phase = AFTER_COMMIT)` 的 listener 把 domain event 轉發到 Kafka。**不修改任何發佈端。**
 
 ### 部署
@@ -322,6 +328,19 @@ public interface SearchPort {
 | `heavy-test.yml` | M3 | nightly L4 測試 |
 | `deploy-staging.yml` | M3 | placeholder |
 | `deploy-prod.yml` | M3 | placeholder，**必須使用 protected environment 並要求人工核准** |
+
+> **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**
+>
+> 截至 Phase 13，`.github/workflows/` 只有 `compose-validate.yml` 與 `openapi-check.yml` 兩支。
+> 本表標 **M1** 的 `backend-test`／`backend-lint`／`frontend-test`／`build` 四支與標 **M2** 的
+> `docker-build`／`security` 兩支**全部逾期**——Phase 1–12 的執行單沒有任何一份列它們為交付物，
+> 而 `dod.sh` 也沒有任何一項檢查 workflow 檔案是否存在（M3-19 只看最後一次 run 的結論，
+> 因此「只有兩支且都綠」也會通過）。
+>
+> 六支的內容都已由本機判準涵蓋（`clean verify` 含 Spotless／Checkstyle／JaCoCo／ArchUnit、
+> 前端六項、`dod.sh`），因此**不是品質缺口而是自動化缺口**：本機忘了跑就不會有第二道網。
+> 全部併入 Phase 23 一次交付（該 phase 本就列了 11 支），並在 `dod.sh` 增設檢查
+> 「11 支 workflow 檔案皆存在」，避免同樣的逾期再發生一次。
 
 ### 安全掃描
 

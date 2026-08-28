@@ -896,3 +896,51 @@ Phase 18(`V25`)都低於已套用的最高版本 → 三個 phase 各會炸一�
   **必須同步**——改一邊沒改另一邊,側信道就回來了
 - `TraceIdFilter` 現在是最外層錯誤網;它 catch `Exception` 但**回應已 committed 時原樣往上拋**,
   不要把那個 guard 拿掉
+
+---
+
+## Phase 1–13 規格漏補(批 0)
+
+- **狀態**:done(2026-08-28)。使用者指示:盤點後續 phase 問題時,前面 phase 規格漏掉的也要補。
+- **Commit**:(見 git log,message `Backfill: close Phase 1-13 spec gaps (ADR 0016)`)
+- **背景**:三組 Explore 平行盤點 Phase 14–23 的阻斷項(約 90 項,見計畫檔),
+  過程中發現**已完成的 Phase 1–13 也有缺口**——不是「以後會踩到」,是現在契約就已經不成立。
+  本批只處理後者;Phase 14–23 的阻斷項(批 1–7)另行處理。
+
+### 三項有實質防護意義的(都加了自動檢查)
+
+1. **ArchUnit 規則 1 的 Jackson 防線是空的** —— 只擋 `com.fasterxml.jackson..`,
+   而 Boot 4 是 `tools.jackson..`。這件事 **Phase 8 就發現並回寫進 06 §6.3.6,
+   卻沒回頭同步 Phase 4 建立的規則**。已補,並以「在 domain 加 tools.jackson 依賴 → 測試轉紅」驗證
+2. **11 個環境變數在 compose、四份樣板、05 §5.4 三處皆未宣告**(Phase 6/8/9)。
+   compose 的 backend 環境變數是**明列白名單**(無 `env_file`),漏列者寫進 `.env` **也到不了容器**
+   —— 設定看似可調、實際完全無效。三處補齊 + `SERVER_PORT`,
+   並新增 **`ConfigSymmetryTest`** 自動檢查(這條規則規格寫了兩次仍復發,人工比對守不住)
+3. **`15 §15.5` 明文「P-02 的可自動化部分必須實作」從未實作**,且無任何 DoD 檢查它。
+   新增 **ArchUnit 規則 10**:禁止 `02 §2.1` 詞彙表「常見誤用」欄的類別名出現在 domain/sdk。
+   以建立 `domain/source/Feed.java` → 規則 10 轉紅驗證
+
+### 七項文件回補
+
+`.github/workflows/` 只有 2 支(§13.8 標 M1 的 4 支 + 標 M2 的 2 支全部逾期,Phase 1–12
+執行單皆未列)、09 端點數 47→**43**、§13.1「M1–M2 程序內 listener」實際零命中、
+`01` 的 `SearchService` 命名漂移、§6.1.2 浮動 tag 政策 vs compose 釘死 patch、
+§15.3「25 項全部可執行」的兩項前置(`.env.prod`、`gh`)、`sample_data.sql` 缺方案樣本
+(已寫進 phase-14 交付物;順修 phase-14 的「15 個配額維度」→ **14**)。
+
+### 為什麼現在才發現(值得記住)
+
+前十三個 phase 的收尾回寫,範圍一律是「**本 phase 做了什麼、偏離了什麼**」。
+上面第 1–3 項都是**跨 phase 的**:Phase 8 發現 Jackson 3 卻沒回頭看 Phase 4 的規則;
+Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 ArchUnit 擴充寫在 `15` 而不在
+任何執行單裡。**逐 phase 回寫抓不到這種缺口**——所以第 2、3 項改成了自動檢查。
+
+### 給下一 session 的注意事項
+
+- **新增任何 `ctip.*` 屬性時**,compose + 四份 `.env.*.example` + `05 §5.4` 必須同步,
+  否則 `ConfigSymmetryTest` 會擋(它只硬性要求 compose 與規格清單;樣板不強制)
+- ArchUnit 現在有 **10 條**規則(判準若寫死 9 需同步)
+- 批 1–7(Phase 14–23 的約 90 項阻斷)尚未開始,計畫在
+  `~/.claude/plans/task-notification-task-id-a59d3bc425ea2-squishy-sedgewick.md`;
+  **批 1(閘門可信度)最優先**——目前 `dod.sh phase2` 會 27/27 假綠,因為
+  `failIfNoSpecifiedTests=false` 使不存在的測試類回報 PASS

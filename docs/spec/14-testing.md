@@ -117,8 +117,13 @@ L1 測試**不得**使用 `@SpringBootTest`、`@MockBean` 或任何 Spring 註�
 - public system tenant
 - 1 個範例 tenant（`slug = demo`）
 - 1 個範例使用者（M2 起）
-- 四個方案定義（M2 起）
+- 四個方案定義（M2 起）¹
 - 4 個範例 threat source（`MANUAL` + 三個 mock）
+
+> ¹ **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
+> `db/seed/sample_data.sql` 目前沒有方案／訂閱樣本——因為 `plans` 表要到 Phase 14 的 `V28` 才存在。
+> **Phase 14 的交付物必須同時補上 seed**，否則 `SyncEndToEndTest`（Phase 16）與所有需要方案配額的
+> 整合測試都沒有 fixture 可用。已寫進 `phases/phase-14.md`。
 - 約 **1,000 筆範例 IOC**，涵蓋所有型別、`CLEAR`/`GREEN`/`AMBER`/`AMBER_STRICT` 四種 TLP、四種 status
 - 若干 STIX 物件與關聯
 

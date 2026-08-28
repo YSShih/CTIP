@@ -6,6 +6,11 @@
 ## 交付物
 
 ### Workflows（11 支）
+
+> ⚠️ 其中 6 支（`backend-test`、`backend-lint`、`frontend-test`、`build` 標 M1；
+> `docker-build`、`security` 標 M2）是**逾期件**——Phase 1–12 未交付，見
+> [13 §13.8](../13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有) 的修訂註記。
+> 本 phase 一次補齊，並在 `dod.sh` 增設「11 支檔案皆存在」的檢查。
 `backend-test.yml`、`backend-lint.yml`、`frontend-test.yml`、`build.yml`、`compose-validate.yml`、`openapi-check.yml`、`docker-build.yml`（含 SBOM）、`security.yml`、`heavy-test.yml`（nightly）、`deploy-staging.yml`、`deploy-prod.yml`（**protected environment + 人工核准**）
 
 ### 安全掃描

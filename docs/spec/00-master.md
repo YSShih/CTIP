@@ -485,4 +485,30 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.17）。*
+## 0.18 實作回饋修訂（2026-08-28，Phase 1–13 規格漏補）
+
+盤點 Phase 14–23 阻斷項時，使用者指出「前面 phase 規格如果有漏掉的也要補」。
+這一輪處理的是**已完成 phase 留下的缺口**——不是「以後會踩到」，是現在契約就已經不成立。
+逐項與驗證見 [ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)。
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | **ArchUnit 規則 1 的 Jackson 防線是空的**——只擋 `com.fasterxml.jackson..`，而 Boot 4 是 `tools.jackson..`。Phase 8 發現後回寫了 §6.3.6，**沒回頭同步 Phase 4 建立的規則** | 規則 1 加上 `tools.jackson..`；以「加依賴 → 測試轉紅」驗證 | `ArchitectureTest` |
+| 2 | **11 個環境變數在 compose、四份樣板、§5.4 三處皆未宣告**（Phase 6/8/9）。compose 的 backend 環境變數是明列白名單，漏列者寫進 `.env` **也到不了容器** | 三處補齊 + `SERVER_PORT`；**新增 `ConfigSymmetryTest` 自動檢查**（人工比對已守不住兩次） | [05 §5.4](05-environment.md#54-環境變數清單) |
+| 3 | **`15 §15.5` 明文「P-02 的可自動化部分必須實作」從未實作**，且無任何 DoD 項目檢查它 | 新增 **ArchUnit 規則 10**：禁止 §2.1 詞彙表「常見誤用」欄的類別名 | [15 §15.5](15-dod-gates.md)、`ArchitectureTest` |
+| 4 | `.github/workflows/` 只有 2 支；§13.8 標 **M1** 的 4 支 + 標 M2 的 2 支全部逾期，Phase 1–12 執行單皆未列，`dod.sh` 也不檢查 | 註記為逾期件，Phase 23 一次補齊 + 增設「11 支皆存在」的 DoD 檢查。內容已由本機判準涵蓋，是**自動化缺口而非品質缺口** | [13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有)、phase-23 |
+| 5 | `09` 宣稱端點數 47，實列 **43** | 改為 43 | [09](09-api.md) |
+| 6 | §13.1 演進圖寫「M1–M2 程序內 listener」，但全庫 `@EventListener` **零命中** | 加註：發佈端已就位、消費端尚無需求是刻意的；Phase 20 是第一個消費者 | [13 §13.1](13-platform-ops.md) |
+| 7 | `01` 的 `search/SearchService` 實際是 `indicator/IndicatorQueryService` | 加註實況；獨立 `search/` 待 Phase 19 | [01](01-architecture.md) |
+| 8 | §6.1.2 規定 image 用 major 浮動 tag，但 compose 把 Kafka/ES/Prometheus/Grafana 釘死 patch | 明確化：浮動只適用資料面元件；那四個**維持精確 pin**（minor/patch 會改 API 與 dashboard schema） | [06 §6.1.2](06-tech-stack.md) |
+| 9 | §15.3 自稱「25 項全部可執行」，但 M3-17 需要 gitignore 的 `.env.prod`、M3-19 需要未安裝的 `gh` | 註明兩項前置 | [15 §15.3](15-dod-gates.md) |
+| 10 | `sample_data.sql` 無方案／訂閱樣本，而 §14.7 要求 | 加註原因並**寫進 phase-14 交付物**（Phase 16 的 `SyncEndToEndTest` 依賴它）；順修 phase-14 的「15 個配額維度」→ **14** | [14 §14.7](14-testing.md)、phase-14 |
+
+> **為什麼現在才發現**:前十三個 phase 的收尾回寫，範圍一律是「本 phase 做了什麼、偏離了什麼」。
+> 第 1、2、3 項都是**跨 phase 的**——Phase 8 發現 Jackson 3 卻沒回頭看 Phase 4 的規則；
+> Phase 6/8/9 各加幾個變數卻沒人重驗對稱性；Phase 1 就該做的 ArchUnit 擴充寫在 `15` 而不在任何執行單裡。
+> 逐 phase 回寫抓不到這種缺口，故第 2、3 項已改為**自動檢查**。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.18）。*
