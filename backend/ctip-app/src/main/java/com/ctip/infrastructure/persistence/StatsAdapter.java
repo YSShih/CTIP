@@ -10,6 +10,7 @@ import jakarta.persistence.Tuple;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.time.Duration;
@@ -104,16 +105,17 @@ class StatsAdapter implements StatsPort {
         return cb.and(visible, cb.equal(root.get("status"), IndicatorStatus.ACTIVE.name()));
     }
 
+    /**
+     * 每個來源的筆數必須套用與 summary 相同的可見度過濾。
+     *
+     * <p>原本直接對 {@code indicator_sources} 全表 GROUP BY,不看可見度——M1 資料全 public 故無實害,
+     * 但 Phase 14 的手動提交上線後,租戶私有(含 {@code INTERNAL_ONLY})的提交量會即時出現在
+     * 匿名可讀的公開統計裡(ADR 0015)。以 IndicatorEntity 為 root 再 join 到 sources,
+     * 就能原封不動重用 {@link TlpSpecifications}(§1.11 唯一一套過濾邏輯)。
+     */
     @Override
-    public List<SourceStats> sources() {
-        Map<UUID, Long> counts = new HashMap<>();
-        List<Tuple> rows = entityManager
-                .createQuery(
-                        "SELECT r.sourceId AS sourceId, COUNT(r) AS total FROM IndicatorSourceEntity r"
-                                + " GROUP BY r.sourceId",
-                        Tuple.class)
-                .getResultList();
-        rows.forEach(row -> counts.put(row.get("sourceId", UUID.class), row.get("total", Long.class)));
+    public List<SourceStats> sources(Visibility visibility) {
+        Map<UUID, Long> counts = visibleCountsBySource(visibility);
         return sources.findAll().stream()
                 .map(entity -> new SourceStats(
                         new SourceId(entity.id),
@@ -124,5 +126,20 @@ class StatsAdapter implements StatsPort {
                         counts.getOrDefault(entity.id, 0L),
                         entity.lastSuccessAt))
                 .toList();
+    }
+
+    private Map<UUID, Long> visibleCountsBySource(Visibility visibility) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> query = cb.createTupleQuery();
+        Root<IndicatorEntity> root = query.from(IndicatorEntity.class);
+        Join<IndicatorEntity, IndicatorSourceEntity> link = root.join("sources");
+        query.multiselect(link.get("sourceId"), cb.count(link))
+                .where(activeAndVisible(visibility, root, query, cb))
+                .groupBy(link.get("sourceId"));
+        Map<UUID, Long> counts = new HashMap<>();
+        for (Tuple row : entityManager.createQuery(query).getResultList()) {
+            counts.put(row.get(0, UUID.class), row.get(1, Long.class));
+        }
+        return counts;
     }
 }

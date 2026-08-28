@@ -129,6 +129,37 @@ class StixSchemaValidationTest {
         return objectMapper.writeValueAsString(projection.content());
     }
 
+    /**
+     * 迴歸鎖(ADR 0015):{@code name} 截斷到 255 char 時不得切斷 surrogate pair。
+     *
+     * <p>URL 型 IOC 的 normalized 值可達 2048 char;若第 255 個 char 恰好是 astral 字元的
+     * 高代理,直接 substring 會產出半個字元——無效的 UTF-16,序列化出去就是壞掉的 JSON 字串。
+     */
+    @Test
+    void nameTruncationNeverSplitsASurrogatePair() {
+        // "URL: " 前綴 5 char + 249 個 'a' = 254 char,第 255 char 起是 4-byte emoji 的高代理
+        String padded = "a".repeat(249) + "\uD83D\uDCA3".repeat(4);
+        IocValue value = new IocValue(IocType.URL, null, "http://" + padded, padded);
+        Indicator indicator = Indicator.create(
+                new NewIndicatorCommand(
+                        new IndicatorId(UUID.fromString("3c8f2d1b-44e6-4b7c-8a2d-1f3e5b7c9d0a")),
+                        PUBLIC,
+                        value,
+                        report(SOURCE_A, Tlp.CLEAR, Set.of()),
+                        new Reputation(70)),
+                new Sha256FingerprintStrategy());
+
+        String name = String.valueOf(StixIndicatorProjector.project(
+                        indicator.snapshot(), Map.of(SOURCE_A, "OpenPhish (Mock)"), T0, T0.plusSeconds(3600))
+                .content()
+                .get("name"));
+
+        assertThat(name).doesNotEndWith("\uD83D");
+        assertThat(name.chars().noneMatch(c -> Character.isSurrogate((char) c)))
+                .as("截斷不得留下未配對的代理字元")
+                .isTrue();
+    }
+
     private static Indicator domainIndicator() {
         IocValue value = new IocValue(IocType.DOMAIN, null, "evil.example.com", "evil.example.com");
         Indicator indicator = Indicator.create(

@@ -87,7 +87,7 @@ class IndicatorRepositoryAdapter implements IndicatorRepository {
     @Transactional(readOnly = true)
     public CursorPage<Indicator> findVisible(Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
         Specification<IndicatorEntity> spec =
-                TlpSpecifications.visibleTo(visibility).and(IndicatorFilterSpecs.matches(filter));
+                TlpSpecifications.visibleTo(visibility).and(IndicatorFilterSpecs.matches(filter, visibility));
         if (after != null) {
             spec = spec.and(keysetAfter(after));
         }
@@ -103,7 +103,7 @@ class IndicatorRepositoryAdapter implements IndicatorRepository {
     @Transactional(readOnly = true)
     public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
         Specification<IndicatorEntity> spec =
-                TlpSpecifications.visibleTo(visibility).and(IndicatorFilterSpecs.matches(filter));
+                TlpSpecifications.visibleTo(visibility).and(IndicatorFilterSpecs.matches(filter, visibility));
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<IndicatorEntity> query = cb.createQuery(IndicatorEntity.class);
         Root<IndicatorEntity> root = query.from(IndicatorEntity.class);

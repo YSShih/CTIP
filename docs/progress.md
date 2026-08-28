@@ -850,3 +850,49 @@ Phase 18(`V25`)都低於已套用的最高版本 → 三個 phase 各會炸一�
   (`flyway:migrate` 會在 reactor 每個 module 上各執行一次,含沒有設定的 parent)
 - 依規則 17 回報:`06 §6.2` 版本表沒有列 `flyway-maven-plugin`(本次未新增版本 property,
   沿用 Boot 納管的 `${flyway.version}` / `${postgresql.version}`),建議版本表補列
+
+---
+
+## 先行清理 — 後續 phase 會踩到的已知缺口
+
+- **狀態**:done(2026-08-28)。使用者指示:把「之後的 phase 會遇到的問題」先修掉。
+- **Commit**:(見 git log,message `Harden: clear known gaps that later phases would hit (ADR 0015)`)
+- **完成判準結果**:全綠 —
+  - `clean verify -Ptest-integration` 無過濾 ✅ **537 tests**(原 532;Spotless / Checkstyle / JaCoCo 全過)
+  - `dod.sh full M3-24` ✅
+  - **每一項修正都以「還原修正 → 確認測試轉紅」驗證過測試真的能判別新舊行為**
+
+### 修了六項(細節與取捨見 ADR 0015,規格索引 §0.17)
+
+1. **[Phase 14 前必修] `/stats/sources` 筆數不經可見度過濾** → `StatsPort.sources(Visibility)`,
+   以 IndicatorEntity 為 root 再 join sources,重用同一套 `TlpSpecifications`
+2. **[Phase 14 前必修] `sourceId` 查詢參數是還原被遮蔽來源歸屬的 oracle** —— 輸出遮蔽
+   `DERIVED_ONLY` 的來源明細,查詢卻能用該來源過濾 → 查詢述詞套用同一條揭露規則
+3. **[Phase 17] `InMemoryRateLimiter` bucket map 永不逐出** → 10,000 個 + 10 分鐘節流後,
+   只逐出「已回滿且閒置逾一日」者(不放寬配額)
+4. **STIX `name` 截斷切斷 surrogate pair** → 最後保留的 char 是高代理即退一格
+5. **filter 逸出的例外回 Boot 預設 `/error`(無 `code`/`traceId`)** → `TraceIdFilter` 加錯誤網
+6. **版本表補列三項實作已在使用的相依**(JWT/Nimbus、Flyway Maven Plugin、networknt;
+   皆不新增版本 property,不改變任何 pin)
+
+### 刻意仍不修的八項 —— 前六項需要你定調
+
+| 項目 | 為什麼不動 |
+|---|---|
+| `User.changePassword` 不撤銷 token family | M3 才有呼叫端,現在做是推測性行為(規則 16)。**M3 實作改密碼端點時必須一併做** |
+| `POST /auth/register` 409 可枚舉 email | 無寄信基礎設施就無法在不破壞註冊流程下消除;受匿名 IP 限流節流 |
+| 租戶停權(`Tenant.suspend`)在認證路徑未被檢查 | 語意 §10 完全未定義(既有資料是否仍可讀?已簽發的 token?)——**猜一個實作下去比不做更糟** |
+| 自助註冊即得 `TENANT_ADMIN`(含 `ioc:submit`) | ADR 0012 決策 5 的刻意設計;**方案配額才是正確的閘門**,Phase 14 務必確認 FREE 的 `manual_submissions_per_day` 是 0 且真的被檢查 |
+| IDNA2008 / ICU4J | 需**新增 runtime 相依**,是版本表的實質變更(與這次補記錄的三項性質不同) |
+| `VITE_API_URL` 進不了 staging/prod bundle(M2-25) | 兩種修法架構影響不同;若選 nginx 反代 `/api`,**必須同時設 `forward-headers-strategy=framework` 與 `server.tomcat.remoteip.internal-proxies`**,否則整個平台共用一個限流桶 |
+| `MAX_PAGES_PER_RUN` 截斷後 cursor/since 語意矛盾 | 需定義 `FetchContext` 的優先序契約;M2 接真實 adapter 前必須決定,現在猜會綁死錯的語意 |
+| FilterBar back/forward 草稿不同步 | 純前端 UX 取捨,非資料正確性問題 |
+
+### 給下一 session 的注意事項
+
+- `StatsPort.sources` 與 `IndicatorFilterSpecs.matches` 都多了 `Visibility` 參數;
+  新增呼叫端一律要傳,不得繞過
+- `IndicatorFilterSpecs` 的來源比對規則與 `RedistributionFilter.visibleSourceRecords`
+  **必須同步**——改一邊沒改另一邊,側信道就回來了
+- `TraceIdFilter` 現在是最外層錯誤網;它 catch `Exception` 但**回應已 committed 時原樣往上拋**,
+  不要把那個 guard 拿掉

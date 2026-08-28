@@ -174,6 +174,38 @@ class IocSearchIntegrationTest extends AbstractPostgresIntegrationTest {
         assertThat(sources.size()).isZero();
     }
 
+    /**
+     * 迴歸鎖(ADR 0015):遮蔽了來源明細,就不能讓 {@code sourceId} 過濾當 oracle 用。
+     *
+     * <p>原本查詢述詞比對任何政策的來源記錄,而輸出過濾遮蔽 DERIVED_ONLY ——
+     * 逐一試 {@code ?sourceId=} 就能還原被遮蔽的來源歸屬。兩者現在用同一條揭露規則。
+     */
+    @Test
+    void filteringByAMaskedSourceLeaksNothingToAnonymous() throws Exception {
+        UUID derivedOnly =
+                jdbc.queryForObject("SELECT id FROM sources WHERE source_type = 'MOCK_ABUSEIPDB'", UUID.class);
+        // 先確認測試不是空轉:該來源在資料庫裡確實有記錄
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM indicator_sources WHERE source_id = ?"
+                                + " AND redistribution_policy = 'DERIVED_ONLY'",
+                        Integer.class,
+                        derivedOnly))
+                .isPositive();
+
+        JsonNode masked = postJson(
+                "/api/v1/iocs/search", "{\"query\":\"ctip-sample\",\"sourceId\":\"" + derivedOnly + "\",\"limit\":20}");
+        assertThat(masked.get("items").size())
+                .as("DERIVED_ONLY 來源的歸屬既然不對匿名輸出,就不得經 sourceId 過濾被還原")
+                .isZero();
+
+        // 對照組:ATTRIBUTION_REQUIRED 的來源仍可正常過濾(§13.7 的搜尋能力未被削掉)
+        UUID attributed =
+                jdbc.queryForObject("SELECT id FROM sources WHERE source_type = 'MOCK_OPENPHISH'", UUID.class);
+        JsonNode visible = postJson(
+                "/api/v1/iocs/search", "{\"query\":\"ctip-sample\",\"sourceId\":\"" + attributed + "\",\"limit\":20}");
+        assertThat(visible.get("items").size()).isPositive();
+    }
+
     private UUID idOf(String normalizedValue) {
         return jdbc.queryForObject("SELECT id FROM indicators WHERE normalized_value = ?", UUID.class, normalizedValue);
     }

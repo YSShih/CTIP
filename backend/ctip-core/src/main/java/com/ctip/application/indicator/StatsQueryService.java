@@ -22,7 +22,7 @@ public class StatsQueryService {
         return stats.summary(visibility, clock.now());
     }
 
-    public List<StatsPort.SourceStats> sources() {
-        return stats.sources();
+    public List<StatsPort.SourceStats> sources(Visibility visibility) {
+        return stats.sources(visibility);
     }
 }

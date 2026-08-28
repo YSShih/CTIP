@@ -462,4 +462,27 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.16）。*
+## 0.17 實作回饋修訂（2026-08-28，先行清掉後續 phase 的已知缺口）
+
+使用者指示把「之後的 phase 會遇到的問題」先修掉。處置與**刻意仍不修的理由**見
+[ADR 0015](../architecture/decisions/0015-future-phase-hardening.md)。
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | `/stats/sources` 的筆數不經可見度過濾——**Phase 14 手動提交上線後,租戶私有情資的提交量會即時出現在匿名可讀的公開統計裡** | `StatsPort.sources(Visibility)`，以 IndicatorEntity 為 root 再 join sources，重用同一套 `TlpSpecifications` | [09 §9.1](09-api.md#91-端點清單) |
+| 2 | `sourceId` 查詢參數是還原被遮蔽來源歸屬的 oracle——輸出遮蔽 `DERIVED_ONLY` 的來源明細，查詢卻能用該來源過濾 | 查詢述詞套用與 `RedistributionFilter` 相同的揭露規則 | [07 §7.9](07-domain-intel.md#79-再散布政策法遵強制)、[13 §13.7](13-platform-ops.md) |
+| 3 | `InMemoryRateLimiter` 的 bucket map 永不逐出（鍵含 client IP） | 超過 10,000 個且 10 分鐘節流後，只逐出「已回滿且閒置逾一日」者——**不放寬任何配額** | [10 §10.7](10-identity-plans.md#107-限流) |
+| 4 | STIX `name` 截斷到 255 char 可能切斷 surrogate pair，產生無效 UTF-16 | 最後保留的 char 是高代理即退一格 | [07 §7.8.2](07-domain-intel.md) |
+| 5 | filter 逸出的例外落到 Boot 預設 `/error`，**沒有 `code` 與 `traceId`**——§9.4 的統一錯誤契約在這條路徑上是破的 | `TraceIdFilter`（最外層）加錯誤網，以既有 `FilterErrorWriter` 寫出；回應已 committed 則原樣往上拋 | [09 §9.4](09-api.md) |
+| 6 | 版本表沒有列三項**實作已在使用**的相依（規則 17 已回報四次） | 6.2.2 補列 JWT(Nimbus)、Flyway Maven Plugin、networknt json-schema-validator；**皆不新增版本 property**，不改變任何 pin | [06 §6.2.2](06-tech-stack.md#62-版本表) |
+
+> ⚠️ **刻意仍不修的八項**（理由見 ADR 0015 末節）：`changePassword` 撤銷 family（M3 才有呼叫端，
+> 現在做是推測性行為）、註冊的 email 枚舉（無寄信基礎設施）、租戶停權語意（§10 未定義，
+> 猜一個實作下去比不做更糟）、自助註冊即得 `TENANT_ADMIN`（**方案配額才是正確的閘門**）、
+> IDNA2008／ICU4J（需新增 runtime 相依，性質與上面補記錄不同）、
+> `VITE_API_URL`（M2-25，兩種修法架構影響不同）、`MAX_PAGES_PER_RUN` 的 cursor/since 契約、
+> FilterBar 的 back/forward 草稿同步。**前六項是規格層決策，需使用者定調。**
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.17）。*

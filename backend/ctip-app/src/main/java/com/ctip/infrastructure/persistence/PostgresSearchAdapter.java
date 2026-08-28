@@ -40,7 +40,7 @@ class PostgresSearchAdapter implements SearchPort {
         Specification<IndicatorEntity> spec = Specification.allOf(
                 (root, query, cb) -> cb.like(root.get("normalizedValue"), needle, '\\'),
                 TlpSpecifications.visibleTo(visibility),
-                IndicatorFilterSpecs.matches(filter));
+                IndicatorFilterSpecs.matches(filter, visibility));
         if (after != null) {
             spec = spec.and((root, query, cb) -> cb.or(
                     cb.lessThan(root.get("lastSeen"), after.lastSeen()),

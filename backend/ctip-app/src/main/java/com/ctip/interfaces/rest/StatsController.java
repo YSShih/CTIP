@@ -50,6 +50,8 @@ class StatsController implements StatsApi {
     @PreAuthorize("hasAuthority('stats:read')")
     @GetMapping("/sources")
     public List<SourceStatsDto> sources() {
-        return stats.sources().stream().map(sourceMapper::toStatsDto).toList();
+        return stats.sources(tenantContext.visibility()).stream()
+                .map(sourceMapper::toStatsDto)
+                .toList();
     }
 }

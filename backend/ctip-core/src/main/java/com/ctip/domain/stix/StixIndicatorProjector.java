@@ -117,6 +117,13 @@ public final class StixIndicatorProjector {
     }
 
     private static String truncate(String name) {
-        return name.length() <= NAME_MAX_LENGTH ? name : name.substring(0, NAME_MAX_LENGTH);
+        if (name.length() <= NAME_MAX_LENGTH) {
+            return name;
+        }
+        // 直接 substring 會在 astral 字元(surrogate pair)恰好跨邊界時切出半個 char,
+        // 產生無效的 UTF-16 序列。若最後保留的 char 是高代理,其低代理必然落在被丟棄的一側,
+        // 退一格讓邊界落在完整字元上(ADR 0015)
+        int end = Character.isHighSurrogate(name.charAt(NAME_MAX_LENGTH - 1)) ? NAME_MAX_LENGTH - 1 : NAME_MAX_LENGTH;
+        return name.substring(0, end);
     }
 }

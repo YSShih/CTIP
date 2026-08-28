@@ -42,6 +42,12 @@
 
 > **pin 日：2026-08-21。首次複查日：2027-02-21。**
 >
+> **實作回饋修訂（2026-08-28；[ADR 0015](../architecture/decisions/0015-future-phase-hardening.md)）**：
+> 6.2.2 補列三項**實作已在使用、但版本表原本沒有**的項目——JWT（Nimbus，隨 Spring Security）、
+> Flyway Maven Plugin、networknt json-schema-validator（test scope）。
+> 三者皆**不新增版本 property**，版本仍由 Spring Boot BOM 或既有 property 決定，
+> 故不改變任何 pin。此前已依規則 17 回報四次（§0.14、§0.16、ADR 0004/0005/0012/0014）。
+>
 > **查證狀態（誠實標示）**：以下 19 項已於 2026-08-21 對 Maven Central / npm registry / 上游官方來源逐一查證 —
 > Java 25、Node 24、Spring Boot 4.1.0、springdoc 3.1.0、MapStruct 1.6.3、React 19.2.8、Vite 8.2.2、TypeScript 7.0.2、
 > React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.101.4、Zod 4.4.3、
@@ -85,6 +91,9 @@
 | palantir-java-format | 2.x | ~ | **確定性格式化**：兩個 AI session 產出位元相同的排版 |
 | Checkstyle (maven-plugin) | 3.x | ~ | 僅五條規則，見 [01](01-architecture.md#18-可讀性硬性規則與執行機制) |
 | JaCoCo | 0.8.x | ~ | 覆蓋率門檻 |
+| JWT（Nimbus JOSE+JWT） | 隨 Spring Security | 隨 Boot | `spring-security-oauth2-jose`，由 BOM 決定；HS256 簽發／驗證（[10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2)）。**不新增獨立 JWT 函式庫** |
+| Flyway Maven Plugin | 隨 Boot BOM（`${flyway.version}`） | 隨 Boot | 只供 `migrate.sh` 的「不啟動應用、只跑 migration」場景；宣告在 parent、無 `<executions>`，不綁 lifecycle |
+| networknt json-schema-validator | 1.5.x（**test scope**） | ~ | 以 vendored OASIS STIX 2.1 JSON Schema 離線驗證產出（[ADR 0005](../architecture/decisions/0005-phase8-stix-projection-decisions.md)）。**不進 runtime classpath** |
 | ~~Lombok~~ | **不使用** | — | **見 6.3.1** |
 
 ### 6.2.3 Frontend
