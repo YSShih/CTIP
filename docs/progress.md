@@ -719,7 +719,7 @@
 
 - **狀態**:done(2026-08-28)。使用者指示:逐端點對照 §10.3 矩陣稽核、以資深架構師與資安專家
   視角複查、找到問題修復並回寫 README。**不是新 phase**,是 Phase 13 的收尾。
-- **Commit**:(見 git log,message `Phase 13 audit: endpoint-level authorization + credential revocation fixes`)
+- **Commit**:`8a62e31`(`Phase 13 audit: endpoint-level authorization + credential revocation fixes`)
 - **完成判準結果**:全綠 —
   - Phase 13 判準逐字 ✅ **151/151**(原 138;RbacMatrix 95 格 → **105 格** + CrossTenantIsolation 加認證方式軸 4 → 8)
   - `clean verify -Ptest-integration` 無過濾 ✅ **532 tests**(sdk 13 + core 214 + adapters 24 + app 281;
