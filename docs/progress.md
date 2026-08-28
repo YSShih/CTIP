@@ -951,7 +951,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-28)。使用者指示:把後續 phase 會遇到的問題全部盤出來修掉,
   讓 Phase 14–23 能順順跑完。
-- **Commit**:批 1 `4d1f974`、批 2+3 `8c25cff`、批 4–7(見 git log)
+- **Commit**:批 1 `4d1f974`、批 2+3 `8c25cff`、批 4–7 `772f5b7`
 - **方法**:三組 Explore 平行盤點 `phases/phase-14..23.md` 與其治理規格,逐項對照已實作程式碼,
   共約 **90 項**落差。計畫檔:`~/.claude/plans/task-notification-task-id-a59d3bc425ea2-squishy-sedgewick.md`
 - **規格索引**:`00-master.md` §0.19;逐項見 ADR 0017–0022
