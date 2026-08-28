@@ -1060,7 +1060,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-28)
 - **執行單**:`docs/spec/phases/phase-15.md`
-- **Commit**:(見 git log,message `Phase 15: bloom filter (two-tier, snapshot, delta)`)
+- **Commit**:`5879dc7`(`Phase 15: bloom filter (two-tier, snapshot, delta)`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest='BloomGenerationTest,BloomBitLayoutTest,BloomDeltaTest,BloomCoverageTest'`
     (逐字)✅ **22/22**(BitLayout 7 + Generation 6 + Coverage 4 + Delta 5)
