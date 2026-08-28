@@ -4,7 +4,7 @@
 - Phase 13 完成判準全綠
 
 ## 交付物
-- Flyway `V22`–`V23`：`plans`、`subscriptions` + 四個方案種子（15 個配額維度）
+- Flyway `V28`–`V29`：`plans`、`subscriptions` + 四個方案種子（15 個配額維度）
 - `Subscription` 聚合（5 條不變量）+ `QuotaService`
 - `.env` 覆寫機制（`CTIP_PLAN_<CODE>_<FIELD>`）
 - 配額強制：分頁上限、批次上限、STIX 物件數、webhook/apikey 數量、手動提交/日、匯入筆數

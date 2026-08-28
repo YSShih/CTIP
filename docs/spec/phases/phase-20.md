@@ -8,7 +8,7 @@
 - `KafkaForwardingListener`（`@TransactionalEventListener(AFTER_COMMIT)`）——**不修改任何發佈端**
 - 事件 schema（JSON Schema）存於 `docs/api/events/` + domain event → topic 對應表
 - 消費端冪等（`eventId` 去重）
-- Flyway `V30`：`webhooks`、`webhook_deliveries`、`notifications`
+- Flyway `V32`：`webhooks`、`webhook_deliveries`、`notifications`
 - `Webhook` 聚合（6 條不變量）+ `WebhookFilter`（伺服器端過濾）
 - HMAC-SHA256 簽章（`HMAC(secret, timestamp + "." + body)`）+ 五個送達標頭
 - 重試指數退避最多 5 次；連續失敗 5 次 → `DISABLED` + `WebhookDisabled` 事件

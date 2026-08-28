@@ -379,8 +379,8 @@ STIX 2.1 物件的**衍生投影**。PostgreSQL 的 domain model 才是 source o
 CONSTRAINT ux_stix_objects_stix_id UNIQUE (stix_id)
 CONSTRAINT fk_so_tenant    FOREIGN KEY (owner_tenant_id) REFERENCES tenants(id)
 CONSTRAINT fk_so_indicator FOREIGN KEY (indicator_id) REFERENCES indicators(id) ON DELETE CASCADE
--- fk_so_threat 不在 V7 建立:threats 表屬 M2(V25),M1 不得建立。
--- V25 建立 threats 後以 ALTER TABLE 補上(見 §4.7;ADR 0001 決策 2):
+-- fk_so_threat 不在 V7 建立:threats 表屬 M2(V31),M1 不得建立。
+-- V31 建立 threats 後以 ALTER TABLE 補上(見 §4.7;ADR 0001 決策 2、ADR 0014):
 --   ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat
 --     FOREIGN KEY (threat_id) REFERENCES threats(id) ON DELETE CASCADE;
 CONSTRAINT ck_so_tlp       CHECK (tlp IN ('CLEAR','GREEN','AMBER','AMBER_STRICT','RED'))
@@ -654,7 +654,7 @@ CONSTRAINT ck_plans_code CHECK (code IN ('ANONYMOUS','FREE','PREMIUM','ENTERPRIS
 CONSTRAINT ck_plans_tier CHECK (tier BETWEEN 0 AND 3)
 ```
 
-**種子資料（`V22__seed_plans.sql`，冪等）**
+**種子資料（`V29__seed_plans.sql`，冪等）**
 
 | 欄位 | ANONYMOUS | FREE | PREMIUM | ENTERPRISE |
 |---|---|---|---|---|
@@ -742,7 +742,7 @@ CREATE INDEX ix_threats_aliases       ON threats USING GIN (aliases);
 CREATE INDEX ix_threats_last_seen     ON threats (last_seen DESC, id DESC);
 ```
 
-> **M1 不建立本表。** 由 `V25__create_threats.sql` 於 M2 建立。
+> **M1 不建立本表。** 由 `V31__create_threats.sql` 於 M2 建立。
 
 ---
 
@@ -1086,7 +1086,17 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 
 ## 4.7 Flyway migration 對應
 
-版本號區段：`V1–V19` = M1、`V20–V29` = M2、`V30+` = M3。
+**版本號一律遞增，依實作順序指派——不預留區段。**
+
+> **實作回饋修訂（2026-08-28，Phase 13 收尾稽核之後；ADR 0014）**
+> 本節原本依「表的分組」預留區段（`V1–V19` = M1、`V20–V29` = M2、`V30+` = M3），
+> 但 Flyway 是**依版本號排序套用**：Phase 13 用掉 `V20`/`V21`/`V24`/`V27` 後，
+> Phase 14 若照原表用 `V22`，既有資料庫在啟動時會直接
+> `FlywayValidateException`（實測：驗證失敗、應用起不來，該 migration 不會被套用）。
+> Phase 15（`V26`）與 Phase 18（`V25`）同樣低於 `V27`，會踩同一個坑。
+> 預留區段與 Flyway 的排序語意天生衝突，故廢除區段、改為依實作順序遞增。
+> **已套用的 `V1`–`V7`、`V20`、`V21`、`V24`、`V27` 一律不動**（改動會使 checksum 失效）；
+> 其中 `V7`、`V20` 的註解仍寫著舊版本號與舊區段規則，以本表為準。
 
 | Migration | 內容 | 表 |
 |---|---|---|
@@ -1096,17 +1106,17 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V4__seed_sources.sql` | `MANUAL` + 三個 mock 來源（冪等） | — |
 | `V5__create_indicators.sql` | `indicators`、`indicator_sources`、`hash_records` | 4, 5, 6 |
 | `V6__create_ingestion_rejections.sql` | `ingestion_rejections` | 7 |
-| `V7__create_stix.sql` | `stix_objects`、`stix_relationships`（`threat_id` 欄位保留、FK 延至 V25） | 8, 9 |
+| `V7__create_stix.sql` | `stix_objects`、`stix_relationships`（`threat_id` 欄位保留、FK 延至 `V31`） | 8, 9 |
 | `V20__create_users_and_rbac.sql` | `users`、`roles`、`permissions`、`role_permissions`、`tenant_users` | 10–14 |
 | `V21__create_auth_tokens.sql` | `refresh_tokens`、`api_keys` | 15, 16 |
-| `V22__create_plans.sql` | `plans`、`subscriptions` | 17, 18 |
-| `V23__seed_plans.sql` | 四個方案（冪等） | — |
+| `V28__create_plans.sql` | `plans`、`subscriptions` | 17, 18 |
+| `V29__seed_plans.sql` | 四個方案（冪等） | — |
 | `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
-| `V25__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
-| `V26__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
+| `V31__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
+| `V30__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
 | `V27__seed_rbac_read_permissions.sql` | 補 `source:read`、`stats:read` 兩個權限與其角色對應（冪等，ADR 0013） | — |
-| `V30__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |
-| `V31__create_audit_logs.sql` | `audit_logs` + `REVOKE UPDATE, DELETE` | 27 |
+| `V32__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |
+| `V33__create_audit_logs.sql` | `audit_logs` + `REVOKE UPDATE, DELETE` | 27 |
 
 規則見 [05-environment.md](05-environment.md#59-flyway)。**絕不修改已套用的 migration**，一律新增。
 

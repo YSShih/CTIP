@@ -226,7 +226,7 @@ of truth）；完整決策記錄見 `docs/architecture/decisions/0001-phase3-spe
 
 | # | 衝突 | 解決 | 修訂處 |
 |---|---|---|---|
-| 1 | 表 8（M1 的 V7）定義 `fk_so_threat` 引用 M2 才建立的 `threats` | V7 保留 `threat_id` 欄位、FK 由 V25 以 `ALTER TABLE` 補上 | [04 表 8、§4.7](04-data-dictionary.md) |
+| 1 | 表 8（M1 的 V7）定義 `fk_so_threat` 引用 M2 才建立的 `threats` | V7 保留 `threat_id` 欄位、FK 由 threats migration 以 `ALTER TABLE` 補上（版本號 2026-08-28 由 V25 改為 `V31`，見 §0.16） | [04 表 8、§4.7](04-data-dictionary.md) |
 | 2 | mvp/dev 的 `BACKEND_JAVA_OPTS` 填 JDWP，但 `JAVA_TOOL_OPTIONS` 作用於 Maven 與 forked app 兩個 JVM，5005 雙綁必然啟動失敗 | JDWP 移至 spring-boot:run 的 `<jvmArguments>`；env 一律留空 | [05 §5.5 註 ¹、§5.6、§5.8.1](05-environment.md#581-實作回饋修正2026-08-21phase-23-實測發現詳見-adr-0001) |
 
 ### 照字面實作必失敗的缺陷（3 項，補列於 05 §5.8.1）
@@ -441,4 +441,25 @@ Phase 13（認證、RBAC、API Key、租戶隔離）發現兩項規格自身衝�
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.15）。*
+## 0.16 實作回饋修訂（2026-08-28，Flyway 版本號）
+
+Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
+處置與實測見 [ADR 0014](../architecture/decisions/0014-flyway-monotonic-versions.md)。
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | §4.7 依「表的分組」預留版本號區段，但 Flyway **依版本號排序套用**——Phase 13 已用掉 `V24`/`V27`，Phase 14（`V22`）、Phase 15（`V26`）、Phase 18（`V25`）在既有資料庫上都會 `FlywayValidateException` 而**啟動失敗**（已實測） | **廢除區段預留**，版本號一律遞增、依實作順序指派：plans → `V28`/`V29`、bloom → `V30`、threats → `V31`、notifications → `V32`、audit_logs → `V33` | [04 §4.7](04-data-dictionary.md#47-flyway-migration-對應)、[05 §5.9](05-environment.md#59-flyway)、phase-14/15/18/20/21、[13](13-platform-ops.md) |
+| 2 | 04 表 17 內文寫 `V22__seed_plans.sql`，§4.7 的表寫 `V23__seed_plans.sql`——同一份規格自相矛盾 | 兩處統一為 `V29__seed_plans.sql` | [04 表 17、§4.7](04-data-dictionary.md) |
+| 3 | `migrate.sh` 呼叫 `flyway:migrate`，但專案**從未加入 flyway-maven-plugin**（Phase 2 就記了待辦）——實際執行以「No plugin found for prefix 'flyway'」失敗 | plugin 宣告在 parent pom（無 `<executions>`，不綁 lifecycle），`migrate.sh` 改用 `-N`；版本沿用 Boot 納管的 `${flyway.version}` / `${postgresql.version}`，不新增版本 property | [05 §5.10](05-environment.md#510-腳本契約) |
+
+> ⚠️ **已套用的 migration 一律不動**（改動會使 checksum 失效）。副作用是
+> `V7__create_stix.sql` 的註解仍寫 `V25__create_threats.sql`、`V20__create_users_and_rbac.sql`
+> 的註解仍寫舊的區段規則——兩處**刻意保持過時**，以 §4.7 為準。
+> `V8`–`V19`、`V22`、`V23`、`V25`、`V26` 這些號碼永遠不會有檔案。
+
+> **依規則 17 回報**：`06 §6.2` 版本表沒有列 `flyway-maven-plugin`，
+> 建議補列一列「Flyway Maven Plugin — 隨 Spring Boot BOM」。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.16）。*

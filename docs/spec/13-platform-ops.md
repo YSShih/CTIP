@@ -169,7 +169,7 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 | 5 | `metadata` JSONB **絕不含**憑證、token 原文、密碼、完整 `Authorization` 標頭 |
 | 6 | `audit_logs` 表**沒有 `updated_at` 欄位**——加上它即為設計錯誤 |
 
-第 1、2 條需在 migration `V31__create_audit_logs.sql` 中以 SQL 實作，並有一條整合測試驗證應用角色的 UPDATE/DELETE 被 DB 拒絕。
+第 1、2 條需在 migration `V33__create_audit_logs.sql` 中以 SQL 實作，並有一條整合測試驗證應用角色的 UPDATE/DELETE 被 DB 拒絕。
 
 ### 觸發點對照表（強制，26 種行為）
 

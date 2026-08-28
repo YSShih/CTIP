@@ -4,7 +4,7 @@
 - Phase 14 完成判準全綠
 
 ## 交付物
-- Flyway `V26`：`bloom_versions`、`bloom_artifacts`
+- Flyway `V30`：`bloom_versions`、`bloom_artifacts`
 - `BloomVersion` 聚合（8 條不變量）+ `BloomArtifact` + `BloomParameters` + `Checksum`
 - `BloomStoragePort` + `infrastructure/bloom/`：位元運算與序列化
 - **位元格式嚴格依 [11 §11.4](../11-sync-bloom.md#114-位元陣列格式強制互通性關鍵)**：LSB-first、Kirsch-Mitzenmacher 雙雜湊、`m` 向上取整至 8 的倍數

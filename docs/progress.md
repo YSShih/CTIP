@@ -780,9 +780,8 @@ actuator 四環境皆 `health,info`。
   (ADR 0012 決策 5),而該角色持有 `ioc:submit` / `ioc:import` / `webhook:manage`。
   `plans.manual_submissions_per_day` 對 FREE 必須是 0 **且必須真的被檢查**
 - 配額改讀 plans 表的清單多一項:`ApiKeySettings.maxPerTenant`(現為 `ctip.api-key.max-per-tenant`)
-- **Flyway 版本號地雷**:已套用 V24、V27,但 Phase 14 的 `V22__create_plans` / `V23__seed_plans`
-  版本號**較低**。既有 DB 上 `flyway migrate` 會因 out-of-order 而失敗 ——
-  屆時需 `spring.flyway.out-of-order=true` 或重建開發用 DB。全新環境不受影響
+- ~~**Flyway 版本號地雷**~~ —— **已於 2026-08-28 處理,見下一段(ADR 0014)**:
+  版本號改為依實作順序遞增,Phase 14 用 `V28`/`V29`(不再是 `V22`/`V23`)
 - `@PreAuthorize("hasPermission(#id, '…')")` 的 `#id` 若不是 tenantId **一定要用 4 參數重載**,
   否則對所有人恆為 false(見 `CtipPermissionEvaluatorTest`)
 - 新增 controller 一定要掛 `@PreAuthorize`,否則 `EndpointAuthorizationTest` 會擋;
@@ -793,3 +792,61 @@ actuator 四環境皆 `health,info`。
   (現在沒有呼叫端,加上去會是推測性行為,故未實作)
 - `Tenant.suspend()` / `TenantStatus.SUSPENDED` 在任何認證路徑都沒被檢查 —— 與使用者停權同一類,
   但租戶停權的語意 §10 未定義,留待 Phase 14 方案/訂閱一併定義
+
+---
+
+## Flyway 版本號 — 廢除區段預留,改依實作順序遞增
+
+- **狀態**:done(2026-08-28)。使用者指示:把 Phase 13 稽核留給 Phase 14 的 Flyway 地雷先處理掉。
+- **Commit**:(見 git log,message `Flyway: monotonic migration versions + working migrate.sh (ADR 0014)`)
+- **完成判準結果**:全綠 —
+  - `clean verify -Ptest-integration` 無過濾 ✅ **532 tests**(Spotless / Checkstyle / JaCoCo 全過)
+  - `dod.sh full M3-24` ✅;全部 `.sh` 過 `bash -n`;四環境 `compose config -q` ✅
+  - **實測(這是重點)**:
+    - 舊編號的失敗模式 —— 乾淨 DB 套 `V20`/`V24`/`V27` 後加入 `V22` →
+      `FlywayValidateException: Validate failed`,**應用啟動失敗**,`V22` 不會被套用
+      (`applied versions = [20, 24, 27]`)。不是靜默漏套
+    - `outOfOrder(true)` 可套用,但順序變成 `[20, 24, 27, 22]` —— 與全新 DB 的 `[20, 22, 24, 27]` 永久不一致
+    - **新編號**:在已套用 `V1`–`V27` 的 DB 上放 `V28`,不開任何 flag →
+      `1,2,3,4,5,6,7,20,21,24,27,28` 乾淨套用
+    - `./environment/scripts/migrate.sh mvp` ✅(修好之後;對全新 DB 則套用 V1–V27 全部 11 支)
+
+### 根因
+
+`04 §4.7` 依「表的分組」預留版本號區段(`V1–V19`=M1、`V20–V29`=M2、`V30+`=M3),
+但 Flyway **依版本號排序套用**,而 phase 的實作順序與表的分組無關。
+Phase 13 用掉 `V20`/`V21`/`V24`/`V27` 之後,Phase 14(`V22`)、Phase 15(`V26`)、
+Phase 18(`V25`)都低於已套用的最高版本 → 三個 phase 各會炸一次。
+問題在 Phase 13 用掉 `V24` 時就已存在,`V27` 只是讓它更明顯。
+
+### 處置(細節與取捨見 `docs/architecture/decisions/0014-flyway-monotonic-versions.md`,規格索引 §0.16)
+
+1. **廢除區段預留**,版本號一律遞增、依實作順序指派。未寫的 migration 重新編號:
+   Phase 14 → `V28`/`V29`、Phase 15 bloom → `V30`、Phase 18 threats → `V31`、
+   Phase 20 notifications → `V32`、Phase 21 audit_logs → `V33`
+2. 順帶修 `04` 內文寫 `V22__seed_plans.sql` 而 §4.7 寫 `V23__seed_plans.sql` 的自相矛盾
+3. 順帶修 **`migrate.sh` 從來沒真的能跑**:呼叫 `flyway:migrate` 但專案從未加過
+   flyway-maven-plugin(Phase 2 就記了待辦)。plugin 改宣告在 **parent** pom 的
+   `<build><plugins>`(無 `<executions>`,不綁任何 lifecycle),`migrate.sh` 改用 `mvnw -N`
+
+### 為什麼不選 `out-of-order=true`
+
+一行就好,而且對目前規劃的 migration 功能上安全(彼此無依賴)。但它會讓全新 DB 與既有 DB 的
+**套用順序永久不一致**,而那正是「絕不修改已套用的 migration」想守住的東西;
+且會永久關掉一個安全網。重新編號此刻是純文件修改(那些 migration 一個都還沒寫),往後只會更貴。
+
+### 給下一 session 的注意事項
+
+- **⚠️ 已套用的 migration 一律不動**(checksum)。副作用:`V7__create_stix.sql` 的註解仍寫
+  `V25__create_threats.sql`、`V20__create_users_and_rbac.sql` 的註解仍寫舊區段規則 ——
+  **刻意保持過時**,一律以 `04 §4.7` 為準
+- `V8`–`V19`、`V22`、`V23`、`V25`、`V26` 這些號碼**永遠不會有檔案**,是舊設計的殘留
+- **Phase 14 的 migration 是 `V28__create_plans.sql` / `V29__seed_plans.sql`**;
+  `MigrationIntegrationTest.allM1MigrationsApplyFromEmptyDatabase` 的版本清單要同步加號碼
+- 新增 migration 前先看一眼現有最大版本號,新號碼必須更大
+- `migrate.sh` 走 `mvnw -N`:plugin 宣告在 parent、`locations` 直指
+  `ctip-app/src/main/resources/db/migration`。**不要改成 `-pl ctip-app`**
+  (sibling SNAPSHOT 未安裝會解析失敗),也**不要加 `-am`**
+  (`flyway:migrate` 會在 reactor 每個 module 上各執行一次,含沒有設定的 parent)
+- 依規則 17 回報:`06 §6.2` 版本表沒有列 `flyway-maven-plugin`(本次未新增版本 property,
+  沿用 Boot 納管的 `${flyway.version}` / `${postgresql.version}`),建議版本表補列

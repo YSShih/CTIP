@@ -201,6 +201,37 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <!--
+        migrate.sh(05 §5.10)以 `mvnw -N flyway:migrate` 呼叫。宣告在 parent 而非 ctip-app:
+        -N 不遞迴,因此不需解析模組相依(單獨 `-pl ctip-app` 會因 SNAPSHOT 未安裝而失敗),
+        而 locations 直指 migration 目錄,plugin 本來就不需要專案 classpath。
+        無 <executions>,不綁任何 lifecycle phase——只有明確呼叫 flyway:* 時才會執行;
+        schema 的正常套用路徑仍是應用啟動時的 Flyway(05 §5.9)。
+        版本與 flyway-database-postgresql 皆由 spring-boot-starter-parent 納管,不新增版本 property
+        (06 §6.2 版本表未列此 plugin,依規則 17 回報)。
+      -->
+      <plugin>
+        <groupId>org.flywaydb</groupId>
+        <artifactId>flyway-maven-plugin</artifactId>
+        <configuration>
+          <locations>
+            <location>filesystem:${maven.multiModuleProjectDirectory}/ctip-app/src/main/resources/db/migration</location>
+          </locations>
+        </configuration>
+        <dependencies>
+          <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <!-- plugin dependencies 不吃 dependencyManagement,須明寫;沿用 Boot 納管的 ${flyway.version} -->
+            <version>${flyway.version}</version>
+          </dependency>
+          <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+          </dependency>
+        </dependencies>
+      </plugin>
     </plugins>
   </build>
 

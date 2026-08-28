@@ -634,7 +634,7 @@ v2.0 初版仍有四項照字面實作必然失敗的缺陷，於 Phase 3 實測
 
 Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: validate`，絕不 `update` 或 `create`。**
 
-- 版本號區段：`V1–V19` = M1、`V20–V29` = M2、`V30+` = M3
+- **版本號一律遞增，依實作順序指派**——不預留區段（原本依表分組預留區段，與 Flyway 的排序套用語意衝突；見 [04 §4.7](04-data-dictionary.md#47-flyway-migration-對應) 與 ADR 0014）
 - 完整 migration 對應見 [04-data-dictionary.md](04-data-dictionary.md#47-flyway-migration-對應)
 - Migration 檔必須 commit
 - **絕不修改已套用的 migration**，一律新增

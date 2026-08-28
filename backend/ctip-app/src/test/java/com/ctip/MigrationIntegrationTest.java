@@ -9,7 +9,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * DoD M1-16:Flyway 從空資料庫執行至最新版本成功(docs/spec/04-data-dictionary.md §4.7)。
- * 版本號區段:V1–V19 = M1、V20–V29 = M2、V30+ = M3;M1 只用到 V7,故中間跳號是規格的區段設計。
+ * 版本號一律遞增、依實作順序指派(§4.7;ADR 0014)。V8–V19 與 V22/V23/V25/V26 的跳號是
+ * 舊區段設計的殘留:那些號碼永遠不會有檔案,已套用的 migration 不得改號(checksum)。
  */
 class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
 

@@ -24,7 +24,7 @@ DoD M1-17 要求可執行地驗證「存在且不可刪除」。domain 層的強
   本觸發器不碰 `updated_at`。
 - Phase 4 的 domain 層仍須依 T2 實作同樣的拒絕(第一道防線);觸發器是最後一道。
 
-## 決策 2:`stix_objects.threat_id` 的 FK 延後至 V25
+## 決策 2:`stix_objects.threat_id` 的 FK 延後至 threats migration
 
 ### 背景
 
@@ -37,6 +37,11 @@ DoD M1-17 要求可執行地驗證「存在且不可刪除」。domain 層的強
 V7 保留 `threat_id UUID` 欄位與 `ck_so_origin` 檢查,**不建 FK**;
 FK 由 M2 的 `V25__create_threats.sql` 在建立 `threats` 後以
 `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat ...` 補上(已記入 progress 給 Phase 18 的注意事項)。
+
+> **後續修訂(2026-08-28,ADR 0014)**:該 migration 的版本號由 `V25` 改為 **`V31`** ——
+> Flyway 依版本號排序套用,而 Phase 13 已用掉 `V27`,`V25` 會使既有資料庫啟動時
+> `FlywayValidateException`。**`V7__create_stix.sql` 內的註解仍寫 `V25`,不得修改**
+> (改動已套用的 migration 會使 checksum 失效);以 [04 §4.7](../../spec/04-data-dictionary.md#47-flyway-migration-對應) 為準。
 
 ### 理由
 

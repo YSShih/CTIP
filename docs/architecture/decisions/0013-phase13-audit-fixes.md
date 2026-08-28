@@ -41,6 +41,9 @@
 種子以 `V27__seed_rbac_read_permissions.sql` 補入(冪等)。**版本號取 V27**:§4.7 的 M2 區段
 V20–V26 已全部指名(V22/V23 = plans、V25 = threats、V26 = bloom),V27–V29 未指派。
 
+> **後續修訂(2026-08-28,[ADR 0014](0014-flyway-monotonic-versions.md))**:區段預留本身與 Flyway 的排序套用語意衝突,
+> 已廢除;未寫的 migration 全部改為依實作順序遞增(plans → V28/V29、bloom → V30、threats → V31)。
+
 > ⚠️ **既有金鑰的行為變更**:Phase 13 之後、本次修正之前建立的 API key,其 scopes 不會包含
 > 這兩個新 code,因此**會失去 `/sources` 與 `/stats` 的存取權**。這正是本修正的目的
 > (scope 就該是有效的收斂),但升級時應告知使用者重新建立金鑰。

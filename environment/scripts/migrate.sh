@@ -27,7 +27,9 @@ BIND="${BIND:-127.0.0.1:5432}"
 JDBC_URL="jdbc:postgresql://${BIND}/${DB}"
 
 info "對 ${ENV_NAME}(${JDBC_URL})執行 Flyway migration……"
-"${REPO_ROOT}/backend/mvnw" -f "${REPO_ROOT}/backend/pom.xml" -pl ctip-app \
+# -N(非遞迴):plugin 宣告在 parent,locations 直指 ctip-app 的 migration 目錄。
+# 不遞迴就不必解析模組相依——單獨 -pl ctip-app 會因 SNAPSHOT 未安裝而失敗。
+"${REPO_ROOT}/backend/mvnw" -f "${REPO_ROOT}/backend/pom.xml" -N \
   flyway:migrate \
   -Dflyway.url="${JDBC_URL}" \
   -Dflyway.user="${USER}" \

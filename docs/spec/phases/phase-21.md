@@ -4,7 +4,7 @@
 - Phase 20 完成判準全綠
 
 ## 交付物
-- Flyway `V31`：`audit_logs` + `REVOKE UPDATE, DELETE ON audit_logs FROM <app_role>` + 專用角色 `ctip_retention`
+- Flyway `V33`：`audit_logs` + `REVOKE UPDATE, DELETE ON audit_logs FROM <app_role>` + 專用角色 `ctip_retention`
 - `AuditPort` + 非同步寫入 + 本地**有界**佇列（溢出記 ERROR，不阻塞）
 - 26 種稽核行為，依 [13 §13.5 觸發點對照表](../13-platform-ops.md#觸發點對照表強制26-種行為) 逐一實作（含新增的 `IOC_SUBMIT`、`IOC_IMPORT`、`IOC_REPORT_FP`）
 - 取樣：寫入 100%、讀取 1%（`AUDIT_SAMPLE_READ_RATE`）

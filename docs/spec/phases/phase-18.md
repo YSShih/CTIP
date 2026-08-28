@@ -4,7 +4,7 @@
 - Phase 17 完成判準全綠
 
 ## 交付物
-- Flyway `V25`：`threats`、`threat_indicators`、`threat_external_references`
+- Flyway `V31`：`threats`、`threat_indicators`、`threat_external_references`
 - `Threat` 聚合（6 條不變量）+ `ThreatIndicatorLink` + `ExternalReference`
 - `ThreatRepository` port + adapter
 - 端點：`GET /threats`、`GET /threats/{id}`、`GET /threats/{id}/indicators`
