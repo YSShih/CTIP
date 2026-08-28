@@ -1,5 +1,9 @@
 package com.ctip;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -31,6 +35,9 @@ public abstract class AbstractPostgresIntegrationTest {
     private static final String APP_USER = "ctip_app";
     private static final String APP_PASSWORD = "ctip_app_test";
 
+    /** Bloom artifact 的測試根目錄;整個 JVM 共用,才不會讓每個測試類各起一個 Spring context。 */
+    protected static final Path BLOOM_DIR = createBloomDirectory();
+
     static {
         POSTGRES.start();
         createApplicationRole();
@@ -58,6 +65,14 @@ public abstract class AbstractPostgresIntegrationTest {
         }
     }
 
+    private static Path createBloomDirectory() {
+        try {
+            return Files.createTempDirectory("ctip-bloom-test");
+        } catch (IOException e) {
+            throw new UncheckedIOException("無法建立 Bloom 測試目錄", e);
+        }
+    }
+
     @DynamicPropertySource
     static void ctipEnvironment(DynamicPropertyRegistry registry) {
         registry.add("POSTGRES_HOST", POSTGRES::getHost);
@@ -74,5 +89,11 @@ public abstract class AbstractPostgresIntegrationTest {
         registry.add("SCHEDULER_ENABLED", () -> "false");
         // mvp 環境的限流後端(避免對 redis 預設值發出 WARN 誤導)
         registry.add("RATE_LIMIT_BACKEND", () -> "memory");
+        // Bloom artifact 寫到臨時目錄:預設的 /var/lib/ctip/bloom 只存在於容器內。
+        // 容量縮小到 10 萬(預設 1000 萬 → 每份 18MB 的位元陣列),測試才不會為此配置整份記憶體;
+        // 位元格式本身由 BloomBitLayoutTest 以固定參數驗證,與此處的容量無關。
+        registry.add("BLOOM_STORAGE_DIR", () -> BLOOM_DIR.toString());
+        registry.add("BLOOM_PUBLIC_CAPACITY", () -> "100000");
+        registry.add("BLOOM_TENANT_DEFAULT_CAPACITY", () -> "10000");
     }
 }

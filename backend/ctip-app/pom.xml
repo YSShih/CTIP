@@ -98,6 +98,13 @@
       <artifactId>bucket4j-core</artifactId>
       <version>${bucket4j.version}</version>
     </dependency>
+    <!-- Bloom artifact 的預設壓縮(docs/spec/11-sync-bloom.md §11.4;06 §6.2.2,版本見 parent properties)。
+         JDK 只內建 GZIP/Deflate,ZSTD 需要這個相依;壓縮只影響傳輸與儲存,不影響 checksum。 -->
+    <dependency>
+      <groupId>com.github.luben</groupId>
+      <artifactId>zstd-jni</artifactId>
+      <version>${zstd.version}</version>
+    </dependency>
     <!-- Hot reload 契約(docs/spec/05-environment.md §5.11):reload.sh 觸發重編後由 DevTools 重啟 context -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

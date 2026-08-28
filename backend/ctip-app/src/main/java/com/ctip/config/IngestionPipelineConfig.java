@@ -1,5 +1,7 @@
 package com.ctip.config;
 
+import com.ctip.application.bloom.BloomChangeTracker;
+import com.ctip.application.ingestion.BloomUpdateStage;
 import com.ctip.application.ingestion.DeduplicateStage;
 import com.ctip.application.ingestion.EventPublishStage;
 import com.ctip.application.ingestion.FingerprintStage;
@@ -39,12 +41,19 @@ import org.springframework.context.annotation.Configuration;
 public class IngestionPipelineConfig {
 
     /** pipeline 用到的 out-port 組合(參數數 ≤ 5 的組合;僅本組態使用)。 */
-    record Repositories(IndicatorRepository indicators, SourceRepository sources, StixObjectPort stixObjects) {}
+    record Repositories(
+            IndicatorRepository indicators,
+            SourceRepository sources,
+            StixObjectPort stixObjects,
+            BloomChangeTracker bloomChanges) {}
 
     @Bean
     Repositories ingestionRepositories(
-            IndicatorRepository indicators, SourceRepository sources, StixObjectPort stixObjects) {
-        return new Repositories(indicators, sources, stixObjects);
+            IndicatorRepository indicators,
+            SourceRepository sources,
+            StixObjectPort stixObjects,
+            BloomChangeTracker bloomChanges) {
+        return new Repositories(indicators, sources, stixObjects, bloomChanges);
     }
 
     /** 查詢層(lookup 的推斷+正規化)共用;pipeline 因 bean 方法參數上限另行內聯建構(組態相同)。 */
@@ -82,6 +91,8 @@ public class IngestionPipelineConfig {
                 // stage 8(§8.2):投影建構;寫出由 IngestionBatchExecutor 於交易提交後執行(ADR 0005)
                 new StixProjectionStage(repositories.sources(), repositories.stixObjects(), clock),
                 new PersistStage(repositories.indicators()),
+                // stage 10(phase-15):標記受影響的 Bloom scope;成員真相仍在資料庫(ADR 0024)
+                new BloomUpdateStage(repositories.bloomChanges()),
                 new EventPublishStage(events)));
     }
 }

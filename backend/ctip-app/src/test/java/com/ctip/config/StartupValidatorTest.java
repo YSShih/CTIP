@@ -11,6 +11,7 @@ import com.ctip.config.CtipProperties.Jwt;
 import com.ctip.config.CtipProperties.RateLimit;
 import com.ctip.config.CtipProperties.Retention;
 import com.ctip.config.CtipProperties.Scheduler;
+import com.ctip.domain.bloom.BloomCompression;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
@@ -116,7 +117,15 @@ class StartupValidatorTest {
                 new CtipProperties.Normalization(false),
                 new CtipProperties.Api(50),
                 new CtipProperties.DataQuality(java.util.List.of()),
-                new Bloom(10_000_000, 0.001, 1_000_000, "0 0 4 * * *", "0 0 * * * *", 24),
+                new Bloom(
+                        10_000_000,
+                        0.001,
+                        1_000_000,
+                        "0 0 4 * * *",
+                        "0 0 * * * *",
+                        24,
+                        "/var/lib/ctip/bloom",
+                        BloomCompression.ZSTD),
                 new Retention(180, 30, 30, 30, 365, 30));
         return new StartupValidator(properties, springEnv);
     }

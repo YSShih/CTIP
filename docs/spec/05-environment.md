@@ -196,6 +196,12 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
 
 ## 5.4 環境變數清單
 
+> **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**：
+> `ConfigSymmetryTest`（ADR 0016）是**單向**檢查——它確認 `application.yml` 用到的每個變數都
+> 出現在 compose 與本節清單，但**抓不到反向缺漏**:本節與 compose 已宣告、`application.yml`
+> 卻沒有綁定的變數(設定看似可調、實際完全沒有作用)。`BLOOM_STORAGE_DIR` /
+> `BLOOM_COMPRESSION` 就是這種情況,已於 Phase 15 補上綁定。新增變數時兩個方向都要確認。
+
 ### 5.4.1 執行模式
 
 ```text

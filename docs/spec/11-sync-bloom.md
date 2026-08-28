@@ -57,6 +57,23 @@ Client 同時查兩份，任一命中即走 API 精確驗證。
 
 tenant Bloom 容量依 `plans.tenant_bloom_capacity`；`null` 表示該方案無 tenant Bloom。
 
+> **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**
+>
+> 1. **tenant 成員條件刻意沒有再散布條件**——私有 Bloom 只發給該租戶自己，不涉及再散布。
+>    因此**不得**沿用 `Indicator.eligibleForBloom()`（它內含 `hasRedistributableSource()`，
+>    只適用 public 層）：手動提交的來源政策固定 `INTERNAL_ONLY`，沿用會使 tenant bloom **恆為空**。
+>    兩個述詞收在 `domain/bloom/BloomMembership`；資料庫端另有等價的 SQL 實作，
+>    `BloomCoverageTest` 逐筆比對兩者，防止其中一邊被改動後安靜漂移
+>    （public 少一筆是可用性問題，**tenant 多一筆是跨租戶外洩**）。
+> 2. **`tenant_bloom_capacity = NULL` 的語意與平台慣例相反。** `QuotaLimit` 的通用語意是
+>    `0` = 停用、`NULL` = **無限制**；本節卻定義 `null` = **無** tenant Bloom。
+>    以本節為準、fail-closed：只有**正整數**才產生 tenant bloom。
+> 3. **容量：`min(方案上限, max(BLOOM_TENANT_DEFAULT_CAPACITY, 目前成員數))`。**
+>    方案值是**權利上限**，`BLOOM_TENANT_DEFAULT_CAPACITY`（§5.4.5）是**實際尺寸預設**——
+>    只用方案值會讓該環境變數變成沒有呼叫端的死設定，且 ENTERPRISE 的小租戶每小時都會產生
+>    一份 18MB 的陣列。PREMIUM 兩種算法結果相同。tenant 的偽陽性率沿用
+>    `BLOOM_PUBLIC_FALSE_POSITIVE_RATE`（沒有 tenant 專屬變數）。
+
 ---
 
 ## 11.3 Bloom 無法刪除元素
@@ -78,7 +95,12 @@ delta = 從 baseVersion 到 targetVersion 之間「新增」的 bit 索引集合
 | Full snapshot | 每日一次（`BLOOM_SNAPSHOT_CRON`，預設 04:00），`datasetVersion` +1 |
 | Delta | 日內每小時一次（`BLOOM_DELTA_CRON`），`bloomVersion` +1 |
 | 強制重下 full 的條件 | delta 鏈 > `BLOOM_MAX_DELTA_CHAIN`（預設 24 段）**或** 累計 delta 大小 > full 的 30% |
-| Artifact 保留 | 最近 `BLOOM_ARTIFACT_KEEP`（預設 30）個版本 |
+| Artifact 保留 | 最近 `BLOOM_ARTIFACT_KEEP`（預設 30）個版本 ¹ |
+
+> ¹ **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**：
+> 「保留最近 N 份」照字面實作會破壞 delta 鏈——同一 `datasetVersion` 內 full snapshot 的
+> `bloomVersion` 最小（= 0），因此是**最舊的一筆**，會先被刪掉，而它的 delta 還留著，
+> 那條鏈永遠無法重建。刪除前必須排除「該 dataset 仍有存活版本」的 full snapshot。
 
 超過條件時，`GET /api/v1/sync/delta` 回：
 
@@ -199,6 +221,14 @@ k = max(1, round((m / n) * ln 2))       // hashFunctionCount
 4. 串接後 base64url（無 padding）
 
 `resultingChecksum` 讓 client 套用後可自我驗證。不符則丟棄並重下 full。
+
+> **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**——
+> 本節的 `checksum` 與 [04 表 23](04-data-dictionary.md) 的 `checksum` 對 delta 的說法相反
+> （表 23 寫「未壓縮**位元陣列**的 SHA-256」，本節寫「addedBits payload 的 SHA-256」）。
+> 定調：**`checksum` = 該版本未壓縮 artifact payload 的 SHA-256**——full 的 payload 是位元陣列、
+> delta 的 payload 是 `addedBits` 的 varint 編碼。這是唯一能讓兩處同時成立的讀法。
+> 因此上列編碼的**第 1–3 步屬於 Phase 15**（不先產生 payload 就算不出 `checksum`），
+> 第 4 步（base64url）與 HTTP 表述屬 Phase 16。
 
 ---
 

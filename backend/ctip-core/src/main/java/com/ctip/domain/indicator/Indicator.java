@@ -192,7 +192,7 @@ public final class Indicator {
         return (ownerTenantId.equals(viewer) && !ownerTenantId.isPublic()) || hasRedistributableSource();
     }
 
-    /** Bloom 資格(L7):ACTIVE 且 CLEAR 且可再散布。 */
+    /** public bloom 的資格(L7):ACTIVE 且 CLEAR 且可再散布。tenant 層見 BloomMembership(ADR 0019)。 */
     public boolean eligibleForBloom() {
         return status == IndicatorStatus.ACTIVE && tlp == Tlp.CLEAR && hasRedistributableSource();
     }

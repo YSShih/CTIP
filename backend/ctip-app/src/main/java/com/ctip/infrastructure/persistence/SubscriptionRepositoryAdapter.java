@@ -5,6 +5,7 @@ import com.ctip.domain.plan.PlanCode;
 import com.ctip.domain.plan.Subscription;
 import com.ctip.domain.plan.SubscriptionStatus;
 import com.ctip.domain.tenant.TenantId;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,14 @@ class SubscriptionRepositoryAdapter implements SubscriptionRepository {
     public Optional<Subscription> findActiveByTenant(TenantId tenantId) {
         return jpa.findByTenantIdAndStatus(tenantId.value(), SubscriptionStatus.ACTIVE.name())
                 .map(entity -> mapper.toDomain(entity, planCodeOf(entity)));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TenantId> findActiveTenantIds() {
+        return jpa.findTenantIdsByStatus(SubscriptionStatus.ACTIVE.name()).stream()
+                .map(TenantId::new)
+                .toList();
     }
 
     @Override

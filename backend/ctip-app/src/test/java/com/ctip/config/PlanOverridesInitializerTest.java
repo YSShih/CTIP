@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.ctip.application.port.PlanRepository;
+import com.ctip.domain.bloom.BloomCompression;
 import com.ctip.domain.plan.Plan;
 import com.ctip.domain.plan.PlanCode;
 import com.ctip.domain.plan.PlanId;
@@ -102,7 +103,15 @@ class PlanOverridesInitializerTest {
                 new CtipProperties.Normalization(false),
                 new CtipProperties.Api(50),
                 new CtipProperties.DataQuality(List.of()),
-                new CtipProperties.Bloom(10_000_000, 0.001, 1_000_000, "0 0 4 * * *", "0 0 * * * *", 24),
+                new CtipProperties.Bloom(
+                        10_000_000,
+                        0.001,
+                        1_000_000,
+                        "0 0 4 * * *",
+                        "0 0 * * * *",
+                        24,
+                        "/var/lib/ctip/bloom",
+                        BloomCompression.ZSTD),
                 new CtipProperties.Retention(180, 30, 30, 30, 365, 30));
     }
 

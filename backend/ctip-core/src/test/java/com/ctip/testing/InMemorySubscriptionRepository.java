@@ -21,6 +21,15 @@ public final class InMemorySubscriptionRepository implements SubscriptionReposit
     }
 
     @Override
+    public List<TenantId> findActiveTenantIds() {
+        return subscriptions.stream()
+                .filter(s -> s.status() == SubscriptionStatus.ACTIVE)
+                .map(Subscription::tenantId)
+                .distinct()
+                .toList();
+    }
+
+    @Override
     public Subscription save(Subscription subscription) {
         subscriptions.removeIf(existing -> existing.id().equals(subscription.id()));
         subscriptions.add(subscription);

@@ -92,6 +92,9 @@ ctip:
     snapshot-cron: "${BLOOM_SNAPSHOT_CRON:0 0 4 * * *}"
     delta-cron: "${BLOOM_DELTA_CRON:0 0 * * * *}"
     max-delta-chain: ${BLOOM_MAX_DELTA_CHAIN:24}
+    # artifact 根目錄(容器內由具名 volume bloom-data 掛載);資料庫存的是相對於它的路徑
+    storage-dir: ${BLOOM_STORAGE_DIR:/var/lib/ctip/bloom}
+    compression: ${BLOOM_COMPRESSION:ZSTD}
   retention:
     audit-days: ${AUDIT_RETENTION_DAYS:180}
     raw-payload-days: ${RAW_PAYLOAD_RETENTION_DAYS:30}

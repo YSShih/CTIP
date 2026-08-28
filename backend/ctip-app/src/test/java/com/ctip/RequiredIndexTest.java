@@ -44,7 +44,12 @@ class RequiredIndexTest extends AbstractPostgresIntegrationTest {
             "ux_stix_rel_stix_id",
             "ux_stix_rel_triple",
             "ix_sr_source",
-            "ix_sr_target");
+            "ix_sr_target",
+            // bloom_versions / bloom_artifacts(表 22、23)
+            "ux_bv_version",
+            "ix_bv_lookup",
+            "ux_ba_version",
+            "ix_ba_gc");
 
     @Autowired
     private JdbcTemplate jdbc;

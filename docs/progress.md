@@ -1053,3 +1053,85 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - `IngestionBatchExecutor.execute` 的第二個參數已改為 `IngestionRun`(不再是裸 `UUID sourceSyncId`)
   - 前端 `/iocs/new`、`/iocs/import` 是靜態段,靠 react-router 的評分贏過 `/iocs/:id`
     ——`router.test.tsx` 有案例釘住,升版若改了排序規則會先紅
+
+---
+
+## Phase 15 — Bloom Filter(兩層 · snapshot · delta)
+
+- **狀態**:done(2026-08-28)
+- **執行單**:`docs/spec/phases/phase-15.md`
+- **Commit**:(見 git log,message `Phase 15: bloom filter (two-tier, snapshot, delta)`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest='BloomGenerationTest,BloomBitLayoutTest,BloomDeltaTest,BloomCoverageTest'`
+    (逐字)✅ **22/22**(BitLayout 7 + Generation 6 + Coverage 4 + Delta 5)
+  - `clean verify -Ptest-integration` 無過濾 ✅ **705 tests**(sdk 13 + core 301 + adapters 33 + app 358;
+    Spotless / Checkstyle / JaCoCo 全過,含 `com.ctip.domain.bloom` 0.85 與 `com.ctip.application.bloom` 0.75 套件門檻)
+  - `test -Dtest=ArchitectureTest` ✅ 10/10
+  - `dod.sh phase2 --only M2-10..M2-15` ✅ 6/6;`dod.sh full --only M3-24` ✅(規格回寫後複跑)
+  - `dod.sh mvp` 回歸 ✅ **38/38**
+  - **容器實測**(把 `BLOOM_DELTA_CRON` 暫時改為每分鐘、`up.sh mvp` 後觀察,驗後還原):
+    `bloom-data` volume 內實際落檔 `public/…/1/0-full.bin.zst`(15,635 bytes)與
+    `tenant/…0001/1/0-full.bin.zst`(14,650 bytes);`bloom_versions` 兩列的
+    `hash_function_count = 10`、public 的 `bit_size = 143775880`、
+    `uncompressed_size_bytes = 17971985` —— 與 §11.5 manifest 範例逐格相符;
+    full 的 `resulting_checksum` 為 NULL(不變量 L6)。
+    路徑是 NO_BASELINE → 改生 full snapshot,`BloomGenerationService` 的降級分支在真實環境成立
+- **交付物**:
+  - migration `V30__create_bloom.sql`(表 22 `bloom_versions` + 表 23 `bloom_artifacts`,含 L1/L2 的
+    `ck_bv_public_tenant` / `ck_bv_base` 兩條 DB 層防線)
+  - core/domain `bloom/`:`BloomBitArray`(LSB-first、尾端位元為 0)、`BloomIndexer`
+    (Kirsch-Mitzenmacher,unsigned 64-bit wraparound)、`BloomDeltaCodec`(升序去重 → 差分 → LEB128 varint)、
+    `BloomParameters`(§11.4 公式,m 取整至 8 的倍數、k 由公式導出)、`Checksum`、`BloomVersion` 聚合
+    (L1–L8)+ `BloomArtifact`、`BloomMembership`(兩個 scope 的成員述詞)、`BloomChainPolicy`、
+    `BloomArtifactLocation`;事件 `BloomSnapshotReady`
+  - core/application `bloom/`:`BloomScopePlanner`(誰有 tenant bloom、容量多大)、`BloomSnapshotService`、
+    `BloomDeltaService`、`BloomRetentionService`、`BloomArrayLoader`、`BloomGenerationService`(排程編排)、
+    `BloomChangeTracker`、`BloomSettings`/`BloomPorts`/`BloomTarget`/`DeltaOutcome`;
+    port `BloomStoragePort`/`BloomMemberPort`/`BloomVersionRepository`、`SubscriptionRepository.findActiveTenantIds`
+  - core/application `ingestion/BloomUpdateStage`(pipeline stage 10,`PersistStage` 之後)
+  - app:`BloomVersionEntity`/`BloomArtifactEntity` + adapter/mapper、`infrastructure/bloom/`
+    (`FilesystemBloomStorage`——專案第一個寫檔實作、`BloomMemberAdapter` 投影查詢)、`BloomSchedulers`
+    (04:00 full / 每小時 delta,沿用 `ctip.scheduler.enabled` 總開關)、`BloomConfig`、
+    `CtipProperties.Bloom` 補 `storageDir`/`compression` + `application.yml` 綁定、`ctip-app` 加 zstd-jni
+  - 測試:判準四支 + core 單元測試(`BloomVersionTest`、`BloomScopePlannerTest`、`BloomSnapshotServiceTest`、
+    `BloomDeltaServiceTest`、`BloomRetentionServiceTest`、`BloomGenerationServiceTest`、`BloomUpdateStageTest`)、
+    `FilesystemBloomStorageTest`;`MigrationIntegrationTest.phase15BloomTablesExist`、`RequiredIndexTest` 補四個索引
+- **偏離事項 / ADR**:10 項見 `docs/architecture/decisions/0024-phase15-bloom-decisions.md`;
+  規格回寫 `00 §0.21`(11 §11.2/§11.3/§11.5、02 BloomVersion、04 表 23、05 §5.4)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **`tenant_bloom_capacity = NULL` 在 §11.2 是「無 tenant Bloom」,而 `QuotaLimit` 的平台慣例是
+     「無限制」**——同一個欄位兩種相反讀法。採 §11.2、fail-closed(只有正整數才生成)
+  2. **「保留最近 N 份」照字面會破壞 delta 鏈**:同 dataset 內 full snapshot 的 `bloomVersion` 最小
+     (= 0)因此最舊,會先被刪掉,而它的 delta 還留著 → 那條鏈永遠無法重建
+  3. **04 表 23 與 §11.5 對 delta 的 `checksum` 說法相反**;定調為「未壓縮 artifact payload」的 SHA-256,
+     因此 varint 差分編碼必須在 Phase 15 完成(不先產生 payload 就算不出 checksum)
+  4. **`BLOOM_STORAGE_DIR` / `BLOOM_COMPRESSION` 在 compose 與 §5.4 都有、`application.yml` 卻沒綁**
+     ——`ConfigSymmetryTest` 是單向檢查(yml → compose/spec),抓不到這種反向缺漏
+  5. `bloom_artifacts.checksum` 是 `CHAR(64)`,entity 沒加 `@JdbcTypeCode(SqlTypes.CHAR)` 會讓
+     `ddl-auto: validate` 以 `bpchar` vs `varchar` **拒絕啟動**
+  6. `information_schema.check_constraints` 只列出**當前角色擁有的表**,而應用以非特權的 `ctip_app`
+     連線——查約束一律走 `pg_constraint`
+  7. **artifact 損壞若不驗會靜默毒化整條鏈**:下一段 delta 的 `resultingChecksum` 會依損壞後的
+     陣列算出,於是每個 client 套用後自我驗證失敗、重下 full,而伺服器端毫無徵兆。
+     `BloomArrayLoader` 因此走與 client 相同的 §11.6 驗證,不符即回 `FULL_SNAPSHOT_REQUIRED`
+     (該檢查以「拿掉檢查 → 測試轉紅」驗證過確實能判別:`expected FULL_SNAPSHOT_REQUIRED but was CREATED`)
+- **給下一 session 的注意事項(Phase 16 = 增量同步 API 與 client 契約)**:
+  - **`addedBits` 只差第 4 步**:`BloomDeltaCodec` 已產出 varint 差分 payload(artifact 內容),
+    Phase 16 只需 base64url(無 padding)包裝;`checksum` / `resultingChecksum` 都已寫入 `bloom_artifacts`
+  - **`BloomVersion.requiresFullSnapshot(chainLength, cumulativeDeltaBytes, policy)` 就是 409 的判定點**
+    ——生成端已在用(鏈太長改生 full),Phase 16 的 `/sync/delta` 用同一個方法回 `SNAPSHOT_REQUIRED`
+  - ⚠️ **M2-15 目前是「假綠」的一半**:它跑的是 `BloomDeltaTest`,而該測試驗的是**生成端**的
+    「鏈太長 → 改生 full」;`409 SNAPSHOT_REQUIRED` 的 HTTP 行為還不存在。Phase 16 必須把該分支
+    加進 `SyncEndToEndTest`,並考慮把 M2-15 指向它
+  - manifest 的 `coverage` / `notCovered` 是必填(§11.5);`BloomScope` 只有 PUBLIC/TENANT,
+    `notCovered` 一律含 `TLP:GREEN`
+  - `GET /sync/bloom` 若採「302 至簽章 URL」需要新的簽章金鑰設定項(§5.4 沒有);
+    直接串流 `BloomStoragePort.read` 則不需要——後者不必新增設定,建議採之
+  - 匿名(綁 public tenant)持有 `sync:bloom`,但 `scope=TENANT` 對它的語意未定義;
+    `BloomScopePlanner.tenantTarget` 對 public tenant 一律回空,API 層照此回 403/404 較一致
+  - **排程預設是關的**(`SCHEDULER_ENABLED=false` 於整合測試);Phase 16 的 `SyncEndToEndTest`
+    要自己呼叫 `BloomSnapshotService.generate(...)` 準備資料,不要等排程
+  - 整合測試的 bloom artifact 根目錄由 `AbstractPostgresIntegrationTest` 注入臨時目錄,
+    且 `BLOOM_PUBLIC_CAPACITY` 縮成 100,000(預設 1,000 萬 → 每份 18MB);新測試沿用即可
+  - tenant bloom 需要**真實存在的租戶**(`bloom_versions.tenant_id` 有 FK):用 `support/BloomTenants`
+    自建租戶並指派方案,不要動種子的 demo 租戶(其他測試共用)

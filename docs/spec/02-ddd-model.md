@@ -251,6 +251,19 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 
 行為：`BloomVersion.nextDelta(...)`、`BloomVersion.isCompatibleWith(BloomParameters clientParams)`、`BloomVersion.requiresFullSnapshot(int chainLength, long cumulativeDeltaBytes)`
 
+> **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**
+>
+> - `requiresFullSnapshot` 實際多接一個 `BloomChainPolicy` 值物件：門檻之一
+>   （`BLOOM_MAX_DELTA_CHAIN`）是設定值，domain 不得讀設定，也不該把 24 寫死（30% 仍由規格固定）。
+>   該方法只允許對 **full snapshot** 版本呼叫——比例的分母是完整位元陣列的大小。
+> - L3（delta 的 base 必須指向既存版本）跨聚合實例，無法在單一聚合內判定：
+>   由 `nextDelta` 保證「新 delta 一定接在既有版本之後」，生成服務再以 repository 查得的最新版本
+>   作為呼叫對象。
+> - L7 的兩條成員述詞收在 `domain/bloom/BloomMembership`，不放 `Indicator`
+>   （該檔已達 297 行、checkstyle 上限 300）；**tenant 層不含再散布條件**，見 [11 §11.2](11-sync-bloom.md#112-兩層架構)。
+> - L8 不是資料條件，而是**禁止存在把命中解讀為確定的程式碼**：本聚合因此不提供任何
+>   `isMalicious` 之類的查詢。
+
 > **L7 的後果必須寫入 client 契約**：`TLP:GREEN` 的情資**沒有 Bloom 覆蓋**。client 端離線比對只涵蓋 `CLEAR`；Bloom miss **不代表**該值不在情資集合中，只代表不在公開集合中。見 [11-sync-bloom.md](11-sync-bloom.md)。
 
 ---

@@ -2,6 +2,7 @@ package com.ctip.application.port;
 
 import com.ctip.domain.plan.Subscription;
 import com.ctip.domain.tenant.TenantId;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -13,4 +14,7 @@ public interface SubscriptionRepository {
     Optional<Subscription> findActiveByTenant(TenantId tenantId);
 
     Subscription save(Subscription subscription);
+
+    /** 目前持有 ACTIVE 訂閱的租戶;tenant bloom 只為這些租戶生成(§11.2 的容量依方案)。 */
+    List<TenantId> findActiveTenantIds();
 }

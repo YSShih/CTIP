@@ -893,7 +893,7 @@ CREATE INDEX ix_bv_lookup ON bloom_versions (scope, tenant_id, bloom_version DES
 | `compression` | VARCHAR(8) | NO | `'ZSTD'` | `GZIP`/`ZSTD`/`NONE` |
 | `size_bytes` | BIGINT | NO | — | 壓縮後大小 |
 | `uncompressed_size_bytes` | BIGINT | NO | — | |
-| `checksum` | CHAR(64) | NO | — | 未壓縮位元陣列的 `SHA-256` |
+| `checksum` | CHAR(64) | NO | — | 未壓縮 artifact payload 的 `SHA-256` ¹ |
 | `resulting_checksum` | CHAR(64) | YES | — | delta 套用後的預期 checksum；full 為 null |
 | `download_count` | BIGINT | NO | `0` | |
 | `expires_at` | TIMESTAMPTZ | YES | — | 下載 URL 有效期 |
@@ -909,6 +909,15 @@ CONSTRAINT ck_ba_sum     CHECK (checksum ~ '^[0-9a-f]{64}$')
 
 CREATE INDEX ix_ba_gc ON bloom_artifacts (created_at);
 ```
+
+> ¹ **實作回饋修訂（2026-08-28；[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)）**：
+> 原文寫「未壓縮**位元陣列**的 SHA-256」，但 [11 §11.5](11-sync-bloom.md#115-metadata-與-api) 對 delta 寫的是
+> 「addedBits payload 的 SHA-256」。定調為**未壓縮 artifact payload** 的 SHA-256——
+> full 的 payload 是位元陣列、delta 的 payload 是 `addedBits` 的 varint 編碼。
+> 套用後的自我驗證用 `resulting_checksum`（不變量 L6）。
+>
+> `checksum` 是 `CHAR(64)`，JPA entity 需 `@JdbcTypeCode(SqlTypes.CHAR)`，
+> 否則 `ddl-auto: validate` 會以 `bpchar` vs `varchar` 拒絕啟動（與表 16 `api_keys` 同一前例）。
 
 ---
 

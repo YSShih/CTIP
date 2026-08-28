@@ -556,4 +556,26 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.20）。*
+## 0.21 實作回饋修訂（2026-08-28，Phase 15）
+
+兩層 Bloom（snapshot / delta）的實作回饋，逐項見
+[ADR 0024](../architecture/decisions/0024-phase15-bloom-decisions.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | `Indicator.eligibleForBloom()` 內含再散布條件，而 §11.2 的 tenant 成員條件**沒有**——沿用會使 tenant bloom **恆為空**（手動提交固定 `INTERNAL_ONLY`）。[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)「沒有動的」那一項在此定調 | 兩個述詞收在 `domain/bloom/BloomMembership`；資料庫端另有等價 SQL，`BloomCoverageTest` 逐筆比對防漂移 | [11 §11.2](11-sync-bloom.md#112-兩層架構)、[02](02-ddd-model.md#bloomversion) |
+| 2 | `plans.tenant_bloom_capacity` 的 `NULL` 在 §11.2 是「**無** tenant Bloom」，與 `QuotaLimit` 通用語意的「無限制」相反 | 以 §11.2 為準、fail-closed：只有正整數才產生 tenant bloom | [11 §11.2](11-sync-bloom.md#112-兩層架構) |
+| 3 | 容量若照字面只用方案值，`BLOOM_TENANT_DEFAULT_CAPACITY` 會變成沒有呼叫端的死設定（規則 16），且 ENTERPRISE 的小租戶每小時產生 18MB 陣列 | 方案值＝權利上限、環境變數＝實際尺寸預設：`min(上限, max(預設, 成員數))` | [11 §11.2](11-sync-bloom.md#112-兩層架構) |
+| 4 | 04 表 23 與 §11.5 對 delta 的 `checksum` 說法相反（位元陣列 vs addedBits payload） | 定調為「未壓縮 **artifact payload**」的 SHA-256；因此 varint 差分編碼屬 Phase 15、base64url 屬 Phase 16 | [04 表 23](04-data-dictionary.md)、[11 §11.5](11-sync-bloom.md#115-metadata-與-api) |
+| 5 | 「保留最近 N 份」照字面會先刪掉 full snapshot（同 dataset 內它的 `bloomVersion` 最小＝最舊），使其 delta 鏈永遠無法重建 | 刪除前排除「該 dataset 仍有存活版本」的 full snapshot | [11 §11.3](11-sync-bloom.md#113-bloom-無法刪除元素) |
+| 6 | `requiresFullSnapshot` 的兩個參數表達不了可設定的 `BLOOM_MAX_DELTA_CHAIN`，而 domain 不得讀設定 | 多接一個 `BloomChainPolicy` 值物件；只允許對 full snapshot 呼叫 | [02](02-ddd-model.md#bloomversion) |
+| 7 | `ConfigSymmetryTest` 是單向檢查，抓不到「compose 與 §5.4 有、`application.yml` 沒綁」的反向缺漏——`BLOOM_STORAGE_DIR` / `BLOOM_COMPRESSION` 即為此 | 補上綁定，並在 §5.4 註明兩個方向都要確認 | [05 §5.4](05-environment.md#54-環境變數清單) |
+
+> 其餘實作決策（位元運算放 domain 而非 infrastructure、`BloomUpdateStage` 只作為
+> 「哪個 scope 變了」的訊號而非成員來源、delta 以 `last_seen` 為水位並往回退一分鐘、
+> 成員掃描另立 `BloomMemberPort` 以投影 + keyset 分頁進行）屬規格自由度內的選擇，
+> 僅記錄於 ADR 0024。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.21）。*

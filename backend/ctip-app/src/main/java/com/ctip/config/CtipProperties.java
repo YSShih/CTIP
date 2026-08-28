@@ -1,5 +1,6 @@
 package com.ctip.config;
 
+import com.ctip.domain.bloom.BloomCompression;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -109,7 +110,9 @@ public record CtipProperties(
             @Positive long tenantDefaultCapacity,
             @NotBlank String snapshotCron,
             @NotBlank String deltaCron,
-            @Min(1) @Max(1000) int maxDeltaChain) {}
+            @Min(1) @Max(1000) int maxDeltaChain,
+            @NotBlank String storageDir,
+            @NotNull BloomCompression compression) {}
 
     /** 資料保留政策(天數;bloomArtifactKeep 為保留份數)。 */
     public record Retention(

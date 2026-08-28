@@ -125,6 +125,24 @@ class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
                 .isEqualTo(1);
     }
 
+    /** Phase 15 交付表 22、23(V30);兩張表在生成第一份 bloom 之前一律為空。 */
+    @Test
+    void phase15BloomTablesExist() {
+        List<String> tables =
+                jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = 'public'", String.class);
+        assertThat(tables).contains("bloom_versions", "bloom_artifacts");
+        // 不變量 L1/L2 的 DB 層防線:scope = PUBLIC 只能綁 public tenant、
+        // is_full_snapshot ⟺ base_bloom_version IS NULL。
+        // 用 pg_constraint 而非 information_schema:後者只列出當前角色擁有的表,
+        // 而應用是以非特權的 ctip_app 連線(ADR 0021)。
+        assertThat(jdbc.queryForList(
+                        "SELECT conname FROM pg_constraint c"
+                                + " JOIN pg_class t ON t.oid = c.conrelid"
+                                + " WHERE t.relname = 'bloom_versions' AND c.contype = 'c'",
+                        String.class))
+                .contains("ck_bv_base", "ck_bv_public_tenant", "ck_bv_scope", "ck_bv_fpr");
+    }
+
     /**
      * 每一張表都必須由某支 migration 建立——不得有「schema 裡有、migration 裡沒有」的表。
      *
