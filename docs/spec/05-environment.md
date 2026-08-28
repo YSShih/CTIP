@@ -240,6 +240,21 @@ GRAFANA_ADMIN_PASSWORD         # 僅 full profile 需要
 
 > `COMPOSE_PROFILES` 不出現在 compose 檔內——它是 Docker Compose **CLI** 讀取的變數，用於決定啟動哪些帶 `profiles:` 的服務。
 
+```text
+POSTGRES_APP_USER              # 應用執行期的**非特權**角色，預設 ctip_app（ADR 0021）
+POSTGRES_APP_PASSWORD          # 同上；Flyway 另以 POSTGRES_USER（owner）連線跑 DDL
+POSTGRES_RETENTION_USER        # 保留政策清理任務專用，預設 ctip_retention（Phase 21 起使用）
+POSTGRES_RETENTION_PASSWORD    # 同上
+```
+
+> **應用不得以 owner／superuser 連線（2026-08-28；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> `POSTGRES_USER` 是 postgres image 的**初始 superuser**（實測 `rolsuper = t`），
+> 而 superuser **繞過所有 GRANT/REVOKE**——Phase 21 的
+> `REVOKE UPDATE, DELETE ON audit_logs` 對它完全無效，M3-09「必須由 **DB** 拒絕」永遠不可能通過。
+> 角色分工：`POSTGRES_USER` 只給 Flyway 跑 DDL、`ctip_app` 是應用執行期連線（只有 DML）、
+> `ctip_retention` 供保留清理任務。建立腳本在 `environment/config/postgres/01-app-roles.sh`
+> （initdb 只在資料目錄為空時執行一次，既有開發資料庫需重建 volume）。
+
 ### 5.4.5 應用程式
 
 ```text
@@ -263,6 +278,8 @@ BLOOM_TENANT_DEFAULT_CAPACITY
 BLOOM_SNAPSHOT_CRON
 BLOOM_DELTA_CRON
 BLOOM_MAX_DELTA_CHAIN          # 預設 24
+BLOOM_STORAGE_DIR              # 預設 /var/lib/ctip/bloom;04 表 23 的 storage_path 以此為根
+BLOOM_COMPRESSION              # ZSTD | GZIP | NONE,預設 ZSTD（§11.4）
 
 SCHEDULER_ENABLED
 SOURCE_SYNC_CRON               # 預設 0 */5 * * * *（08 §8.7）
@@ -287,6 +304,8 @@ REJECTION_RETENTION_DAYS       # 預設 30
 DELIVERY_RETENTION_DAYS        # 預設 30
 INDICATOR_RETENTION_DAYS       # 預設 365
 BLOOM_ARTIFACT_KEEP            # 預設 30
+DELIVERY_CLEANUP_CRON          # 預設 0 10 2 * * *（08 §8.7）
+INDICATOR_CLEANUP_CRON         # 預設 0 20 2 * * *（同上）
 ```
 
 > 後六個保留政策變數在 v1.1 只出現於 §55.3，變數清單裡沒有——本版補齊。這是第三項缺陷（變數宣告與使用不對稱）。
@@ -329,6 +348,7 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 | `SWAGGER_ENABLED` | `true` | `true` | `true` | `false` |
 | `SCHEDULER_ENABLED` | `true` | `true` | `true` | `true` |
 | `*_BIND`（其餘） | `127.0.0.1:*` | `127.0.0.1:*` | `0.0.0.0:*` | 由代理層決定 |
+| `ACTUATOR_EXPOSED_ENDPOINTS` | `health,info` | `health,info` | `health,info` | **`health,info,prometheus`** |
 
 **兩項相對 v1.1 的修正**
 
@@ -343,6 +363,16 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 > 詳見 §5.8.1 #2 與 ADR 0001 決策 3。
 
 ---
+
+> **`ACTUATOR_EXPOSED_ENDPOINTS` 2026-08-28 補列（[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> [13 §13.6](13-platform-ops.md) 要求 prod **必須**暴露 `prometheus`（否則 Prometheus 的
+> `ctip-backend` job 一直 404），但四份樣板一律 `health,info`，本表也沒有這一列。
+> prod 改為含 `prometheus`；同時 §13.6 要求「`prometheus` 需限制來源 IP」——
+> 而 `SecurityConfig` 是 `anyRequest().permitAll()`，**該限制目前沒有任何實作位置**，
+> 已列入 `phase-22.md` 的交付物。
+>
+> ⚠️ `phases/phase-22.md` 的判準用 `up.sh dev` 驗 `/actuator/prometheus`，但 dev 是
+> `health,info` 且 `COMPOSE_PROFILES=standard`（不啟 Prometheus）——判準已改用 `staging`。
 
 ## 5.6 Compose 骨架
 

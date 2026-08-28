@@ -29,6 +29,9 @@ services:
       POSTGRES_DB:                    ${POSTGRES_DB:?}
       POSTGRES_USER:                  ${POSTGRES_USER:?}
       POSTGRES_PASSWORD:              ${POSTGRES_PASSWORD:?}
+      # 應用執行期以非特權角色連線;Flyway 另以 owner 連線跑 DDL(ADR 0021)
+      POSTGRES_APP_USER:           ${POSTGRES_APP_USER:-ctip_app}
+      POSTGRES_APP_PASSWORD:       ${POSTGRES_APP_PASSWORD:?}
       REDIS_HOST:                     ${REDIS_HOST:-redis}
       REDIS_PORT:                     ${REDIS_PORT:-6379}
       REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
@@ -64,13 +67,20 @@ services:
       BLOOM_SNAPSHOT_CRON:            ${BLOOM_SNAPSHOT_CRON:-0 0 4 * * *}
       BLOOM_DELTA_CRON:               ${BLOOM_DELTA_CRON:-0 0 * * * *}
       BLOOM_MAX_DELTA_CHAIN:          ${BLOOM_MAX_DELTA_CHAIN:-24}
+      BLOOM_STORAGE_DIR:              ${BLOOM_STORAGE_DIR:-/var/lib/ctip/bloom}
+      BLOOM_COMPRESSION:              ${BLOOM_COMPRESSION:-ZSTD}
       AUDIT_RETENTION_DAYS:           ${AUDIT_RETENTION_DAYS:-180}
       RAW_PAYLOAD_RETENTION_DAYS:     ${RAW_PAYLOAD_RETENTION_DAYS:-30}
       REJECTION_RETENTION_DAYS:       ${REJECTION_RETENTION_DAYS:-30}
       DELIVERY_RETENTION_DAYS:        ${DELIVERY_RETENTION_DAYS:-30}
       INDICATOR_RETENTION_DAYS:       ${INDICATOR_RETENTION_DAYS:-365}
       BLOOM_ARTIFACT_KEEP:            ${BLOOM_ARTIFACT_KEEP:-30}
+      DELIVERY_CLEANUP_CRON:          ${DELIVERY_CLEANUP_CRON:-0 10 2 * * *}
+      INDICATOR_CLEANUP_CRON:         ${INDICATOR_CLEANUP_CRON:-0 20 2 * * *}
     volumes:
+      # Bloom artifact 是檔案(04 表 23 的 storage_kind=FILESYSTEM、storage_path NOT NULL);
+      # 沒有這個 volume 時,每次容器重建就全部消失(ADR 0019)
+      - bloom-data:${BLOOM_STORAGE_DIR:-/var/lib/ctip/bloom}
       - ${BACKEND_MOUNT_SRC:-./.noop}:${BACKEND_MOUNT_DST:-/opt/noop}:${BACKEND_MOUNT_MODE:-ro}
       - ${MAVEN_CACHE_SRC:-maven-cache}:${MAVEN_CACHE_DST:-/opt/noop-m2}
     ports:
@@ -112,6 +122,11 @@ services:
       POSTGRES_DB:       ${POSTGRES_DB:?}
       POSTGRES_USER:     ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      # 供 initdb 的 01-app-roles.sh 建立非特權角色(ADR 0021)
+      POSTGRES_APP_USER:           ${POSTGRES_APP_USER:-ctip_app}
+      POSTGRES_APP_PASSWORD:       ${POSTGRES_APP_PASSWORD:?}
+      POSTGRES_RETENTION_USER:     ${POSTGRES_RETENTION_USER:-ctip_retention}
+      POSTGRES_RETENTION_PASSWORD: ${POSTGRES_RETENTION_PASSWORD:?}
     volumes:
       # postgres:18+ 要求掛載點為 /var/lib/postgresql(掛 …/data 會拒絕啟動;ADR 0001 決策 4)
       - postgres-data:/var/lib/postgresql
@@ -208,6 +223,7 @@ networks:
     driver: bridge
 
 volumes:
+  bloom-data:
   postgres-data:
   redis-data:
   kafka-data:

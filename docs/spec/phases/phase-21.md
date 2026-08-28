@@ -18,6 +18,13 @@
 - [13-platform-ops.md §13.4、§13.5](../13-platform-ops.md#134-隱私與資料保留)
 - [04-data-dictionary.md](../04-data-dictionary.md)（表 27 + §4.5 稽核行為）
 
+- 前端頁面 **Admin Panel**（`/admin`，[12](../12-frontend.md) 標 M3，原本無 phase 承接；ADR 0022）
+
+- **`POST /api/v1/auth/change-password`**（[09](../09-api.md) 全文沒有這個端點，而
+  [ADR 0015](../../architecture/decisions/0015-future-phase-hardening.md) 把「`User.changePassword`
+  必須一併撤銷該使用者全部 token family」指定為「M3 責任」——但 M3 四個 phase 都沒有承接它。
+  本 phase 補上端點 **與** family 撤銷；ADR 0022）
+
 ## 完成判準
 ```bash
 ./backend/mvnw -f backend/pom.xml test -Ptest-integration \

@@ -296,6 +296,14 @@ SourceStatus: ACTIVE | DEGRADED | FAILED | DISABLED
 | 原始 payload 清理 | M3 | 每日 01:30 | `PAYLOAD_CLEANUP_CRON` |
 | 拒絕記錄清理 | M3 | 每日 01:40 | `REJECTION_CLEANUP_CRON` |
 | Bloom artifact 清理 | M3 | 每日 01:50 | `BLOOM_ARTIFACT_CLEANUP_CRON` |
+| Webhook 送達記錄清理 | M3 | 每日 02:10 | `DELIVERY_CLEANUP_CRON` |
+| `EXPIRED` indicator 軟刪除 | M3 | 每日 02:20 | `INDICATOR_CLEANUP_CRON` |
+
+> **實作回饋修訂（2026-08-28；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> [13 §13.4](13-platform-ops.md) 列了**六項**保留政策、`phases/phase-21.md` 也寫「六個保留清理任務」，
+> 但本表原本只有**四項**——缺 `webhook_deliveries` 與 `EXPIRED` indicator。
+> 那兩項的保留天數變數（`DELIVERY_RETENTION_DAYS`、`INDICATOR_RETENTION_DAYS`）早就存在於
+> compose 與 `application.yml`，只是**沒有任何任務會去讀**。本次補上對應的排程列與 cron 變數。
 
 > ¹ 2026-08-25 釐清（ADR 0004）：`SOURCE_SYNC_CRON`（預設每 5 分鐘）是**掃描節奏**；
 > 每次掃描對 enabled 且 syncable 的來源逐一判斷是否已依自身 `recommendedInterval` 到期

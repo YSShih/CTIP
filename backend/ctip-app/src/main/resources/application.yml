@@ -5,8 +5,12 @@ spring:
     name: ctip
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
-    username: ${POSTGRES_USER}
-    password: ${POSTGRES_PASSWORD}
+    # 應用執行期以**非特權**角色連線;Flyway 另以 owner 連線跑 DDL(下方 spring.flyway.*)。
+    # 理由:POSTGRES_USER 是 postgres image 的初始 superuser,而 superuser 繞過所有
+    # GRANT/REVOKE ——M3-09「audit_logs 的 UPDATE/DELETE 必須被 DB 拒絕」在單一 superuser
+    # 連線下永遠不可能通過(ADR 0021)。
+    username: ${POSTGRES_APP_USER:${POSTGRES_USER}}
+    password: ${POSTGRES_APP_PASSWORD:${POSTGRES_PASSWORD}}
   jpa:
     open-in-view: false # 強制:避免 lazy loading 洩漏到 view 層
     hibernate:
@@ -14,6 +18,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # migration 需要 DDL 與擴充權限,以 owner 連線;應用執行期則是上面的非特權角色
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
   data:
     redis:
       host: ${REDIS_HOST:redis}

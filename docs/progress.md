@@ -944,3 +944,42 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   `~/.claude/plans/task-notification-task-id-a59d3bc425ea2-squishy-sedgewick.md`;
   **批 1(閘門可信度)最優先**——目前 `dod.sh phase2` 會 27/27 假綠,因為
   `failIfNoSpecifiedTests=false` 使不存在的測試類回報 PASS
+
+---
+
+## Phase 14–23 前置清障(批 1–7)
+
+- **狀態**:done(2026-08-28)。使用者指示:把後續 phase 會遇到的問題全部盤出來修掉,
+  讓 Phase 14–23 能順順跑完。
+- **Commit**:批 1 `4d1f974`、批 2+3 `8c25cff`、批 4–7(見 git log)
+- **方法**:三組 Explore 平行盤點 `phases/phase-14..23.md` 與其治理規格,逐項對照已實作程式碼,
+  共約 **90 項**落差。計畫檔:`~/.claude/plans/task-notification-task-id-a59d3bc425ea2-squishy-sedgewick.md`
+- **規格索引**:`00-master.md` §0.19;逐項見 ADR 0017–0022
+
+### 最重要的三件事
+
+1. **閘門本來量不到東西**(批 1、ADR 0017):`failIfNoSpecifiedTests=false` 讓 `dod.sh` 對
+   **不存在的測試類回報 PASS**。實測 Phase 14/15/16 一行程式都沒有時,`dod.sh phase2`
+   回報 **27/27 全綠**。現在會先確認測試類檔案存在,找不到就 FAIL 並說明所屬 phase
+2. **`up.sh staging` 本來必死**(批 3、ADR 0018):prometheus 掛空目錄→容器啟動即 ERROR 退出
+   (實測),`up.sh` 對 exited 服務 die → M2-25 → M3-01 連鎖失敗。Phase 19 的第一個硬阻斷
+3. **稽核 append-only 本來永遠不可能通過**(批 6、ADR 0021):`POSTGRES_USER` 是 postgres image
+   的初始 superuser(實測 `rolsuper = t`),superuser 繞過所有 GRANT/REVOKE
+   ——實測 `REVOKE` 之後 `DELETE` 照樣成功。已改為三角色模型
+
+### 給下一 session 的注意事項
+
+- **⚠️ 開發資料庫需重建一次**:`config/postgres/01-app-roles.sh` 是 initdb 腳本,
+  只在資料目錄為空時執行。本次已重建 `ctip_postgres-data` volume 並驗證
+  (三角色建立、11 migrations、1020 indicators、API 200)。**其他機器第一次拉到這個 commit 時
+  也要 `down.sh mvp` + `docker volume rm ctip_postgres-data` + `up.sh mvp`**
+- **應用連線角色是 `ctip_app`(非特權)**,Flyway 用 `ctip`(owner)。
+  `MigrationIntegrationTest.applicationConnectsAsANonSuperuserRole` 鎖住這件事。
+  **新測試若需要建表,會 `permission denied for schema public`——那是刻意的**,
+  請改用 Java 端資料結構(見 `IngestionEndToEndTest` 的 `preExistingIds`)
+- **新增 `ctip.*` 屬性**:compose + 四份 `.env.*.example` + `05 §5.4` 必須同步(`ConfigSymmetryTest` 會擋)
+- **新增權限碼**:規格 §10.3 的清單與矩陣 + seed migration + `RbacMatrix` 常數,
+  **三處同步**(`RbacMatrixTest.theSpecificationMatrixMatchesTheSeededMatrix` 逐格比對規格表)
+- **Phase 14 開工前必讀** `phase-14.md` 新增的交付物:`subscription:read` 權限、
+  放寬三處配額型別(0/null)、`RateLimiterPort` 改簽章、`import_jobs` 表、seed 補方案樣本
+- ArchUnit 現在有 **10 條**規則

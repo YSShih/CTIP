@@ -22,7 +22,7 @@
 ```bash
 ./backend/mvnw -f backend/pom.xml test -Ptest-all \
   -Dtest='MetricsCompletenessTest,SensitiveLogTest,TracePropagationTest'
-./environment/scripts/up.sh dev
+./environment/scripts/up.sh staging   # dev 是 standard profile,不啟 Prometheus 且未暴露該端點
 curl -fsS http://localhost:8080/actuator/prometheus | grep -q 'ctip_ingestion_stage_duration'
 ```
 `MetricsCompletenessTest` 必須比對 [13 §13.6](../13-platform-ops.md#監控) 的指標清單逐項存在。

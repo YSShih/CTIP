@@ -75,7 +75,17 @@ SUBSCRIPTION_CHANGED | SYNC_SNAPSHOT_READY | SYSTEM_ALERT
 | 使用 `ApplicationEventPublisher`（M1–M2）與 Kafka consumer（M3） |
 | **不得**自行實作 listener registry |
 | Webhook 必須有 **HMAC-SHA256 簽章**（標頭 `X-CTIP-Signature: sha256=<hex>`），簽章對象為原始 request body |
+
+> **簽章對象定調（2026-08-28；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> 本節下方又寫「簽章計算：`HMAC-SHA256(secret, timestamp + "." + body)`——含 timestamp 以防重放」，
+> 與上一句的「簽章對象為原始 request body」**互斥**。
+> **以 `timestamp + "." + body` 為準**（`phases/phase-20.md` 與 M3-06 都採這一種，且它才有防重放）。
 | 重試指數退避，最多 5 次；連續失敗 5 次 → `DISABLED` 並發出 `WebhookDisabled` |
+
+> **事件名定調（2026-08-28；ADR 0021）**：[02 §2.3](02-ddd-model.md) 的不變量 W3 寫
+> 「發出 **`SystemAlert`**」，但同一份 02 的 §2.4 事件清單裡**沒有 `SystemAlert` 這個事件**，
+> 而 §2.4 與本節、`phase-20.md` 都寫 `WebhookDisabled`。**以 `WebhookDisabled` 為準**；
+> 02 的 W3 已更正。
 | 訂閱過濾**在伺服器端執行**，不得把全部事件推給 client 再過濾 |
 | WebSocket 僅 `plans.websocket_enabled` 為 true 的方案可連線 |
 
@@ -302,7 +312,14 @@ public interface SearchPort {
 
 | 規則 |
 |---|
-| 索引更新為非同步（M2 起經 Kafka；M1 直接同步寫入，因為 M1 沒有 ES） |
+| 索引更新在 **M2 為 pipeline 內同步**（`SearchIndexStage`）、**M3 起改經 Kafka**——見下方修訂 |
+
+> **實作回饋修訂（2026-08-28；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**：
+> 本列原寫「M2 起經 Kafka」，但 [§13.1](#131-事件與-kafka-phase-20--m3) 標明 Kafka 是
+> `[Phase 20 · M3]`，而 Phase 19（ES）在 M2。[08 §8.2](08-ingestion-sdk.md) 也寫
+> 「M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`」——即 pipeline 內同步。
+> **定調以 08 與 phase-19 為準**：M2 是 pipeline 內同步寫入，Phase 20 引入 Kafka 後才改為非同步。
+> 「索引失敗不得使 ingestion 失敗」在兩種模式下都必須成立。
 | 提供 reconciliation 排程比對 DB 與 ES 的筆數與版本（每日 05:00） |
 | **索引失敗不得使 ingestion 失敗**，只記錄並排入重試 |
 | **ES 不可用時 API 自動降級為 PostgreSQL 搜尋**，回 200 並在回應 header 帶 `X-Search-Backend: postgres`，不得回 500 |

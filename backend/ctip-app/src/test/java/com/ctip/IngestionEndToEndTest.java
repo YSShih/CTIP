@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ctip.application.source.SourceSyncOutcome;
 import com.ctip.application.source.SourceSyncService;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
@@ -41,9 +42,19 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private MockMvc mvc;
 
+    /**
+     * 測試開始前既有的 indicator id。
+     *
+     * <p>原本用 {@code CREATE TABLE e2e_indicator_snapshot AS …} 的暫存表，但應用角色改為
+     * 非特權的 {@code ctip_app} 之後就沒有 schema 的 CREATE 權限了（ADR 0021）。
+     * 那是**刻意的**——測試必須跟正式環境用同一組權限，否則 M3-09 之類的授權斷言量不到東西。
+     * 快照因此改存在 Java 端；SQL 以 {@code NOT IN (:ids)} 展開。
+     */
+    private List<UUID> preExistingIds = List.of();
+
     @BeforeAll
     void enableAllMocksAndSnapshotIndicators() {
-        jdbc.execute("CREATE TABLE e2e_indicator_snapshot AS SELECT id FROM indicators");
+        preExistingIds = jdbc.queryForList("SELECT id FROM indicators", UUID.class);
         jdbc.update("UPDATE sources SET enabled = true WHERE source_type IN ('MOCK_ABUSEIPDB','MOCK_ALIENVAULT')");
     }
 
@@ -51,8 +62,7 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     void restoreSeedState() {
         jdbc.update("DELETE FROM ingestion_rejections");
         jdbc.update("DELETE FROM source_sync");
-        jdbc.update("DELETE FROM indicators WHERE id NOT IN (SELECT id FROM e2e_indicator_snapshot)");
-        jdbc.execute("DROP TABLE e2e_indicator_snapshot");
+        jdbc.update("DELETE FROM indicators WHERE " + notPreExisting("id"));
         jdbc.update("UPDATE sources SET enabled = (source_type IN ('MANUAL','MOCK_OPENPHISH')), status = 'ACTIVE',"
                 + " consecutive_failures = 0, last_sync_at = NULL, last_success_at = NULL, last_failure_at = NULL,"
                 + " last_error_message = NULL, avg_latency_ms = NULL, next_cursor = NULL, total_records_ingested = 0");
@@ -155,7 +165,7 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
         // hash_records 寫入(04 表 6):每筆新 indicator 恰一列平台計算(source_id null)的
         // SHA256 記錄,digest 與 indicators.fingerprint 一致(指紋對 normalized_value 計算)
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM indicators i WHERE i.id NOT IN (SELECT id FROM e2e_indicator_snapshot)"
+                        "SELECT count(*) FROM indicators i WHERE " + notPreExisting("i.id")
                                 + " AND 1 <> (SELECT count(*) FROM hash_records h WHERE h.indicator_id = i.id"
                                 + " AND h.algorithm = 'SHA256' AND h.source_id IS NULL AND h.digest = i.fingerprint)",
                         Integer.class))
@@ -164,7 +174,7 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
         // STIX 投影(§7.8、表 8):每筆新 indicator 恰一列 stix_objects,
         // stix_id = indicator--{id},tlp/owner 與 indicator 一致,content 含 pattern 與 marking 引用
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM indicators i WHERE i.id NOT IN (SELECT id FROM e2e_indicator_snapshot)"
+                        "SELECT count(*) FROM indicators i WHERE " + notPreExisting("i.id")
                                 + " AND 1 <> (SELECT count(*) FROM stix_objects o WHERE o.indicator_id = i.id"
                                 + " AND o.stix_id = 'indicator--' || i.id AND o.stix_type = 'indicator'"
                                 + " AND o.tlp = i.tlp AND o.owner_tenant_id = i.owner_tenant_id"
@@ -211,16 +221,12 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
 
         // 重同步不得重複物化 hash_records(reconcile 依 (algorithm, digest) 冪等)
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM hash_records h WHERE h.indicator_id NOT IN"
-                                + " (SELECT id FROM e2e_indicator_snapshot)",
-                        Integer.class))
+                        "SELECT count(*) FROM hash_records h WHERE " + notPreExisting("h.indicator_id"), Integer.class))
                 .isEqualTo(indicatorsAfterFirstRun);
 
         // STIX 投影以 stix_id UPSERT:重同步後仍一 indicator 一列,modified 前進、created 保持
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM stix_objects o WHERE o.indicator_id NOT IN"
-                                + " (SELECT id FROM e2e_indicator_snapshot)",
-                        Integer.class))
+                        "SELECT count(*) FROM stix_objects o WHERE " + notPreExisting("o.indicator_id"), Integer.class))
                 .isEqualTo(indicatorsAfterFirstRun);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM stix_objects WHERE stix_created > stix_modified", Integer.class))
@@ -267,9 +273,23 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     }
 
     private int newIndicatorCount() {
-        Integer count = jdbc.queryForObject(
-                "SELECT count(*) FROM indicators WHERE id NOT IN (SELECT id FROM e2e_indicator_snapshot)",
-                Integer.class);
+        Integer count = jdbc.queryForObject(notPreExistingCountSql(), Integer.class);
         return count == null ? -1 : count;
+    }
+
+    /** {@code <column> NOT IN ('<uuid>', …)};快照為空時退化為恆真。 */
+    private String notPreExisting(String column) {
+        if (preExistingIds.isEmpty()) {
+            return "true";
+        }
+        return column + " NOT IN ("
+                + preExistingIds.stream()
+                        .map(id -> "'" + id + "'::uuid")
+                        .collect(java.util.stream.Collectors.joining(","))
+                + ")";
+    }
+
+    private String notPreExistingCountSql() {
+        return "SELECT count(*) FROM indicators WHERE " + notPreExisting("id");
     }
 }

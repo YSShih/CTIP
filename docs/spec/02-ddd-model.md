@@ -73,9 +73,16 @@ CTIP 是一個 deployable、一套詞彙、一個所有權邊界。依 DDD 的�
 | `User` | `RefreshToken` | `EmailAddress`、`PasswordHash` | M2 |
 | `ApiKey` | — | `KeyPrefix`、`KeyHash`、`ScopeSet` | M2 |
 | `Subscription` | — | `BillingPeriod` | M2 |
-| `Threat` | `ThreatIndicatorLink` | `ExternalReference`、`ThreatAlias` | M2 |
+| `Threat` | `ThreatIndicatorLink` | `ExternalReference` | M2 |¹
 | `BloomVersion` | `BloomArtifact` | `BloomParameters`（k, m, n, fpr）、`Checksum` | M2 |
 | `Webhook` | — | `WebhookFilter`、`HmacSecret` | M3 |
+
+> ¹ **`ThreatAlias` 已移除（2026-08-28；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**：
+> 它原本只出現在本列,不在 §2.5/§2.6 的值物件清單裡;而
+> [03 §3.2](03-diagrams.md) 的 class 圖寫 `Set<String> aliases`、
+> [04 表 19](04-data-dictionary.md) 寫 `TEXT[]`——**同一件事三種型態**。
+> 以 04 的 `TEXT[]` 為準(它是唯一有 schema 的一份),alias 就是字串集合,不需要值物件。
+
 
 **非聚合**（無不變量、無狀態機 → 兩模型，無 domain model）：
 `source_sync`、`ingestion_rejections`、`stix_objects`、`stix_relationships`、`roles`、`permissions`、`role_permissions`、`tenant_users`、`plans`、`webhook_deliveries`、`notifications`、`audit_logs`
@@ -214,6 +221,17 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 | H5 | 與 `Indicator` 的關聯以 ID 參照（`ThreatIndicatorLink` 只存 `indicatorId`），**不持有 `Indicator` 物件** |
 | H6 | `tlp` 不得比其任一關聯 Indicator 更寬鬆 |
 
+> **H6 的執行點（2026-08-28 定調；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**：
+> H6「`Threat.tlp` 不得比任一關聯 Indicator 更寬鬆」是**跨聚合**不變量,與 H5
+> (`ThreatIndicatorLink` 只存 `IndicatorId`)及 §2.2「跨聚合只能以 ID 參照、不使用同一交易」
+> 互相拉扯——Threat 聚合內部拿不到 Indicator 的 TLP,DB 也沒有對應約束。
+>
+> **定調**:H6 由 **application 層在建立／變更關聯時**強制(讀取關聯 Indicator 的 TLP,
+> 以 `Tlp.strictest` 收緊 `Threat.tlp`),**不是 domain 不變量**。
+> 另因 Indicator 的 TLP 會在多來源合併時收緊,`IndicatorTlpTightened` 事件必須觸發
+> 對應 Threat 的重新收緊——這是 Phase 18 的交付物。
+> H6 因此從「聚合不變量」降格為「應用層一致性規則」,並在本表註記。
+
 行為：`Threat.linkIndicator(IndicatorId, IndicatorRole)`、`Threat.unlinkIndicator(IndicatorId)`、`Threat.addExternalReference(ExternalReference)`、`Threat.retire()`
 
 ---
@@ -243,7 +261,19 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 |---|---|
 | W1 | `targetUrl` 必須為 `https://` |
 | W2 | `secretHash` 為 HMAC 密鑰的 SHA-256；原文只在建立當下回傳一次 |
-| W3 | `consecutiveFailures` 達 5 → `DISABLED`，並發出 `SystemAlert` 事件 |
+
+> **W2 與 `Webhook.sign()` 在數學上互斥（2026-08-28 定調；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> W2 與 [04 表 24](04-data-dictionary.md) 都寫「只存 secret 的 `SHA-256`，原文僅建立時回傳一次」，
+> 但本節的行為清單有 `Webhook.sign(byte[] payload)`，而 [13 §13.2](13-platform-ops.md) 要求
+> 每次送達都以 `HMAC-SHA256(secret, …)` 簽章。**伺服器手上只有摘要，重建不出 secret**——
+> 照字面實作,`WebhookDeliveryTest`(M3-06)不可能通過。
+>
+> **定調**:secret **以 AES-GCM 加密後儲存**(欄位改名 `secret_encrypted`),
+> 金鑰來自新環境變數 `WEBHOOK_SECRET_KEK`(prod 必須來自 secret manager,啟動守衛比照 `JWT_SECRET`)。
+> 「原文僅建立時回傳一次」的對外契約不變——UI 與 API 都不再吐出 secret,只有送達路徑會解密使用。
+> 這與 refresh token／API key 只存雜湊的作法不同,因為那兩者是**驗證**(比對即可),
+> 而 webhook 簽章是**產生**(必須持有原文)。
+| W3 | `consecutiveFailures` 達 5 → `DISABLED`，並發出 `WebhookDisabled` 事件（2026-08-28 更正，原寫 `SystemAlert`——該事件不在 §2.4 清單中；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)） |
 | W4 | 送達重試最多 5 次，指數退避 |
 | W5 | 訂閱過濾**必須在伺服器端執行**，不得把全部事件推給 client 再過濾 |
 | W6 | 每租戶數量上限由 `plans.maxWebhooks` 於建立時檢查 |

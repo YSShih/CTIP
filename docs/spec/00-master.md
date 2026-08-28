@@ -511,4 +511,32 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.18）。*
+## 0.19 實作回饋修訂（2026-08-28，Phase 14–23 前置清障）
+
+使用者要求把後續 phase 會遇到的問題全部盤出來修掉。三組平行盤點 `phases/phase-14..23.md`
+與其治理規格、對照已實作程式碼，共約 **90 項**落差。分七批處理，
+逐項見 [ADR 0017](../architecture/decisions/0017-gate-credibility.md)–[0022](../architecture/decisions/0022-orphan-deliverables.md)。
+
+| 批 | 主題 | 關鍵發現 |
+|---|---|---|
+| 1 | **閘門可信度** | `dod.sh` 對**不存在的測試類回報 PASS**——實測 Phase 14/15/16 一行程式都沒有時 `dod.sh phase2` 回報 27/27 全綠。另修 23 份執行單的 `./mvnw` 路徑（repo 根沒有這支）、過濾式判準改 `test`（`verify` 會綁 JaCoCo）、`MigrationIntegrationTest` 的兩個會在 Phase 14/15/18/20/21 各紅一次的封閉清單、RBAC 矩陣的**第三份來源（規格表）納入自動比對** |
+| 2 | **版本表** | Phase 15–23 需要的相依**一項都沒列**（規則 6 會擋住每一個 phase 的第一天）。補 14 列 + `spring-boot-<tech>` autoconfig 座標表 + GitHub Action 版本政策 |
+| 3 | **環境可啟動** | prometheus 掛空目錄→**容器啟動即退出**（實測），`up.sh staging` 必死→M2-25→M3-01 連鎖；grafana provisioning 空→M3-13 FAIL；kafka 無 healthcheck；ES 開了 security 卻沒傳密碼 |
+| 4 | **Phase 14–16 定調** | 配額超限**三處三種答案**、`ioc:publish` 照字面實作**不產生任何公開效果**、誤判回報在資料模型上**必撞唯一約束**、匯入 job **無表可存**、Bloom `hashFunctionCount` 範例與公式**不一致**且雙雜湊**溢位語意未定義**、`CTIP_PLAN_*` **到不了容器也綁不上屬性** |
+| 5 | **Phase 17–19 定調** | 限流維度歸屬三處各說各話、`endpointClass` 配額值從未定義、H4 的唯一約束在 `NULL` 時**完全不生效**、H6 是跨聚合不變量與 §2.2 互斥、M2 五種 STIX SDO **無任何欄位對照**、ES index mapping 漏欄位會**整套繞過可見度過濾** |
+| 6 | **Phase 20–23 定調 + 稽核角色模型**（唯一含實作） | webhook 簽章對象兩句互斥、W3 事件名 02 自身矛盾、**secret 只存雜湊卻要算 HMAC（數學上不可能）**、WebSocket/SSE **完全沒有端點定義**卻要用 Playwright 測、保留任務六個只定義四個、prod 沒暴露 `prometheus`。**實作**：應用改以非特權角色 `ctip_app` 連線 |
+| 7 | **無主交付物歸位** | Playwright、六個前端頁、改密碼端點、`docs/api/events/`、`dod.sh` 的 workflow 存在性檢查——規格要求、DoD 會檢查，卻**沒有任何 phase 負責交付** |
+
+> **批 6 的實作為什麼非做不可**:`POSTGRES_USER` 是 postgres image 的**初始 superuser**
+> (實測 `rolsuper = t`),而 superuser **繞過所有 GRANT/REVOKE**——實測 `REVOKE` 之後
+> `DELETE` 照樣成功。Phase 21 的 `REVOKE UPDATE, DELETE ON audit_logs` 因此完全無效,
+> **M3-09「必須由 DB 拒絕」永遠不可能通過**。現在改只影響一個測試基底類;
+> 拖到 Phase 21,全部整合測試都已建立在 superuser 連線上。
+>
+> 切換後 `IngestionEndToEndTest` 立刻以 `permission denied for schema public` 失敗
+> ——那是權限模型真的生效的證據。**選擇改測試而不是放寬權限**,否則就失去
+> 「測試與正式環境同權限」的意義。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.19）。*

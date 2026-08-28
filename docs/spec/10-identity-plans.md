@@ -104,6 +104,19 @@ system:admin
 | `source:manage` / `source:sync` | — | — | — | — | ✓ |
 | `system:admin` | — | — | — | — | ✓ |
 
+> **Phase 20 必須新增 `notification:read`（2026-08-28；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> `GET /notifications` 與 `PATCH /notifications/{id}/read` 原本也沒有權限碼。
+> 同樣三處同步（本節清單與矩陣、seed migration、`RbacMatrix` 常數）。建議歸屬 `LOGGED_IN`。
+>
+> > **Phase 14 必須新增 `subscription:read`（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**：
+> [09 §9.1](09-api.md#91-端點清單) 的 `GET /subscription` 與 `/subscription/usage` 原本沒有權限欄，
+> 而本節的權限清單也沒有對應碼——但下方「實作要求」明訂**每一個 handler 都必須宣告授權**，
+> 且 `EndpointAuthorizationTest` 會擋下沒有 `@PreAuthorize` 的新端點。
+> 新增時**三處必須同步**：本節的清單與矩陣、Phase 14 的 seed migration、
+> `RbacMatrix` 測試常數——`RbacMatrixTest.theSpecificationMatrixMatchesTheSeededMatrix`
+> 會逐格比對這三者（[ADR 0017](../architecture/decisions/0017-gate-credibility.md)）。
+> 建議歸屬：`LOGGED_IN`（USER 以上皆可看自己的方案）。
+>
 > `ioc:publish`（把自己提交的 IOC 標為 `CLEAR`/`GREEN`）只給 `SYSTEM_ADMIN`——把租戶資料推入公開情資池是平台營運決策，不是租戶自助操作。
 
 ### 實作要求
@@ -236,7 +249,28 @@ Access token claims：`sub`（userId）、`tid`（tenantId）、`roles`、`perms
 | **手動提交／日** | 0 | 0 | 1,000 | 50,000 |
 | **單檔匯入筆數上限** | 0 | 0 | 10,000 | 500,000 |
 
-所有數值必須可由 `.env` 覆寫（`CTIP_PLAN_<CODE>_<FIELD>` 命名慣例），啟動時載入並更新 `plans` 表。
+> **配額值的 `0` 與 `null`（2026-08-28 定調；ADR 0019）**：`0` = **停用**（不是「無限制」），
+> `null` = **無限制**。這兩個值目前撞上既有實作的建構子不變量——
+> `ApiKeySettings`（`maxPerTenant < 1` 丟例外）vs ANONYMOUS `max_api_keys = 0`、
+> `StixExportSettings`（`maxObjects <= 0` 丟例外）vs ANONYMOUS `0` / ENTERPRISE `null`、
+> `CtipProperties.Api` 的 `@Positive`。**Phase 14 必須先放寬這三處型別**（改為允許 0 與
+> nullable），否則種子表的合法值會讓應用啟動即失敗。
+
+所有數值必須可由 `.env` 覆寫，啟動時載入並更新 `plans` 表。
+
+> **實作回饋修訂（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**——
+> 原本的 `CTIP_PLAN_<CODE>_<FIELD>` 命名慣例**到不了容器,也綁不上屬性**,兩個獨立的問題:
+>
+> 1. **compose 沒有 `env_file`**,backend 的環境變數是[明列白名單](05-environment.md#54-環境變數清單)。
+>    寫進 `.env` 的 `CTIP_PLAN_*` 不會被傳進容器——設定看起來可調,實際完全無效
+>    （與 [ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md) 的 §5.5 對稱性缺陷同一類）。
+> 2. **Spring relaxed binding 會把 `CTIP_PLAN_PREMIUM_MAX_API_KEYS` 對到
+>    `ctip.plan.premium.max.api.keys`**,不是 `…max-api-keys`——底線一律變成點,不會變成連字號。
+>
+> **定調**:方案配額**不走環境變數逐項覆寫**。`plans` 表由 `V29__seed_plans.sql`（冪等）種入，
+> 之後由 `SYSTEM_ADMIN` 經管理端點調整（§10.6 金流段已定 M2 由 `SYSTEM_ADMIN` 手動操作）。
+> 需要在部署期覆寫時,以**單一 JSON 變數** `CTIP_PLAN_OVERRIDES`（compose 白名單已列，
+> 內容為 `{"PREMIUM":{"maxApiKeys":20}}` 形式）承載，避免 relaxed binding 的命名陷阱。
 
 ### 金流
 
@@ -299,6 +333,33 @@ v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必
 - 匿名 IP 正規化：IPv4 取完整位址；**IPv6 取 `/64` 前綴**（避免單一使用者以 `/64` 內的位址繞過）
 - `endpointClass` 分三類：`read`（GET/查詢）、`write`（POST/PATCH/DELETE）、`heavy`（bloom 下載、STIX bundle、import）
 
+> **`endpointClass` 的配額值（2026-08-28 定調；ADR 0020）**：`plans` 表只有
+> `requests_per_minute` / `requests_per_day` **各一組**，04 與本節都沒有定義三類各自的數值。
+> **定調**:維度 5 不另設數值,而是**以方案總配額的比例**表示——
+> `read` = 100%、`write` = 20%、`heavy` = 5%(取整,至少 1)。
+> 這樣不必為每個方案多開六個欄位,也保證分類上限恆低於總上限。比例值為常數,不進 `plans` 表。
+
+> **限流維度 1–3 的歸屬（2026-08-28 定調；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**：
+> 三處各說各話——本節下方寫「隨 API key／方案於 **Phase 14/17** 加入」、
+> `phases/phase-17.md` 把「五個限流維度」列為自己的交付物、`docs/progress.md` 寫「Phase 14 直接取用」。
+> **定調為 Phase 17**：維度 1–3 需要**依方案查表的 per-key 限額**，而那需要
+> `RateLimiterPort` 改簽章（見下表）與 Redis 後端一起做才有意義；Phase 14 只負責
+> `plans` 表與配額值本身。`phase-14.md` 與 `phase-17.md` 已同步。
+>
+> ⚠️ **維度 4（匿名 IP）必須留在認證之前**——`RateLimitFilter` 現在排在
+> `SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1`，那是 Phase 13 修掉「認證失敗完全繞過限流」
+> 的迴歸([ADR 0012](../architecture/decisions/0012-phase13-auth-rbac-decisions.md) 決策 16)。
+> 維度 1–3 需要已解析的身分，只能在認證之後——**兩者必須分成兩個檢查點,不得把維度 4 一起搬後面**。
+
+> **實作回饋修訂（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**——
+> 現行 port 簽章承載不了本節的五個維度,Phase 14／17 動工前必須先改:
+>
+> | 缺口 | 現況 | 需要 |
+> |---|---|---|
+> | **per-key 限額** | `RateLimiterPort.tryConsume(key, tokens)` 沒有任何參數傳「這把 key 的上限」;`InMemoryRateLimiter.limitFor(window)` 只看 window,回傳建構子注入的單一數值 | 限額必須隨呼叫傳入（依方案查表），否則 60/300/1200/6000 的分級無法表達 |
+> | **「無上限」** | `RateLimitResult.limit` 是 `long` 原始型別 | ENTERPRISE 的 `requests_per_day` 是 `null`（依合約），而 §10.7 要求 `X-RateLimit-*` 出現在**所有**回應——需要可表示無限的型別 |
+> | **同步間隔的窗** | `RateLimitKey.Window` 只有 `MINUTE`／`DAY` | `min_sync_interval_seconds` 的值是 86400／21600／300／60，其中 6h／5min／1min 表達不了；且**沒有任何欄位記錄某租戶上次同步時間**（`last_sync_at` 只在 `sources` 表） |
+>
 > **M1 實作範圍（2026-08-25，Phase 6；ADR 0004）**：只有匿名身分，故 Phase 6 實作維度 4
 > （匿名 IP × minute/day）；維度 1–3 與 `endpointClass` 隨 API key／方案於 Phase 14/17 加入。
 > 匿名數值（60/min、1000/day，§10.6）在 plans 表存在前以 property 預設值承載

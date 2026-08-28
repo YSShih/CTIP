@@ -706,6 +706,47 @@ CONSTRAINT ck_sub_prov   CHECK (provider IN ('NONE','STRIPE','MANUAL'))
 
 ---
 
+### 18b. `import_jobs` `[Phase 14 · M2]`
+
+> **本表 2026-08-28 新增（[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**：
+> [09 §9.7](09-api.md#97-寫入端點細節-m2) 的 `POST /iocs/import` 定義為「非同步處理，回 `202` +
+> `importJobId`，以 `GET /iocs/import/{jobId}` 查詢進度」，而
+> [13 §13.5](13-platform-ops.md) 的稽核也已把 `import_job` 當成 `resource_type`——
+> 但**沒有任何資料表能承載 job 狀態**。編號用 `18b` 以免動到既有表號。
+
+| 欄位 | 型別 | NULL | 預設 | 說明 |
+|---|---|---|---|---|
+| `id` | UUID | NO | `gen_random_uuid()` | PK；即對外的 `importJobId` |
+| `tenant_id` | UUID | NO | — | FK → `tenants.id` |
+| `submitted_by` | UUID | NO | — | FK → `users.id` |
+| `status` | VARCHAR(16) | NO | `'PENDING'` | `PENDING`/`RUNNING`/`SUCCESS`/`PARTIAL`/`FAILURE` |
+| `format` | VARCHAR(16) | NO | — | `CSV`/`STIX_BUNDLE` |
+| `total_rows` | INTEGER | YES | — | 解析後的總筆數；`PENDING` 時為 null |
+| `accepted_count` | INTEGER | NO | `0` | 新建立 |
+| `merged_count` | INTEGER | NO | `0` | 合併進既有 IOC |
+| `rejected_count` | INTEGER | NO | `0` | 逐筆 rejection 明細在 `ingestion_rejections` |
+| `error_message` | VARCHAR(1024) | YES | — | 整批失敗的原因（解析錯誤等） |
+| `started_at` | TIMESTAMPTZ | YES | — | |
+| `finished_at` | TIMESTAMPTZ | YES | — | 終態才寫入 |
+| `created_at` | TIMESTAMPTZ | NO | `now()` | |
+| `updated_at` | TIMESTAMPTZ | NO | `now()` | |
+
+```sql
+CONSTRAINT pk_import_jobs PRIMARY KEY (id)
+CONSTRAINT fk_ij_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+CONSTRAINT fk_ij_user   FOREIGN KEY (submitted_by) REFERENCES users(id)
+CONSTRAINT ck_ij_status CHECK (status IN ('PENDING','RUNNING','SUCCESS','PARTIAL','FAILURE'))
+CONSTRAINT ck_ij_format CHECK (format IN ('CSV','STIX_BUNDLE'))
+CONSTRAINT ck_ij_counts CHECK (accepted_count >= 0 AND merged_count >= 0 AND rejected_count >= 0)
+
+CREATE INDEX ix_import_jobs_tenant ON import_jobs (tenant_id, created_at DESC);
+```
+
+> 逐筆 rejection 沿用既有的 `ingestion_rejections`（表 6），以 `import_job_id` 關聯——
+> Phase 14 須為該表加上此欄位（nullable，來源同步的 rejection 仍為 null）。
+
+---
+
 ### 19. `threats` `[Phase 18 · M2]`
 
 | 欄位 | 型別 | NULL | 預設 | 說明 |
@@ -781,11 +822,18 @@ Threat 聚合內的值物件集合。**本版新增**（v1.1 定義為 `List<Ext
 | `created_at` | TIMESTAMPTZ | NO | `now()` | |
 
 ```sql
-CONSTRAINT ux_ter_identity UNIQUE (threat_id, source_name, external_id)
+-- H4 的唯一性:external_id 可為 null,而 PostgreSQL 的 UNIQUE 不去重 null
+-- (§6.3.6 自己列的地雷)。必須以 COALESCE 建唯一索引,否則 external_id IS NULL 時
+-- H4 完全不被強制(ADR 0020)
+CONSTRAINT ux_ter_identity UNIQUE (threat_id, source_name, external_id)  -- 見下方 CREATE UNIQUE INDEX
 CONSTRAINT fk_ter_threat   FOREIGN KEY (threat_id) REFERENCES threats(id) ON DELETE CASCADE
 CONSTRAINT ck_ter_has_ref  CHECK (external_id IS NOT NULL OR url IS NOT NULL)
 
 CREATE INDEX ix_ter_external ON threat_external_references (source_name, external_id);
+
+-- H4 的實際強制(取代上面那條 UNIQUE 的 null 語意缺口):
+CREATE UNIQUE INDEX ux_ter_identity_coalesced
+  ON threat_external_references (threat_id, source_name, COALESCE(external_id, ''));
 ```
 
 ---
@@ -869,7 +917,7 @@ CREATE INDEX ix_ba_gc ON bloom_artifacts (created_at);
 | `created_by_user_id` | UUID | NO | — | FK → `users.id` |
 | `name` | VARCHAR(128) | NO | — | |
 | `target_url` | VARCHAR(2048) | NO | — | 必須為 HTTPS |
-| `secret_hash` | CHAR(64) | NO | — | HMAC 簽章密鑰的 `SHA-256`。**原文僅建立時回傳一次** |
+| `secret_encrypted` | BYTEA | NO | — | HMAC 簽章密鑰,**以 AES-GCM 加密儲存**(金鑰 `WEBHOOK_SECRET_KEK`)。原文僅建立時回傳一次。2026-08-28 由 `secret_hash CHAR(64)` 改——只存雜湊時伺服器重建不出 secret,無法計算送達簽章([ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)) |
 | `event_types` | TEXT[] | NO | `'{}'` | 訂閱的事件型別，見 4.5 |
 | `filter_ioc_types` | TEXT[] | NO | `'{}'` | 空 = 不限 |
 | `filter_min_severity` | VARCHAR(16) | YES | — | 門檻，null = 不限 |
@@ -1109,7 +1157,7 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V7__create_stix.sql` | `stix_objects`、`stix_relationships`（`threat_id` 欄位保留、FK 延至 `V31`） | 8, 9 |
 | `V20__create_users_and_rbac.sql` | `users`、`roles`、`permissions`、`role_permissions`、`tenant_users` | 10–14 |
 | `V21__create_auth_tokens.sql` | `refresh_tokens`、`api_keys` | 15, 16 |
-| `V28__create_plans.sql` | `plans`、`subscriptions` | 17, 18 |
+| `V28__create_plans.sql` | `plans`、`subscriptions`、`import_jobs` + `ingestion_rejections.import_job_id` | 17, 18, 18b |
 | `V29__seed_plans.sql` | 四個方案（冪等） | — |
 | `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
 | `V31__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |

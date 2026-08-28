@@ -21,6 +21,8 @@
 - [02-ddd-model.md §2.4](../02-ddd-model.md#24-domain-event-清單)
 - [03-diagrams.md §3.2.9](../03-diagrams.md#329-webhook-聚合-m3)
 
+- 前端頁面 **webhook 管理頁**（[09](../09-api.md) 有三個 `/webhooks` 端點與 `webhook:manage` 權限，但 [12](../12-frontend.md) 的頁面表沒有對應頁；ADR 0022）
+
 ## 完成判準
 ```bash
 ./backend/mvnw -f backend/pom.xml test -Ptest-all \

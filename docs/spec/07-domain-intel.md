@@ -254,6 +254,28 @@ public Bloom **只含 `CLEAR`**。`GREEN` 及以上**沒有 Bloom 覆蓋**——
 | `relationship` | — | ✅ | `ThreatIndicatorLink` |
 | `course-of-action` | — | ✅ | — |
 
+> **M2 的 SDO 映射（2026-08-28 定調；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**
+>
+> §7.8.2 只有 `indicator` 的欄位對照表、§7.8.4 只有 `marking-definition`，而 §7.8.6 又要求
+> 「`content` JSONB 內容必須與 **7.8.2–7.8.4** 的規則一致」——Phase 18 要投影的五種 SDO
+> **沒有任何欄位對照可依**。定調:
+>
+> | STIX 型別 | 來源 domain 物件 | 對照表 |
+> |---|---|---|
+> | `malware` | `Threat`（`type = MALWARE_FAMILY`） | Phase 18 依 §7.8.2 的體例補寫入本節 |
+> | `attack-pattern` | `Threat`（`type = ATTACK_PATTERN`） | 同上 |
+> | `observed-data` | `IndicatorSource`（單一來源的一次觀測） | 同上 |
+> | `identity` | `Source`（情資提供方） | 同上；`stix_id` 規則為 `identity--{sourceId}` |
+> | ~~`course-of-action`~~ | **無** | **本版移除** |
+>
+> **`course-of-action` 移除的理由**:本表原本它的「來源 domain 物件」欄是空的——
+> 平台沒有任何資料能填。一個永遠產不出實例的投影型別就是規則 16 禁止的 placeholder。
+> 未來若引入緩解措施(mitigation)類的 domain 概念,再重新納入。
+>
+> `ThreatType` 的 `CAMPAIGN` / `THREAT_ACTOR` / `PHISHING_KIT` 在 STIX 2.1 分別對應
+> `campaign` / `threat-actor` / 無標準型別。**M2 只投影 `MALWARE_FAMILY` 與 `ATTACK_PATTERN`**;
+> 其餘三型仍可存於 `threats` 表(它們是平台的分類),只是不產生 STIX 物件。
+
 > **相對 v1.1 的範圍修正**：v1.1 的 §16.1 要求 M1 支援 `malware` 與 `attack-pattern`，但 §18.3 明確說「M1 不實作 Threat」——**M1 沒有任何資料能填進這兩種物件**。本版把 M1 收斂到「只有 `Indicator` 能產出的物件」。
 
 ### 7.8.2 `indicator` 映射（強制對照表）

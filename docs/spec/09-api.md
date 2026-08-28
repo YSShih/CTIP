@@ -32,8 +32,14 @@ POST   /api/v1/iocs/lookup                         匿名   批次精確驗證
 ```text
 POST   /api/v1/iocs                                ioc:submit      單筆提交
 POST   /api/v1/iocs/import                         ioc:import      批次匯入（CSV / STIX bundle）
+GET    /api/v1/iocs/import/{jobId}                 ioc:import      匯入進度查詢
 POST   /api/v1/iocs/{id}/report-false-positive     ioc:report-fp   誤判回報
 ```
+
+> **實作回饋修訂（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**：
+> `GET /iocs/import/{jobId}` 原本只出現在 §9.7 的內文，端點清單裡沒有，且**沒有任何資料表**
+> 能承載 job 狀態——「非同步 + 202 + jobId + 進度查詢」無處持久化。本次補進清單，
+> 並於 [04](04-data-dictionary.md) 新增 `import_jobs` 表（Phase 14 的 `V28`）。
 
 > **本版新增。** v1.1 的三十個端點裡沒有任何寫入 IOC 的方式，導致三個懸空定義：Premium 有 `tenant_bloom_capacity` 卻沒有管道產生私有 IOC；`IndicatorStatus.FALSE_POSITIVE` 與 `SourceRecordStatus.FALSE_POSITIVE` 定義了卻永遠不可能被賦值（§62 第 16 條禁止 placeholder，一個永不可達的狀態就是資料模型層級的 placeholder）。
 
@@ -100,12 +106,34 @@ POST   /api/v1/auth/logout                         （以請求主體的 refresh
 ### 訂閱與 API Key `[M2]`
 
 ```text
-GET    /api/v1/subscription
-GET    /api/v1/subscription/usage
+GET    /api/v1/subscription                        subscription:read
+GET    /api/v1/subscription/usage                  subscription:read
 GET    /api/v1/api-keys                            apikey:create
 POST   /api/v1/api-keys                            apikey:create
 DELETE /api/v1/api-keys/{id}                       apikey:revoke
 ```
+
+### 即時推送 `[M3]`
+
+```text
+GET    /api/v1/ws                                  （見下）      WebSocket 升級
+GET    /api/v1/events                              （見下）      SSE fallback
+```
+
+> **本節 2026-08-28 新增（[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
+> `phase-20.md` 要交付「WebSocket + SSE fallback」、[12 §12.x](12-frontend.md) 有 `VITE_WS_URL`、
+> `01` 有 `interfaces/websocket/ [M3]`，而 **M3-05 要用 Playwright 測它**——
+> 但本檔原本**沒有任何 WS/SSE 的路徑、協定或認證方式定義**，測試無從得知要連哪裡。
+>
+> | 項目 | 規格 |
+> |---|---|
+> | 協定 | **原生 WebSocket**，不使用 STOMP／SockJS（單一訊息型態，不需要 broker 語意） |
+> | 認證 | 升級請求以 `Sec-WebSocket-Protocol: ctip.auth.<jwt>` 攜帶 access token——瀏覽器的 WS API 無法設自訂標頭。**不接受 query string 傳 token**（會進 access log） |
+> | 授權 | 需 `plans.websocket_enabled`；否則升級回 `403` |
+> | 訊息 | 伺服器→client 單向；JSON，形狀為 `{ "type": <NotificationType>, "payload": {...}, "eventId": "..." }` |
+> | 訂閱範圍 | 連線綁 `tenantId`，只推送該租戶可見的事件（沿用 §7.9 的輸出過濾） |
+> | SSE fallback | `GET /api/v1/events`，`text/event-stream`；認證走一般 `Authorization` 標頭。事件格式同上 |
+> | 心跳 | WS 每 30s ping；SSE 每 30s 送 `: keepalive` 註解行 |
 
 ### 通知與稽核 `[M3]`
 
@@ -113,8 +141,8 @@ DELETE /api/v1/api-keys/{id}                       apikey:revoke
 GET    /api/v1/webhooks                            webhook:manage
 POST   /api/v1/webhooks                            webhook:manage
 DELETE /api/v1/webhooks/{id}                       webhook:manage
-GET    /api/v1/notifications
-PATCH  /api/v1/notifications/{id}/read
+GET    /api/v1/notifications                       notification:read
+PATCH  /api/v1/notifications/{id}/read             notification:read
 GET    /api/v1/audit-logs                          audit:read
 ```
 
@@ -318,10 +346,10 @@ OpenAPI JSON: /v3/api-docs
 |---|
 | 需要權限 `ioc:submit` |
 | `owner_tenant_id` = 提交者的 tenant（**不可指定**） |
-| `tlp` 預設 `AMBER`（私有）。要設 `CLEAR`／`GREEN` 需額外權限 `ioc:publish` |
+| `tlp` 預設 `AMBER`（私有）。要設 `CLEAR`／`GREEN` 需額外權限 `ioc:publish`，且**同時把 `owner_tenant_id` 轉為 public tenant**（見本節末「`ioc:publish` 的語意」） |
 | 來源記為系統來源 `MANUAL`，`redistribution_policy = INTERNAL_ONLY` |
 | 走完整 pipeline（驗證、正規化、去重、合併），**不繞過任何 stage** |
-| 配額：`plans.max_manual_submissions_per_day`，超出回 `429 RATE_LIMIT_EXCEEDED` |
+| 配額：`plans.max_manual_submissions_per_day`，超出回 `429 RATE_LIMIT_EXCEEDED`（見本節末「配額超限的三種語意」） |
 | 回應 `201` + 完整 Indicator DTO（若合併至既有 IOC 則回 `200`） |
 
 ### `POST /api/v1/iocs/import`
@@ -343,10 +371,51 @@ OpenAPI JSON: /v3/api-docs
 | 需要權限 `ioc:report-fp` |
 | 在該 tenant 的 `indicator_sources` 中，將 `MANUAL` 來源那一列的 `status` 設為 `FALSE_POSITIVE`（若不存在則建立） |
 | 隨後重跑 `IndicatorMergePolicy.determineStatus`——是否真的變成 `FALSE_POSITIVE` 由合併規則決定（[07](07-domain-intel.md#status-判定順序強制短路求值)），**不由呼叫端直接指定** |
-| 只影響該 tenant 自己的 Indicator；**不得**影響 public tenant 的公開情資 |
+| **只接受 `owner_tenant_id` = 呼叫者 tenant 的 Indicator**；對 public tenant 的公開情資一律回 `403 FORBIDDEN`（見本節末「誤判回報的作用域」） |
 | 發出 `IndicatorFalsePositiveReported` 事件 |
 
 > 對公開情資的誤判回報屬於「向平台營運方申訴」，不是 API 操作。M1–M3 不提供此流程，需在 `docs/api/` 說明並提供聯絡方式。
+
+---
+
+### 配額超限的三種語意 `[2026-08-28 定調]`
+
+> **實作回饋修訂（[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**：
+> 同一件事在三處寫了三種答案——§9.7 說 `429 RATE_LIMIT_EXCEEDED`、§9.4 的錯誤碼表說
+> `403 PLAN_LIMIT_EXCEEDED`「超出方案能力（非流量）」、[07 §7.3](07-domain-intel.md) 又有
+> `QUOTA_EXCEEDED` 逐筆寫入 `ingestion_rejections`。三者其實各有適用情境，本次明確劃分：
+
+| 情境 | 回應 | 為什麼 |
+|---|---|---|
+| **時間窗內的計數**（請求/分、請求/日、**手動提交/日**） | `429 RATE_LIMIT_EXCEEDED` + `X-RateLimit-*` + `Retry-After` | 有重置時間，client 知道何時可再試。與 §10.7 的限流同一套語意 |
+| **非時間窗的能力上限**（`max_api_keys`、`max_webhooks`、`stix_export_max_objects`、`websocket_enabled`） | `403 PLAN_LIMIT_EXCEEDED` | 不會自己恢復，等待無用；要解除只能升級方案 |
+| **單次請求的尺寸上限**（`max_batch_lookup`、`max_import_rows_per_file`） | `413 PAYLOAD_TOO_LARGE` | 是這一次請求太大，拆小就能過 |
+| **單次分頁上限**（`max_page_size`） | 夾到上限，**不報錯** | §9.3 既有行為 |
+| **批次處理中途跨越每日配額** | 請求本身成功（`202`/`200`），越界的記錄逐筆寫入 `ingestion_rejections`，reason = `QUOTA_EXCEEDED` | 已接受的部分不該因為後半超額而整批失敗 |
+
+### `ioc:publish` 的語意 `[2026-08-28 定調]`
+
+> 照原文字面實作會產生「`owner_tenant_id` = 某租戶、`tlp` = `CLEAR`」的 Indicator，而它：
+> 不符 [10 §10.1](10-identity-plans.md) 對公開情資的定義（owner 必須是 public tenant）、
+> 不符 [11 §11.2](11-sync-bloom.md) public bloom 的成員條件、
+> 也不會被其他租戶看到（`Indicator.isVisibleTo` 對非自家資料要求 `ownerTenantId.isPublic()`）。
+> **「publish」不產生任何公開效果**——一個永遠沒有作用的權限就是規則 16 禁止的 placeholder。
+>
+> **定調**：`ioc:publish` 是**擁有權轉移**——把 `owner_tenant_id` 設為 public tenant 並套用
+> `CLEAR`／`GREEN`。轉移後該 IOC 依 §7.9 的一般規則對所有人可見，且進入 public bloom。
+> 原租戶的來源記錄保留（`indicator_sources` 不變），attribution 因此仍然成立。
+
+### 誤判回報的作用域 `[2026-08-28 定調]`
+
+> 原文「在該 tenant 的 `indicator_sources` 中把 `MANUAL` 那一列設為 `FALSE_POSITIVE`」
+> 與「只影響該 tenant 自己」在資料模型上**互相矛盾**：`sources` 對 `source_type` 有唯一約束
+> （`ux_sources_source_type`），全平台只有**一列** `MANUAL` 來源；而 `indicator_sources`
+> 是 `UNIQUE (indicator_id, source_id)`。因此對一筆 public Indicator 建立 MANUAL 誤判列，
+> 改到的是**共用的公開資料**，而且第二個租戶回報同一筆時會直接撞唯一約束。
+>
+> **定調**：本端點**只接受 `owner_tenant_id` = 呼叫者 tenant 的 Indicator**。
+> 租戶自己的 IOC 每個 tenant 各有獨立的 indicator 列，不會相撞，「只影響自己」自然成立。
+> 對公開情資回 `403 FORBIDDEN`，並在錯誤訊息指向下方的申訴流程。
 
 ---
 

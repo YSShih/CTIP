@@ -18,12 +18,26 @@
 - [11-sync-bloom.md §11.5–§11.7](../11-sync-bloom.md#115-metadata-與-api)
 - [09-api.md](../09-api.md#同步-m2)
 
+### Playwright E2E 骨架（M2-26 的前置；[ADR 0022](../../architecture/decisions/0022-orphan-deliverables.md)）
+
+`@playwright/test` 相依、`playwright.config.ts`、`e2e/` 目錄與 CI 可執行的最小案例。
+**目前完全未安裝**，而 DoD **M2-26**（`cd frontend && npx playwright test`）與 M3-05 都靠它，
+`phases/13–23` 卻沒有任何一份執行單交付它——本 phase 補上骨架，Phase 20 再加 websocket 案例。
+
 ## 完成判準
 ```bash
 ./backend/mvnw -f backend/pom.xml test -Ptest-integration -Dtest=SyncEndToEndTest
 cd frontend && npm run test -- SyncPage
 ```
 `SyncEndToEndTest` 必須跑完整流程：manifest → delta → 套用 → 驗證 `resultingChecksum` → 更新版本，並包含一次 `409 SNAPSHOT_REQUIRED` 分支。
+
+> **實作前必讀（2026-08-28；[ADR 0019](../../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**
+>
+> - `min_sync_interval_seconds`（86400/21600/300/60）**現行 `RateLimitKey.Window` 表達不了**
+>   （只有 MINUTE/DAY），且**沒有任何欄位記錄某租戶上次同步時間**（`last_sync_at` 只在 `sources` 表）
+> - `GET /sync/bloom` 的「302 至簽章下載 URL」目前**沒有簽章金鑰的環境變數**——
+>   若採此路徑需先補設定項；直接串流回應則不需要
+> - 匿名持有 `sync:bloom`，但 `scope=TENANT` 對匿名（綁 public tenant）的語意未定義
 
 ## 不得做的事
 - **不得**建立 `POST /api/v1/sync/check`（與 `/iocs/lookup` 重複，已移除）

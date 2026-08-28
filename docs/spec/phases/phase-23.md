@@ -29,6 +29,17 @@ OWASP Dependency-Check 或 Dependabot alerts、Gitleaks、Trivy、CycloneDX + `n
 - [13-platform-ops.md §13.8](../13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有)
 - [15-dod-gates.md §15.3](../15-dod-gates.md#153-dod-fullphase-2023)
 
+- 前端頁面 **STIX Viewer**（`/stix/:id`，[12](../12-frontend.md) 標 M3；Cytoscape.js 已在版本表卻未安裝。原本無 phase 承接；ADR 0022）
+
+### 本 phase 另補（原本無 phase 承接；[ADR 0022](../../architecture/decisions/0022-orphan-deliverables.md)）
+
+- `docs/api/events/README.md` + 事件 JSON Schema（[13 §13.1](../13-platform-ops.md) 要求，目錄目前是空的，且無任何 DoD 檢查）
+- `docs/api/` 的 webhook timestamp 偏差規則（[13 §13.2](../13-platform-ops.md) 明文要求寫入 `docs/api/`）
+- `docs/deployment/` 的兩份未被 DoD 檢查、但規格明文要求的記載：
+  **真實 client IP 的限制**（[10 §10.7](../10-identity-plans.md)）與 **ShedLock 前置**（[08 §8.7](../08-ingestion-sdk.md)）
+- **`dod.sh` 增設「11 支 workflow 檔案皆存在」的檢查**——目前 M3-19 只看最後一次 run 的結論，
+  「只有兩支且都綠」也會通過，這正是 6 支 M1/M2 workflow 逾期到現在沒被發現的原因
+
 ## 完成判準
 ```bash
 ./environment/scripts/dod.sh full        # ← 整個 DoD-Full，25 項

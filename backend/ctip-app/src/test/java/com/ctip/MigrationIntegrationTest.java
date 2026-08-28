@@ -153,6 +153,24 @@ class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
         }
     }
 
+    /**
+     * 應用的 datasource 必須是**非特權**角色(ADR 0021)。
+     *
+     * <p>superuser 繞過所有 GRANT/REVOKE:以 superuser 連線時,Phase 21 的
+     * {@code REVOKE UPDATE, DELETE ON audit_logs} 完全無效,而 M3-09 要求那必須由 <b>DB</b> 拒絕。
+     * 實測過:`ctip` 是 postgres image 的初始 superuser(`rolsuper = t`),
+     * REVOKE 之後 DELETE 照樣成功。這條斷言鎖住連線角色不會被改回 owner。
+     */
+    @Test
+    void applicationConnectsAsANonSuperuserRole() {
+        String user = jdbc.queryForObject("SELECT current_user", String.class);
+        assertThat(user).as("應用不得以 owner/superuser 連線").isEqualTo("ctip_app");
+
+        Boolean superuser =
+                jdbc.queryForObject("SELECT rolsuper FROM pg_roles WHERE rolname = current_user", Boolean.class);
+        assertThat(superuser).as("%s 不得是 superuser", user).isFalse();
+    }
+
     @Test
     void requiredExtensionsInstalled() {
         List<String> extensions = jdbc.queryForList("SELECT extname FROM pg_extension", String.class);

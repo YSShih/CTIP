@@ -104,7 +104,21 @@ delta = 從 baseVersion 到 targetVersion 之間「新增」的 bit 索引集合
 | 位元序 | bit index `i` 位於 byte `i / 8`，該 byte 內的第 `i % 8` 個 **最低有效位**（LSB-first） |
 | 陣列長度 | `ceil(bitSize / 8)` bytes |
 | 未使用的尾端位元 | 必須為 0 |
-| 雜湊函式族 | 以 `fingerprint` 的十六進位字串解為位元組後，用 **Kirsch-Mitzenmacher** 雙雜湊：`h1 = 前 8 bytes 之 big-endian int64`、`h2 = 次 8 bytes 之 big-endian int64`，第 `i` 個索引 = `((h1 + i * h2) mod bitSize + bitSize) mod bitSize`（`i` 從 0 到 `k-1`） |
+| 雜湊函式族 | 以 `fingerprint` 的十六進位字串解為位元組後，用 **Kirsch-Mitzenmacher** 雙雜湊：`h1 = 前 8 bytes 之 big-endian int64`、`h2 = 次 8 bytes 之 big-endian int64`，第 `i` 個索引 = `((h1 + i * h2) mod bitSize + bitSize) mod bitSize`
+
+> **實作回饋修訂（2026-08-28；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**——兩項本節原本沒定義、但決定位元陣列內容的東西：
+>
+> 1. **`hashFunctionCount` 以公式為準。** 下方 manifest 範例原寫 `7`，但同一組參數
+>    （n=10,000,000、p=0.001）代入本節公式得 `k = round((m/n) · ln2) = round(9.9648) = 10`。
+>    範例的另外兩個數字（`bitSize` 143775880、`sizeBytes` 17971985）都是公式算出來的，
+>    只有 k 不是。範例已改為 **10**。`BloomBitLayoutTest` 要斷言確切的 byte 陣列，
+>    k 取 7 或 10 會產出完全不同的結果——這個值必須先定案才有辦法實作。
+> 2. **`h1 + i * h2` 以 unsigned 64-bit wraparound（mod 2^64）計算。**
+>    `h1`、`h2` 宣告為 int64，`i` 最大到 k-1，加乘在 64 位元下**必然溢位**；
+>    而本節寫的是數學上的 `mod`，沒說是「先在 mod 2^64 下截斷」還是「任意精度」。
+>    Java 的 `long` 會 wrap、JavaScript 的 `BigInt` 不會，**兩端算出的 index 不同**
+>    ——而本節存在的理由正是「client 能產生位元組完全相同的陣列」。
+>    定調為 wraparound（即 Java `long` 的自然行為）；非 Java client 必須自行截斷至 64 位元。（`i` 從 0 到 `k-1`） |
 | `checksum` | **未壓縮**位元陣列的 `SHA-256`，十六進位小寫 |
 | 壓縮 | `ZSTD`（預設）／`GZIP`／`NONE`，僅影響傳輸 |
 
@@ -132,7 +146,7 @@ k = max(1, round((m / n) * ln 2))       // hashFunctionCount
     "datasetVersion": 128,
     "bloomVersion": 42,
     "fingerprintAlgorithm": "SHA256",
-    "hashFunctionCount": 7,
+    "hashFunctionCount": 10,
     "bitSize": 143775880,
     "capacity": 10000000,
     "falsePositiveRate": 0.001,
