@@ -15,7 +15,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration -Dtest=OpenApiCompletenessTest
+./backend/mvnw -f backend/pom.xml test -Ptest-integration -Dtest=OpenApiCompletenessTest
 ./environment/scripts/up.sh mvp
 curl -fsS http://localhost:8080/swagger-ui/index.html > /dev/null
 curl -fsS http://localhost:8080/v3/api-docs | jq -e '.paths | length > 0'

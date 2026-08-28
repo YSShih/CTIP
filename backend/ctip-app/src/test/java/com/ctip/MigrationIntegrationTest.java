@@ -2,7 +2,15 @@ package com.ctip;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,11 +25,51 @@ class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    /**
+     * 每一支 migration 檔都成功套用,且套用順序嚴格遞增。
+     *
+     * <p>原本是寫死版本清單的 {@code containsExactly}——每個新增 migration 的 phase 都會讓它變紅,
+     * 而那不是缺陷、是預期中的成長。改為由 {@code db/migration} 目錄實際內容推導(ADR 0017)。
+     *
+     * <p><strong>本測試抓不到 ADR 0014 的 out-of-order 危害</strong>,這點必須講清楚:
+     * 全新資料庫一律照版本序一次套完,所以「順序遞增」在這裡恆真——即使放進一支版本號
+     * 低於既有最高版的 migration 也一樣。那個危害只在**既有**資料庫上出現
+     * ({@code FlywayValidateException},ADR 0014 實測),repo 層的測試結構上看不到。
+     * 真正的守門是 §4.7 的編號政策本身:新號碼必須大於現有最大值。
+     */
     @Test
-    void allM1MigrationsApplyFromEmptyDatabase() {
-        List<String> versions = jdbc.queryForList(
+    void everyMigrationOnDiskIsApplied() {
+        List<String> applied = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank", String.class);
-        assertThat(versions).containsExactly("1", "2", "3", "4", "5", "6", "7", "20", "21", "24", "27");
+
+        assertThat(applied)
+                .as("flyway_schema_history 應涵蓋 db/migration 下的每一支 migration")
+                .containsExactlyInAnyOrderElementsOf(migrationVersionsOnDisk());
+
+        assertThat(applied.stream().map(Integer::valueOf).toList())
+                .as("版本號不得重複")
+                .doesNotHaveDuplicates();
+    }
+
+    /**
+     * 掃 <strong>classpath</strong> 上的 migration 檔名,取 {@code V<n>__} 的 n。
+     *
+     * <p>刻意讀 classpath 而非 {@code src/main/resources}:Flyway 讀的是 classpath,
+     * 而 {@code mvn test}(未 clean)不會刪掉 {@code target/classes} 裡已從原始碼移除的檔案。
+     * 讀原始碼目錄會讓兩邊看到不同的 migration 集合,測試就抓不到真正被套用的東西。
+     */
+    private static List<String> migrationVersionsOnDisk() {
+        Path dir = classpathMigrationDir();
+        Pattern version = Pattern.compile("^V(\\d+)__.*\\.sql$");
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.map(path -> version.matcher(path.getFileName().toString()))
+                    .filter(Matcher::matches)
+                    .map(matcher -> matcher.group(1))
+                    .sorted(Comparator.comparingInt(Integer::valueOf))
+                    .toList();
+        } catch (IOException e) {
+            throw new IllegalStateException("讀不到 migration 目錄:" + dir, e);
+        }
     }
 
     @Test
@@ -57,20 +105,52 @@ class MigrationIntegrationTest extends AbstractPostgresIntegrationTest {
                         "api_keys");
     }
 
-    /** 尚未進入的 phase 不得預先建表(規則 16:不留 placeholder)。 */
+    /**
+     * 每一張表都必須由某支 migration 建立——不得有「schema 裡有、migration 裡沒有」的表。
+     *
+     * <p>原本是「未來 phase 的表不得存在」的封閉清單,那會在 Phase 14/15/18/20/21 各紅一次,
+     * 而那些都是正常交付。真正該守的規則 16 語意是<strong>不得預先建立無人使用的表</strong>,
+     * 這由「表必須出現在某支 migration 的 SQL 裡」表達,且不會隨 phase 推進而失效(ADR 0017)。
+     */
     @Test
-    void tablesOfLaterPhasesDoNotExist() {
-        List<String> tables =
-                jdbc.queryForList("SELECT tablename FROM pg_tables WHERE schemaname = 'public'", String.class);
+    void everyTableIsCreatedByAMigration() {
+        List<String> tables = jdbc.queryForList(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+                        + " AND tablename <> 'flyway_schema_history'",
+                String.class);
+        String allMigrationSql = readAllMigrations();
         assertThat(tables)
-                .doesNotContain(
-                        "plans",
-                        "subscriptions",
-                        "threats",
-                        "bloom_versions",
-                        "webhooks",
-                        "notifications",
-                        "audit_logs");
+                .allSatisfy(table -> assertThat(allMigrationSql)
+                        .as("表 %s 不是由任何 migration 建立的", table)
+                        .contains(table));
+    }
+
+    private static String readAllMigrations() {
+        Path dir = classpathMigrationDir();
+        try (Stream<Path> files = Files.list(dir)) {
+            return files.filter(path -> path.getFileName().toString().endsWith(".sql"))
+                    .map(path -> {
+                        try {
+                            return Files.readString(path);
+                        } catch (IOException e) {
+                            throw new IllegalStateException("讀不到 " + path, e);
+                        }
+                    })
+                    .collect(Collectors.joining("\n"));
+        } catch (IOException e) {
+            throw new IllegalStateException("讀不到 migration 目錄:" + dir, e);
+        }
+    }
+
+    /** Flyway 讀的位置:{@code classpath:db/migration}(application.yml)。 */
+    private static Path classpathMigrationDir() {
+        try {
+            return Path.of(java.util.Objects.requireNonNull(
+                            MigrationIntegrationTest.class.getResource("/db/migration"), "classpath 上找不到 /db/migration")
+                    .toURI());
+        } catch (java.net.URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

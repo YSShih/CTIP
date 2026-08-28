@@ -19,9 +19,9 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='CursorPaginationIntegrationTest,IocSearchIntegrationTest,ErrorResponseTest,SecurityTest'
-./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest
+./backend/mvnw -f backend/pom.xml test -Dtest=ArchitectureTest
 ```
 `CursorPaginationIntegrationTest` 必須連續翻頁至最後一頁並驗證無重複、無遺漏。
 `SecurityTest` 必須包含安全測試 1、3、7、9。

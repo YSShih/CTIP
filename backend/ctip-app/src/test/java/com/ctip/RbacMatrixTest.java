@@ -70,10 +70,26 @@ class RbacMatrixTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void seedContainsExactlyTheTwentyOneSpecifiedPermissions() {
+    void seedContainsExactlyTheSpecifiedPermissions() {
         assertThat(rolePermissions.allPermissionCodes())
-                .containsExactlyInAnyOrderElementsOf(RbacMatrix.MATRIX.keySet())
-                .hasSize(21);
+                .containsExactlyInAnyOrderElementsOf(RbacMatrix.MATRIX.keySet());
+    }
+
+    /**
+     * 第三份來源:規格 §10.3 的矩陣表本身。
+     *
+     * <p>矩陣有三份人工同步的來源——規格表、`V24`/`V27` 種子、測試常數 {@link RbacMatrix}。
+     * 前兩份已由 {@link #everyCellOfThePermissionMatrix} 與上一條綁在一起,規格表卻只能靠人眼比對。
+     * 本測試直接解析 §10.3 的 Markdown 表,讓三份來源任一漂移都會轉紅(ADR 0017)。
+     *
+     * <p>順帶消滅寫死的權限總數:原本的 {@code hasSize(21)} 每加一個權限就要改一處,
+     * 而規格表才是那個數字的真正來源。
+     */
+    @Test
+    void theSpecificationMatrixMatchesTheSeededMatrix() {
+        assertThat(RbacMatrix.parseSpecificationTable())
+                .as("docs/spec/10-identity-plans.md §10.3 的矩陣表與種子/常數不一致")
+                .isEqualTo(RbacMatrix.MATRIX);
     }
 
     /** 矩陣的單調性:上層角色涵蓋下層角色的全部權限。 */

@@ -18,7 +18,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration -Dtest='DistributedRateLimitTest,QuotaEnforcementTest'
+./backend/mvnw -f backend/pom.xml test -Ptest-integration -Dtest='DistributedRateLimitTest,QuotaEnforcementTest'
 ```
 `DistributedRateLimitTest` 必須驗證：兩個實例共用同一配額桶（單實例耗盡後另一實例也被拒）。
 

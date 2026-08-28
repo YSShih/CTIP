@@ -21,7 +21,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='AuthFlowIntegrationTest,RefreshTokenRotationTest,RbacMatrixTest,ApiKeyTest,CrossTenantIsolationTest,SecurityTest'
 ```
 `RbacMatrixTest` 必須以參數化涵蓋 [10 §10.3](../10-identity-plans.md#角色與權限矩陣) 矩陣**每一格**。

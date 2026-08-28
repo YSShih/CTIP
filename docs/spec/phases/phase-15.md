@@ -19,7 +19,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='BloomGenerationTest,BloomBitLayoutTest,BloomDeltaTest,BloomCoverageTest'
 ```
 `BloomBitLayoutTest` 必須以固定的 fingerprint 輸入斷言**確切的 byte 陣列**（不只是「命中」）。

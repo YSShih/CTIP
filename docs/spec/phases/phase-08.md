@@ -19,7 +19,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='StixTlpMarkingsTest,StixPatternTest,StixSchemaValidationTest'
 ```
 `StixTlpMarkingsTest` 必須以字面字串斷言五個 UUID 與 extension-definition ID 完全相符。

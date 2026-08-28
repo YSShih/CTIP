@@ -20,7 +20,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-all \
+./backend/mvnw -f backend/pom.xml test -Ptest-all \
   -Dtest='MetricsCompletenessTest,SensitiveLogTest,TracePropagationTest'
 ./environment/scripts/up.sh dev
 curl -fsS http://localhost:8080/actuator/prometheus | grep -q 'ctip_ingestion_stage_duration'

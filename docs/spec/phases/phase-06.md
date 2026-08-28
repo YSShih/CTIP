@@ -22,7 +22,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='NormalizationTest,RejectionRuleTest,IngestionEndToEndTest,RateLimitTest'
 ```
 `RejectionRuleTest` 必須覆蓋八種 reason 各至少一案例。

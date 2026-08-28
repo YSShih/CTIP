@@ -20,7 +20,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='MigrationIntegrationTest,PublicTenantIntegrationTest,SampleDataIntegrationTest,RequiredIndexTest,TlpRedAbsenceTest'
 ./environment/scripts/up.sh mvp
 curl -fsS http://localhost:8080/actuator/health | jq -e '.status == "UP"'

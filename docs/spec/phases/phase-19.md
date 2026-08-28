@@ -18,7 +18,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-all \
+./backend/mvnw -f backend/pom.xml test -Ptest-all \
   -Dtest='ElasticsearchSearchTest,SearchFallbackTest,SearchReconciliationTest'
 ./environment/scripts/up.sh staging
 ./environment/scripts/dod.sh phase2        # ← 整個 DoD-Phase2，27 項

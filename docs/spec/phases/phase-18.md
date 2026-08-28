@@ -21,7 +21,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='ThreatIntegrationTest,StixSchemaValidationTest'
 cd frontend && npm run test -- ThreatFeedPage ThreatDetailPage
 ```

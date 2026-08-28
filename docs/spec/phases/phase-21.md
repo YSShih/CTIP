@@ -20,7 +20,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='AuditAppendOnlyTest,AuditFailureIsolationTest,RetentionTaskTest,AuditCompletenessTest'
 ```
 `AuditAppendOnlyTest` 必須驗證應用角色的 `UPDATE` 與 `DELETE` 被 **DB** 拒絕（不是被應用碼拒絕）。

@@ -91,7 +91,34 @@ check() { # check <id> <描述> <指令字串或函式名>
 # Maven 縮寫:單一測試類以 test-all profile 執行(不受預設 unit tag 過濾),
 # 並容忍其他 module 無符合的測試類
 MVN='./backend/mvnw -f backend/pom.xml'
-MVNT="${MVN} test -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest="
+
+# surefire 的 failIfNoSpecifiedTests=false(06 §6.3.6 第 4 條)是必要的——判準的 -Dtest=<類名>
+# 會對 reactor 每個 module 執行,沒有該測試類的 module 不得因此失敗。
+# 但它的副作用是:**測試類根本不存在時,surefire 跑 0 個測試,build 仍然成功**。
+# 於是尚未實作的 phase 的 DoD 項目會一路 [PASS]——閘門量不到它該量的東西。
+# 實測:Phase 14/15/16 一行程式都沒有時,dod.sh phase2 仍回報 27/27 全綠。
+# 因此先驗證每個測試類確實存在,再交給 Maven(ADR 0017)。
+mvn_test() { # mvn_test <逗號分隔的測試類名>
+  local classes="$1" missing="" name
+  local IFS=','
+  for name in $classes; do
+    name="${name%%#*}"          # 去掉 -Dtest=Class#method 的方法段
+    [ -n "$name" ] || continue
+    if ! find "${REPO_ROOT}/backend" -path '*/src/test/java/*' -name "${name}.java" \
+         -not -path '*/target/*' 2>/dev/null | grep -q .; then
+      missing="${missing} ${name}"
+    fi
+  done
+  unset IFS
+  if [ -n "$missing" ]; then
+    echo "找不到測試類:${missing}"
+    echo "(surefire 的 failIfNoSpecifiedTests=false 會讓不存在的測試類靜默通過,"
+    echo " 因此本檢查先確認檔案存在。若該 phase 尚未實作,這一項本來就應該是 FAIL。)"
+    return 1
+  fi
+  ${MVN} test -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest="${classes}"
+}
+MVNT="mvn_test "
 
 # ---------------------------------------------------------------------------
 # 複合檢查函式
@@ -313,7 +340,7 @@ PYEOF
 gate_mvp() {
   check M1-01 "四個 module 皆編譯,L1–L3 測試通過" "${MVN} verify -Ptest-integration"
   check M1-02 "覆蓋率門檻達標(JaCoCo check 綁在 verify)" "${MVN} verify -Ptest-integration"
-  check M1-03 "ArchUnit 9 條規則通過" "${MVNT}ArchitectureTest"
+  check M1-03 "ArchUnit 規則全數通過" "${MVNT}ArchitectureTest"
   check M1-04 "Spotless 格式一致" "${MVN} spotless:check"
   check M1-05 "Checkstyle 五條可讀性規則通過" "${MVN} checkstyle:check"
   check M1-06 "前端 type check 通過" "cd frontend && npx tsc --noEmit"

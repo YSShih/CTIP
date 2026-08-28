@@ -20,7 +20,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration -Dtest=SyncEndToEndTest
+./backend/mvnw -f backend/pom.xml test -Ptest-integration -Dtest=SyncEndToEndTest
 cd frontend && npm run test -- SyncPage
 ```
 `SyncEndToEndTest` 必須跑完整流程：manifest → delta → 套用 → 驗證 `resultingChecksum` → 更新版本，並包含一次 `409 SNAPSHOT_REQUIRED` 分支。

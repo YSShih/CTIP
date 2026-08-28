@@ -19,7 +19,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='IndicatorMergePolicyTest,ValidityPeriodTest,ThreatScorerTest,FingerprintTest'
 ```
 `ValidityPeriodTest` 必須包含兩個關鍵分支：來源**未明示** `validUntil`（走型別預設 TTL）、`FILE_HASH`（結果為 null）。

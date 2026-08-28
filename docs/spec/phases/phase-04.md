@@ -36,9 +36,9 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration
-./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest     # 9 條規則
-./mvnw -f backend/pom.xml test -Dtest=SecurityTest
+./backend/mvnw -f backend/pom.xml verify -Ptest-integration
+./backend/mvnw -f backend/pom.xml test -Dtest=ArchitectureTest     # 9 條規則
+./backend/mvnw -f backend/pom.xml test -Dtest=SecurityTest
 # domain 覆蓋率 >= 85%（JaCoCo check 已綁在 verify）
 ```
 

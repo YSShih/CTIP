@@ -24,7 +24,7 @@
 ## 完成判準
 ```bash
 cd frontend && npm run test -- IocSearchPage IocDetailPage DashboardPage
-./mvnw -f backend/pom.xml verify -Ptest-integration
+./backend/mvnw -f backend/pom.xml verify -Ptest-integration
 ./environment/scripts/dod.sh mvp        # ← 整個 DoD-MVP，38 項
 ```
 

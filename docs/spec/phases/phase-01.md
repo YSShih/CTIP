@@ -25,9 +25,9 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml -DskipTests package     # 四個 module 皆產生 artifact
-./mvnw -f backend/pom.xml spotless:check
-./mvnw -f backend/pom.xml checkstyle:check
+./backend/mvnw -f backend/pom.xml -DskipTests package     # 四個 module 皆產生 artifact
+./backend/mvnw -f backend/pom.xml spotless:check
+./backend/mvnw -f backend/pom.xml checkstyle:check
 cd frontend && npm ci && npx tsc --noEmit && npx eslint . --max-warnings 0
 test -f environment/.noop/.gitkeep
 git check-ignore environment/.env.local && ! git check-ignore environment/.env.mvp.example

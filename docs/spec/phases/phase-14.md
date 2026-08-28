@@ -26,7 +26,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='QuotaEnforcementTest,ManualSubmissionTest,FalsePositiveReportTest'
 ```
 `ManualSubmissionTest` 必須驗證：預設 `TLP:AMBER`、走完整 pipeline（含驗證與去重）、擁有租戶看得到自己的資料（再散布過濾不作用於自己）。

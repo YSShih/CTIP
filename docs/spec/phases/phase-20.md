@@ -23,7 +23,7 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-all \
+./backend/mvnw -f backend/pom.xml test -Ptest-all \
   -Dtest='KafkaEventTest,EventIdempotencyTest,KafkaUnavailableTest,WebhookDeliveryTest,WebhookFilterTest'
 cd frontend && npx playwright test websocket
 ```

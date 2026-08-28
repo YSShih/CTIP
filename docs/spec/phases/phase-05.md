@@ -18,9 +18,9 @@
 
 ## 完成判準
 ```bash
-./mvnw -f backend/pom.xml verify -Ptest-integration \
+./backend/mvnw -f backend/pom.xml test -Ptest-integration \
   -Dtest='MockAdapterDeterminismTest,ResilienceTest,SourceHealthTest'
-./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest
+./backend/mvnw -f backend/pom.xml test -Dtest=ArchitectureTest
 ```
 確定性測試必須：同一 `FetchContext` 連續呼叫兩次，結果 `equals`。
 

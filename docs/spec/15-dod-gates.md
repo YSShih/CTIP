@@ -25,8 +25,19 @@
 | **不得**因為某項失敗就中止後續檢查（要一次看到全部問題） |
 | 結尾必須印出「需人工確認」清單，並提示這些項目未被自動驗證 |
 
-> 判準中的 `./mvnw … -Dtest=<類名>` 在多 module reactor 下依賴 parent pom 的 surefire 設定
+> 判準中的 `./backend/mvnw … -Dtest=<類名>` 在多 module reactor 下依賴 parent pom 的 surefire 設定
 > `failIfNoSpecifiedTests=false`（[06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) 第 4 點）；缺少該設定時，沒有該測試類的 module 會使整個指令失敗。
+
+> **實作回饋修訂（2026-08-28；[ADR 0017](../architecture/decisions/0017-gate-credibility.md)）**——三項與判準指令有關的修正：
+>
+> 1. **`./mvnw` 不存在**：wrapper 在 `backend/mvnw`，repo 根沒有。23 份執行單原本都寫 `./mvnw -f backend/pom.xml`，
+>    逐字執行必然 `no such file`（Phase 1–13 是由人轉譯後執行才沒踩到）。全部改為 `./backend/mvnw -f backend/pom.xml`。
+> 2. **過濾式判準一律用 `test`，不用 `verify`**：`verify` 會綁上 JaCoCo `check`，而只跑幾個測試類
+>    不可能達到 `ctip-core` 的 PACKAGE 門檻（domain 0.85 / application 0.75）。`dod.sh` 一直用的就是 `test`
+>    ——兩處原本不一致。**每個 phase 收尾另跑一次無過濾的 `clean verify -Ptest-integration`**（此為既有慣例）。
+> 3. **`failIfNoSpecifiedTests=false` 的反面代價**：測試類**不存在**時 surefire 跑 0 個測試、build 仍成功，
+>    於是尚未實作的 phase 的 DoD 項目會一路 `[PASS]`。實測 Phase 14/15/16 一行程式都沒有時，
+>    `dod.sh phase2` 仍回報 27/27 全綠。`dod.sh` 現在會**先確認測試類檔案存在**再交給 Maven。
 
 ---
 
