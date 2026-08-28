@@ -990,7 +990,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-28)
 - **執行單**:`docs/spec/phases/phase-14.md`
-- **Commit**:(見 git log,message `Phase 14: plans, quotas and IOC write endpoints`)
+- **Commit**:`20932f2`(`Phase 14: plans, quotas and IOC write endpoints`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest='QuotaEnforcementTest,ManualSubmissionTest,FalsePositiveReportTest'`
     (逐字)✅ **24/24**(Quota 12 + ManualSubmission 8 + FalsePositive 4)
