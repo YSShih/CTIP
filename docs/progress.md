@@ -856,7 +856,7 @@ Phase 18(`V25`)都低於已套用的最高版本 → 三個 phase 各會炸一�
 ## 先行清理 — 後續 phase 會踩到的已知缺口
 
 - **狀態**:done(2026-08-28)。使用者指示:把「之後的 phase 會遇到的問題」先修掉。
-- **Commit**:(見 git log,message `Harden: clear known gaps that later phases would hit (ADR 0015)`)
+- **Commit**:`8f1cf30`(`Harden: clear known gaps that later phases would hit (ADR 0015)`)
 - **完成判準結果**:全綠 —
   - `clean verify -Ptest-integration` 無過濾 ✅ **537 tests**(原 532;Spotless / Checkstyle / JaCoCo 全過)
   - `dod.sh full M3-24` ✅
