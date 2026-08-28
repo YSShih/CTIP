@@ -902,7 +902,7 @@ Phase 18(`V25`)都低於已套用的最高版本 → 三個 phase 各會炸一�
 ## Phase 1–13 規格漏補(批 0)
 
 - **狀態**:done(2026-08-28)。使用者指示:盤點後續 phase 問題時,前面 phase 規格漏掉的也要補。
-- **Commit**:(見 git log,message `Backfill: close Phase 1-13 spec gaps (ADR 0016)`)
+- **Commit**:`3a53250`(`Backfill: close Phase 1-13 spec gaps (ADR 0016)`)
 - **背景**:三組 Explore 平行盤點 Phase 14–23 的阻斷項(約 90 項,見計畫檔),
   過程中發現**已完成的 Phase 1–13 也有缺口**——不是「以後會踩到」,是現在契約就已經不成立。
   本批只處理後者;Phase 14–23 的阻斷項(批 1–7)另行處理。
