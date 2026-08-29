@@ -1380,13 +1380,13 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-29)
 - **執行單**:`docs/spec/phases/phase-19.md`
-- **Commit**:(見 git log,message `Phase 19: elasticsearch search, fallback and reconciliation`)
+- **Commit**:`0991e6a`(`Phase 19: elasticsearch search, fallback and reconciliation`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-all -Dtest='ElasticsearchSearchTest,SearchFallbackTest,SearchReconciliationTest'`(逐字)✅ **14/14**
   - `./environment/scripts/up.sh staging` ✅ 八個服務全 healthy(含 `elasticsearch:9.5.1`)
-  - `./environment/scripts/dod.sh phase2` ✅ **27/27**
-    (第一次跑 26/27,唯一的紅是 M2-01 內的 M1-10 `npm run api:check`——它比對 **committed** 的
-    generated 型別,commit 前必然紅;commit 後複跑 `--only` 兩項皆綠,同 Phase 16/18)
+  - `./environment/scripts/dod.sh phase2` ✅ **27/27**(commit 後單次乾淨跑完,無 `--only` 補跑)
+    (commit 前的那一輪是 26/27,唯一的紅是 M2-01 內的 M1-10 `npm run api:check`——它比對
+    **committed** 的 generated 型別,commit 前必然紅,同 Phase 16/18)
   - `clean verify -Ptest-integration` 無過濾 ✅ **836 tests**
     (sdk 13 + core 369 + adapters 33 + app 421;Spotless / Checkstyle / JaCoCo 全過)
   - **staging 實機驗證**:索引在啟動後自動補建 1,037 筆 → 搜尋回 `X-Search-Backend: elasticsearch`;
