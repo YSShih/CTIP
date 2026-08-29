@@ -18,7 +18,10 @@ import com.ctip.infrastructure.security.JwtAccessTokenAdapter;
 import com.ctip.infrastructure.security.SecureRandomTokenGenerator;
 import com.ctip.infrastructure.security.TenantContext;
 import com.ctip.infrastructure.web.FilterErrorWriter;
+import com.ctip.infrastructure.web.RequestBodySizeLimitFilter;
+import com.ctip.infrastructure.web.RequestBodySizeLimits;
 import java.time.Duration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,6 +45,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final String IMPORT_PATH_PREFIX = "/api/v1/iocs/import";
 
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -92,6 +97,20 @@ public class SecurityConfig {
     @Bean
     FilterErrorWriter filterErrorWriter(ClockPort clock) {
         return new FilterErrorWriter(clock);
+    }
+
+    /**
+     * 請求本文的硬上限,排在<strong>整條 security chain 之前</strong>:
+     * 這道防線要在資料進到堆積之前生效,而不是在認證之後(見 {@link RequestBodySizeLimitFilter})。
+     * 目前只套用在唯一以原始 byte 陣列收檔的端點 {@code POST /api/v1/iocs/import}。
+     */
+    @Bean
+    FilterRegistrationBean<RequestBodySizeLimitFilter> requestBodySizeLimitFilter(FilterErrorWriter errorWriter) {
+        FilterRegistrationBean<RequestBodySizeLimitFilter> registration =
+                new FilterRegistrationBean<>(new RequestBodySizeLimitFilter(
+                        IMPORT_PATH_PREFIX, RequestBodySizeLimits.MAX_IMPORT_BYTES, errorWriter));
+        registration.setOrder(SecurityFilterProperties.DEFAULT_FILTER_ORDER - 2);
+        return registration;
     }
 
     @Bean

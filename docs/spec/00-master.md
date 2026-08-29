@@ -720,4 +720,30 @@ Kafka、事件 schema、站內通知、WebSocket／SSE 與 webhook 送達,逐項
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.26）。*
+## 0.27 實作回饋修訂（2026-08-29，Phase 1–20 總複查）
+
+跨 phase 的複查(邏輯、規格與實作一致性、資安、程式弱點),逐項見
+[ADR 0030](../architecture/decisions/0030-phase1-20-review-security-fixes.md)。
+五項全部已修復並附迴歸測試。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | ⚠️ **CORS `allowedMethods` 漏了 PUT 與 PATCH**:清單停在 `GET/POST/DELETE`,但 Phase 18 加了兩支 `PUT`(威脅關聯、威脅狀態)、Phase 20 加了 `PATCH /notifications/{id}/read`。前端是獨立來源的 SPA(nginx 不 proxy `/api`),這三支端點的 preflight 一律 403,**在瀏覽器端完全打不通**;`MockMvc` 不走 preflight,所以測試全綠 | 清單補為 `GET, POST, PUT, PATCH, DELETE`;`CorsPreflightTest` 改為對 `PATCH` 端點實際發 preflight。§5.7 加註「新增端點時同步這份清單是硬性步驟」 | [05 §5.7](05-environment.md#57-spring-設定對應本版新增) |
+| 2 | ⚠️ **Webhook 送達是未設防的 SSRF 入口**:W1 只要求 `https://`,而送達是「伺服器主動對租戶指定的 URL 發 POST」。任何持 `webhook:manage` 的租戶都能存進 `https://169.254.169.254/…`(雲端 metadata)或 `https://10.0.0.5:8080/admin`;本文雖被丟棄,`webhook_deliveries` 仍記下狀態碼與延遲 | 兩道防線:建立時對**字串**判定(`WebhookTarget`,domain 純運算)、每次送達前對**解析後位址**判定(`WebhookTargetGuard`,擋主機名指向內網與 DNS rebinding)。範圍共用同一組判定。`reconstitute` 刻意只驗 scheme——一列舊資料不得讓整個租戶的扇出停擺 | [02 §2.3](02-ddd-model.md#webhook)、[13 §13.2](13-platform-ops.md#132-通知-phase-20--m3) |
+| 3 | ⚠️ **登入鎖定期滿後 `failed_login_count` 不歸零 → 帳號可被永久鎖定**:計數一旦到 10 就永遠是 10,鎖定一過期,任何一次失敗都立刻再鎖 15 分鐘。攻擊者每 15 分鐘一個錯密碼即可讓受害帳號永久登不進來。U7 說的是「**連續**失敗 10 次」,原實作是「一生失敗 10 次」 | 記錄本次失敗之前先檢查上一段鎖定是否已過期,過期即歸零重新起算;§10.4 補明 | [10 §10.4](10-identity-plans.md#104-認證-phase-13--m2) |
+| 4 | **匯入端點的請求本文沒有容器層上限**:`@RequestBody byte[]` 先把整包讀進記憶體,64 MB 檢查在那之後才跑;Tomcat 對非表單本文沒有預設上限。持 `ioc:import` 的帳號送數 GB 本文即可耗盡堆積 | 新增排在 security chain 之前的 `RequestBodySizeLimitFilter`:有 `Content-Length` 的看標頭回 413,**chunked 的由包裝過的 input stream 在讀滿上限時中止**(只檢查標頭等於沒擋)。端點層檢查保留為兜底,兩處共用同一常數 | [09 §9.7](09-api.md#97-寫入端點細節-m2) |
+| 5 | **限流的端點分類可被路徑編碼繞過**:分類拿 `getRequestURI()` 原文比對,而 routing 拿的是解碼後、去路徑參數的段落。`/api/v1/iocs/%69mport` 照樣打到 import handler,上限卻從 `heavy` 的 5% 變成 `write` 的 20% | 比對前正規化(逐段去路徑參數、逐段百分比解碼、去尾斜線);解碼出來的 `/` 不得成為段落分隔符,壞掉的百分比序列不得拋例外(那條路徑未認證即可觸發) | [10 §10.7](10-identity-plans.md#107-限流-phase-1417--m2) |
+
+> **檢查過但未發現問題**(記下來,免得下一輪重查):JWT 簽發與驗證(無 alg confusion)、
+> API key 常數時間比對、refresh token 輪替與重用偵測、RBAC 矩陣與端點授權宣告
+> (24 個 authority 全有種子、無端點漏標 `@PreAuthorize`)、TLP 與再散布可見度的兩份實作、
+> SQL 全部參數化、`LIKE` 與 ES wildcard 跳脫、Bloom 位元序與 delta 編碼、cursor 精度、
+> Kafka 轉發的非阻塞與有界佇列、前端(無 `dangerouslySetInnerHTML`,token 只在記憶體)。
+>
+> **一個排除掉的疑似缺陷**:`UserTest` 的外層 `@Test` 在 surefire 報表顯示 `Tests run: 0`。
+> 實測(故意讓其中一個失敗)證明它們**有**執行,只是被歸到第一個 `@Nested` 類別的報表裡。
+> 那是報表歸屬問題,不是覆蓋率缺口。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.27）。*

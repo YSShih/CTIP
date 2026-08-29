@@ -128,6 +128,33 @@ X-CTIP-Timestamp: 1755763200
 
 簽章計算：`HMAC-SHA256(secret, timestamp + "." + body)`——含 timestamp 以防重放。接收端應拒絕 timestamp 偏差超過 5 分鐘的請求，此規則必須寫入 `docs/api/`。
 
+### 送達目標的限制（SSRF，2026-08-29 補；ADR 0030）
+
+送達是「**伺服器主動對租戶指定的 URL 發出 POST**」，那正是 SSRF 的定義。只驗 `https://`
+（不變量 W1 的原始寫法）遠遠不夠：任何持 `webhook:manage` 的租戶都能存進
+`https://169.254.169.254/latest/meta-data/`、`https://localhost:9200/_cluster/health` 或
+`https://10.0.0.5:8080/admin`，平台就會替它去打自己網路裡的東西。即使回應本文被丟棄，
+`webhook_deliveries` 仍會留下狀態碼與延遲——那是一台可用的內網掃描器。
+
+**兩道防線，缺一不可**（單獨任一道都擋不住另一種）：
+
+| # | 位置 | 判定對象 | 擋掉的是 |
+|---|---|---|---|
+| 1 | 建立時（domain，`WebhookTarget`） | URL **字串** | 字面內網 IP、`localhost` / `*.internal` 一類的名稱、URL 內嵌帳密、非 https |
+| 2 | 每次送達前（infrastructure，`WebhookTargetGuard`） | `InetAddress` **解析結果** | 主機名解析到內網、**DNS rebinding**（建立時是公網、之後才改指內網） |
+
+封鎖的位址範圍（兩道防線共用同一組判定，不得各寫一份）：
+`0/8`、`10/8`、`100.64/10`（CGNAT）、`127/8`、`169.254/16`（雲端 metadata）、`172.16/12`、
+`192.0.0/24`、`192.168/16`、`198.18/15`、`224/4` 起（multicast 與保留）；IPv6 `::`、`::1`、
+`fc00::/7`（ULA）、`fe80::/10`、`ff00::/8`，以及 `::ffff:a.b.c.d` 形式的 IPv4-mapped 位址。
+
+> `InetAddress` 自帶的述詞**不足以**表達這組範圍：`isSiteLocalAddress()` 對 IPv6 只認已廢止的
+> `fec0::/10`，不認實際在用的 ULA `fc00::/7`；IPv4 也不含 CGNAT 與 metadata 以外的保留段。
+>
+> **完整的目標檢查只在「建立」時做，`reconstitute` 只驗 scheme。** 規則收緊之後，
+> 一列舊資料若讓聚合重建失敗，整個租戶的送達扇出會一起停擺；既存的違規目標由防線 2 擋下——
+> 該處本來就必須擋（DNS 可以在建立之後才指回內網），因此放寬重建不會留下缺口。
+
 ---
 
 ## 13.3 安全

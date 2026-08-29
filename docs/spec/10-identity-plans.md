@@ -154,7 +154,7 @@ system:admin
 | 撤銷 | refresh token 撤銷清單；access token 短命，不做黑名單 |
 | 重用偵測 | 已使用的 refresh token 再次出現 → 撤銷該 `familyId` 全部 token，記錄 `TOKEN_REUSE_DETECTED` 稽核事件 |
 | 密碼雜湊 | BCrypt（cost 12）或 Argon2id |
-| 登入鎖定 | 連續失敗 10 次 → 鎖定 15 分鐘 |
+| 登入鎖定 | **連續**失敗 10 次 → 鎖定 15 分鐘；鎖定期滿後計數**歸零重新起算**（見下方修訂 4） |
 
 > **實作回饋修訂（2026-08-28，Phase 13 收尾稽核；ADR 0013 決策 3、4、5、8）**
 >
@@ -170,6 +170,10 @@ system:admin
 > 3. **登入失敗的訊息一律相同。** 鎖定原本回 `Account temporarily locked`、密碼錯回
 >    `Invalid credentials`，連送 10 次錯密碼即可列舉帳號——抵銷了先前才修掉的 BCrypt 時間側信道。
 >    鎖定事實只記伺服器端。
+> 4. **鎖定期滿後 `failed_login_count` 必須歸零（2026-08-29 補；ADR 0030）。** 不歸零的話，
+>    計數會永遠停在門檻值，鎖定一過期，**任何一次**失敗都立刻再鎖 15 分鐘——攻擊者每 15 分鐘
+>    送一個錯密碼就能讓受害帳號永久登不進來。U7 說的是「**連續**失敗 10 次」，不是「一生失敗 10 次」；
+>    歸零點在 `User.recordFailedLogin`（記錄本次失敗**之前**先檢查上一段鎖定是否已過期）。
 > 4. **密碼上限為 UTF-8 72 bytes**（BCrypt 的硬性上限；Spring Security 7 對超長輸入丟例外而非截斷）。
 >    字元數擋不住：25 個中文字就是 75 bytes。
 
@@ -374,6 +378,14 @@ v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必
 > `POST /iocs/lookup` 不改變狀態，本節的 `read` 也明文含「查詢」。照 HTTP 方法字面歸成 `write`
 > 會把前端唯一的搜尋路徑壓到總配額的 20%。`heavy` 取本節明列的三支
 > （`/sync/bloom`、`/stix/bundle`、`/iocs/import`），且優先於方法判定。
+
+> **路徑比對前必須正規化（2026-08-29 補；ADR 0030）**：限流 filter 排在 DispatcherServlet
+> **之前**，拿得到的只有 `getRequestURI()` 的原文；而 Spring 的 `PathPattern` 是拿
+> *解碼後、去除路徑參數*的段落去 routing 的。兩者不一致時，`/api/v1/iocs/%69mport` 與
+> `/api/v1/iocs/import;v=1` 會照樣打到 import handler，分類卻落到寬五倍的 `write`——
+> 最貴的三支端點就這樣脫離了 `heavy` 的 5%。正規化＝逐段去除 `;` 之後的路徑參數、
+> 逐段百分比解碼、去除尾斜線；**解碼出來的 `/` 不得成為段落分隔符**（與 `RequestPath` 一致，
+> 否則 `%2F` 就能拼出任意分類）。
 
 > **`endpointClass` 的配額值（2026-08-28 定調；ADR 0020）**：`plans` 表只有
 > `requests_per_minute` / `requests_per_day` **各一組**，04 與本節都沒有定義三類各自的數值。

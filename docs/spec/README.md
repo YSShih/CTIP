@@ -30,7 +30,7 @@
 
 | 檔案 | 行數 | 職責 |
 |---|---|---|
-| [00-master.md](00-master.md) | ~460 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.16 實作回饋修訂索引 |
+| [00-master.md](00-master.md) | ~760 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.27 實作回饋修訂索引 |
 | [01-architecture.md](01-architecture.md) | ~330 | 分層與依賴方向、4 個 Maven module、抽象判準、9 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
 | [02-ddd-model.md](02-ddd-model.md) | ~360 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、19 個 domain event、Shared Kernel、18 個值物件 |
 | [03-diagrams.md](03-diagrams.md) | ~740 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
@@ -77,7 +77,23 @@ v1.1 → v2.0 的實質改動：修正 **4 項建置阻斷缺陷**、**3 項版�
 
 完整變更清單見 [00-master.md §0.6](00-master.md#06-相對-v11-的變更摘要)。
 
-v2.0 定稿後，M1 實作期間（Phase 2–12）與 M1 總複查陸續發現的規格衝突與缺口以**實作回饋修訂**回寫：修正直接寫進主題檔對應章節，並在 [00-master.md](00-master.md) 的 **§0.7–§0.13** 建立索引、於 `docs/architecture/decisions/` 留下 ADR。照字面實作會踩的坑集中在 [05 §5.8.1](05-environment.md) 與 [06 §6.3.6](06-tech-stack.md)。
+v2.0 定稿後，實作期間（Phase 2–20）與各輪複查陸續發現的規格衝突與缺口以**實作回饋修訂**回寫：修正直接寫進主題檔對應章節，並在 [00-master.md](00-master.md) 的 **§0.7–§0.27** 建立索引、於 `docs/architecture/decisions/` 留下 ADR。照字面實作會踩的坑集中在 [05 §5.8.1](05-environment.md) 與 [06 §6.3.6](06-tech-stack.md)。
+
+### 安全性複查的結論（§0.27，2026-08-29）
+
+Phase 1–20 的跨階段複查修掉五項缺陷，其中三項是安全性問題。它們有一個共同形狀值得記下來：
+**每一項都是「規格寫對了，但清單沒有跟著新端點長」或「規格只寫了字面條件，沒寫它要防的東西」**。
+
+| 缺陷 | 為什麼測試沒抓到 |
+|---|---|
+| CORS 漏 `PUT`／`PATCH`（[05 §5.7](05-environment.md)） | `MockMvc` 直接呼叫 handler，不走 preflight；只有跨源 preflight 測試驗得到 |
+| Webhook 送達可打內網（SSRF，[13 §13.2](13-platform-ops.md)） | W1 只說「必須 https」，而 https 到 `169.254.169.254` 也是 https |
+| 鎖定期滿計數不歸零 → 帳號可被永久鎖定（[10 §10.4](10-identity-plans.md)） | 既有測試只驗「10 次會鎖」，沒有驗「鎖定過期之後會怎樣」 |
+| 匯入本文無容器層上限（[09 §9.7](09-api.md)） | 端點層確實回 413——但那是在整包已經進了記憶體之後 |
+| 限流分類可被 `%69mport` 繞過（[10 §10.7](10-identity-plans.md)） | 分類看的是原始 URI，routing 看的是解碼後的路徑，兩者從未被放在一起比對 |
+
+逐項的處置與被否決的替代方案見 [ADR 0030](../architecture/decisions/0030-phase1-20-review-security-fixes.md)；
+該 ADR 末尾也列出**檢查過但未發現問題**的區域，下一輪複查可以直接跳過。
 
 ---
 

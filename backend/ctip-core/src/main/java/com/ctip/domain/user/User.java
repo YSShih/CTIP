@@ -116,8 +116,18 @@ public final class User {
         return List.copyOf(family);
     }
 
-    /** 不變量 U7:連續失敗達門檻即鎖定。 */
+    /**
+     * 不變量 U7:<strong>連續</strong>失敗達門檻即鎖定。
+     *
+     * <p>鎖定期滿即開始新的一輪計數。不歸零的話,{@code failedLoginCount} 會永遠停在門檻值,
+     * 鎖定過期後<strong>任何一次</strong>失敗都立刻再鎖 15 分鐘——攻擊者每 15 分鐘送一個錯密碼
+     * 就能讓受害帳號永久無法登入,而規格說的是「連續失敗 10 次」,不是「一生失敗 10 次」。
+     */
     public void recordFailedLogin(Instant now, int maxAttempts, Duration lockDuration) {
+        if (lockedUntil != null && !isLocked(now)) {
+            failedLoginCount = 0;
+            lockedUntil = null;
+        }
         failedLoginCount++;
         if (failedLoginCount >= maxAttempts) {
             lockedUntil = now.plus(lockDuration);

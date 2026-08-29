@@ -1598,3 +1598,41 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     仍要自己加
 
 ---
+
+## 總複查 — Phase 1–20(邏輯 / 規格一致性 / 資安 / 弱點)
+
+- **狀態**:done(2026-08-29,使用者指派的跨 phase 複查)
+- **Commit**:(見 git log,message `Review: Phase 1-20 security and consistency fixes`)
+- **範圍**:backend 主碼 31.5k 行 / 833 個 Java 檔、frontend 138 檔、規格 16 檔、27 個 migration
+- **判準結果**:全綠 —
+  - `./backend/mvnw -f backend/pom.xml -Ptest-all verify` ✅(含 Spotless / Checkstyle / JaCoCo / ArchUnit)
+  - 新增迴歸測試 5 組:`WebhookTargetTest`(25)、`WebhookTargetGuardTest`(12)、
+    `RequestBodySizeLimitFilterTest`(4)、`EndpointClassifierTest` +4、`CorsPreflightTest` +4、
+    `UserTest.u7CounterRestartsAfterTheLockExpires`、`NotificationApiTest` SSRF 參數化 5 例
+- **修正的五項缺陷**(全數回寫規格 §0.27,逐項理由見 ADR 0030):
+  1. ⚠️ **CORS `allowedMethods` 漏 PUT / PATCH** → Phase 18 的兩支 `PUT` 與 Phase 20 的
+     `PATCH /notifications/{id}/read` 在瀏覽器端一律 preflight 403,**功能完全打不通**。
+     `MockMvc` 不走 preflight,所以測試全綠
+  2. ⚠️ **Webhook 送達是未設防的 SSRF 入口** → W1 只要求 https,租戶可指向
+     `169.254.169.254`(雲端 metadata)或任意內網位址。加兩道防線(建立時查字串、
+     送達前查解析後位址)
+  3. ⚠️ **登入鎖定期滿後計數不歸零 → 帳號可被永久鎖定**:每 15 分鐘一個錯密碼即可
+  4. **匯入端點的請求本文沒有容器層上限** → 數 GB 本文可耗盡堆積(Tomcat 對非表單本文無預設上限)
+  5. **限流的端點分類可被 `%69mport` / `;v=1` 繞過** → heavy 的 5% 變成 write 的 20%
+- **檢查過但未發現問題**(下一輪複查可跳過,清單在 ADR 0030 末尾):JWT(無 alg confusion)、
+  API key 常數時間比對、refresh token 輪替與重用偵測、RBAC 矩陣與端點授權宣告、
+  TLP/再散布的兩份可見度實作、SQL 參數化、`LIKE` 與 ES wildcard 跳脫、Bloom 位元序與 delta 編碼、
+  cursor 精度、Kafka 轉發、前端 XSS 與 token 保存
+- **給下一 session 的注意事項**:
+  - **新增端點時必須同步 `WebCorsConfig.allowedMethods`**——這是第 1 項缺陷的成因,
+    而它只有 preflight 整合測試驗得到
+  - `WebhookTarget`(domain)與 `WebhookTargetGuard`(送達端)是同一組判定的兩個位置,
+    **改其中一邊必須改另一邊**;範圍清單以 `WebhookTarget.isBlockedIpv4/6` 為準
+  - `Webhook.reconstitute` **刻意**只驗 scheme(不做完整目標檢查):一列舊資料不得讓
+    整個租戶的送達扇出停擺;這不是漏寫
+  - `RequestBodySizeLimits.MAX_IMPORT_BYTES` 是 filter 與 controller 共用的常數,不要各寫一份
+  - surefire 會把外層 `@Test` 歸到第一個 `@Nested` 類別的報表裡,
+    看到 `Tests run: 0` **不代表沒執行**(已實測確認)
+  - Phase 21 仍是下一步,本次複查未改動任何 phase 範圍
+
+---

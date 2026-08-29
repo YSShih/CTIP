@@ -15,7 +15,8 @@ import java.util.Set;
  * Webhook 聚合根,不變量 W1–W6(docs/spec/02-ddd-model.md §2.3、03 §3.2.9)。
  *
  * <ul>
- *   <li>W1 {@code targetUrl} 必須 {@code https://} —— 本類別 + {@code ck_wh_https}</li>
+ *   <li>W1 {@code targetUrl} 必須 {@code https://} 且指向平台外部 —— {@link WebhookTarget}
+ *       + {@code ck_wh_https};送達端另對<em>解析後</em>的位址再擋一次(DNS rebinding)</li>
  *   <li>W2 密鑰不以明文落庫 —— {@link HmacSecret} 由基礎設施以 AES-GCM 加解密(ADR 0021)</li>
  *   <li>W3 {@code consecutiveFailures} 達 5 → {@code DISABLED} + {@code WebhookDisabled}</li>
  *   <li>W4 送達重試最多 5 次 —— {@link #MAX_ATTEMPTS} 與退避表</li>
@@ -28,10 +29,10 @@ public final class Webhook {
     /** 不變量 W4:單一事件最多嘗試五次(首次 + 四次重試)。 */
     public static final int MAX_ATTEMPTS = 5;
 
+    private static final String REQUIRED_SCHEME = "https://";
+
     /** 不變量 W3:連續五個事件皆用盡重試 → 停用。 */
     public static final int FAILURE_THRESHOLD = 5;
-
-    private static final String REQUIRED_SCHEME = "https://";
 
     private final PendingEvents pendingEvents = new PendingEvents();
 
@@ -68,8 +69,16 @@ public final class Webhook {
         }
     }
 
-    /** 建立一個 {@code ACTIVE} 的 webhook;W6 的數量上限由呼叫端先行檢查。 */
+    /**
+     * 建立一個 {@code ACTIVE} 的 webhook;W6 的數量上限由呼叫端先行檢查。
+     *
+     * <p>完整的目標位址檢查({@link WebhookTarget#require})只在<strong>建立</strong>時做,
+     * {@link #reconstitute} 只驗 scheme:規則收緊之後,一列舊資料若讓聚合重建失敗,
+     * 整個租戶的送達扇出會一起停擺。既存的違規目標由送達端在解析位址後擋下——
+     * 該處本來就必須擋(DNS 可以在建立之後才指回內網),因此這裡放寬不會留下缺口。
+     */
     public static Webhook register(WebhookSnapshot snapshot) {
+        WebhookTarget.require(snapshot.targetUrl());
         if (snapshot.status() != WebhookStatus.ACTIVE) {
             throw new IllegalArgumentException("新建立的 webhook 必須為 ACTIVE");
         }
@@ -171,7 +180,7 @@ public final class Webhook {
     }
 
     private static String requireHttps(String url) {
-        if (url == null || !url.startsWith(REQUIRED_SCHEME)) {
+        if (url == null || !url.regionMatches(true, 0, REQUIRED_SCHEME, 0, REQUIRED_SCHEME.length())) {
             throw new IllegalArgumentException("targetUrl 必須為 https://(不變量 W1):" + url);
         }
         return url;

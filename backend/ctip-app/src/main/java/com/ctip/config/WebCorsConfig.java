@@ -9,7 +9,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * CORS(05 §5.7:CORS_ALLOWED_ORIGINS → ctip.cors.allowed-origins;逗號分隔多來源)。
  * 只開放 /api/**;憑證走 Authorization / X-API-Key 標頭而非 cookie,故不開 allowCredentials。
- * DELETE 自 Phase 13 起需要(撤銷 API key)。Spring Security filter chain 以
+ * DELETE 自 Phase 13 起需要(撤銷 API key);PUT 自 Phase 18(威脅關聯與狀態)、
+ * PATCH 自 Phase 20(標記通知已讀)起需要——這份清單漏一個方法,對應端點在瀏覽器端就完全打不通
+ * (preflight 直接 403),而伺服器端測試看不到這件事。Spring Security filter chain 以
  * {@code http.cors(...)} 沿用本設定(無 CorsConfigurationSource bean 時回退到 MVC 的對應)。
  * StartupValidator 已擋 prod 萬用字元來源。
  */
@@ -26,7 +28,7 @@ class WebCorsConfig implements WebMvcConfigurer {
     public void addCorsMappings(@NonNull CorsRegistry registry) {
         registry.addMapping("/api/**")
                 .allowedOrigins(parseOrigins(cors.allowedOrigins()))
-                .allowedMethods("GET", "POST", "DELETE")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE")
                 .allowedHeaders("*")
                 // X-Bloom-*:Browser Extension 這類瀏覽器 client 必須讀得到下載回應的版本與 checksum,
                 // 否則它只能相信 manifest 的版號,而那是「delta 可到達的最新版」而非這份 artifact 的版本

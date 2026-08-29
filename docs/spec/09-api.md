@@ -417,8 +417,20 @@ OpenAPI JSON: /v3/api-docs
 - `Content-Type: text/csv` 或 `application/json`（STIX 2.1 bundle）
 - 需要權限 `ioc:import`
 - 單檔筆數上限 `plans.max_import_rows_per_file`，超出回 `413 PAYLOAD_TOO_LARGE`
+- 請求本文的位元組上限 **64 MB**，超出回 `413 PAYLOAD_TOO_LARGE`（見下方修訂）
 - **非同步處理**：回 `202 Accepted` + `importJobId`，以 `GET /api/v1/iocs/import/{jobId}` 查詢進度
 - 回應含逐筆結果摘要（accepted / merged / rejected 及各 rejection reason 計數）
+
+> **本文上限必須在容器層生效（2026-08-29 補；ADR 0030）**：這是全平台唯一以原始 byte 陣列收檔的
+> 端點。`@RequestBody byte[]` 會先把**整包**讀進記憶體，端點層的 64 MB 檢查在那之後才跑；
+> 而 Tomcat 對**非表單**的請求本文沒有任何預設上限（`max-http-form-post-size` 只管
+> `application/x-www-form-urlencoded`）。因此一個持 `ioc:import` 的帳號送一份數 GB 的本文
+> 就能把 JVM 的堆積吃光——一次請求換一次 OOM。
+>
+> 上限改由一支排在 **security chain 之前**的 filter 強制，兩種情形都要擋：宣告了
+> `Content-Length` 的直接看標頭回 413；**沒有** `Content-Length` 的（chunked）由包裝過的
+> input stream 在讀滿上限的下一個位元組時中止。只檢查標頭等於沒擋——後者才是攻擊者會用的那一種。
+> 端點層的檢查保留為兜底（filter 未註冊時仍有上限），兩處共用同一個常數。
 
 ### `POST /api/v1/iocs/{id}/report-false-positive`
 

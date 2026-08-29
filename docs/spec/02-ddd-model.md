@@ -277,7 +277,7 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 
 | # | 不變量 |
 |---|---|
-| W1 | `targetUrl` 必須為 `https://` |
+| W1 | `targetUrl` 必須為 `https://`，且**必須指向平台外部** |
 | W2 | `secretHash` 為 HMAC 密鑰的 SHA-256；原文只在建立當下回傳一次 |
 
 > **W2 與 `Webhook.sign()` 在數學上互斥（2026-08-28 定調；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：

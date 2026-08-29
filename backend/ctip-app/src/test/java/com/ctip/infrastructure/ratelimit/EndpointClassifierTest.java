@@ -41,4 +41,30 @@ class EndpointClassifierTest {
     void trailingSlashDoesNotChangeTheClass() {
         assertThat(EndpointClassifier.classify("GET", "/api/v1/sync/bloom/")).isEqualTo(EndpointClass.HEAVY);
     }
+
+    /**
+     * 迴歸鎖:百分比編碼與路徑參數不得把 heavy 換成 write。
+     *
+     * <p>限流 filter 只看得到原始 request URI,而 routing 看的是解碼後、去除路徑參數的段落——
+     * 這兩支請求都會真的打到 import / bloom handler,分類卻曾落到寬五倍的 write。
+     */
+    @Test
+    void percentEncodedAndMatrixVariantsStayHeavy() {
+        assertThat(EndpointClassifier.classify("POST", "/api/v1/iocs/%69mport")).isEqualTo(EndpointClass.HEAVY);
+        assertThat(EndpointClassifier.classify("POST", "/api/v1/iocs/import;v=1"))
+                .isEqualTo(EndpointClass.HEAVY);
+        assertThat(EndpointClassifier.classify("GET", "/api/v1/sync/%62loom")).isEqualTo(EndpointClass.HEAVY);
+    }
+
+    /** 解碼出來的 {@code /} 不得被當成分隔符——否則 %2F 就能拼出任意分類。 */
+    @Test
+    void decodedSlashDoesNotCreateNewSegments() {
+        assertThat(EndpointClassifier.classify("POST", "/api/v1/iocs%2Fimport")).isEqualTo(EndpointClass.WRITE);
+    }
+
+    /** 壞掉的百分比序列不得讓分類拋例外(那會變成 500,而且是未認證即可觸發的路徑)。 */
+    @Test
+    void malformedEscapesAreClassifiedWithoutThrowing() {
+        assertThat(EndpointClassifier.classify("POST", "/api/v1/iocs/%zz")).isEqualTo(EndpointClass.WRITE);
+    }
 }

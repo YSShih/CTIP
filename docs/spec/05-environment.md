@@ -629,9 +629,18 @@ v1.1 定義了環境變數，卻從未說明它們如何對映到 Spring 屬性�
 
 > **實作回饋修訂（2026-08-26，Phase 12；ADR 0009）**:`ctip.cors.allowed-origins` 只是屬性承載,
 > **必須**另有 `WebCorsConfig`(`WebMvcConfigurer.addCorsMappings`)把它套用到 `/api/**`
-> (GET/POST、exposedHeaders 帶 `X-RateLimit-*` 與 `Retry-After`、M1 不開 allowCredentials)。
+> (exposedHeaders 帶 `X-RateLimit-*` 與 `Retry-After`、M1 不開 allowCredentials)。
 > Phase 3–11 只有屬性與 StartupValidator 守衛、無 MVC 接線,瀏覽器跨源呼叫全數被擋
 > (Phase 12 前端首次整合即發現)。
+>
+> **`allowedMethods` 必須涵蓋每一個實際存在的方法（2026-08-29 補；ADR 0030）**:
+> 清單原為 `GET/POST`(Phase 12)、`+DELETE`(Phase 13),但 Phase 18 加了
+> `PUT /threats/{id}/indicators/{indicatorId}` 與 `PUT /threats/{id}/status`、
+> Phase 20 加了 `PATCH /notifications/{id}/read`,清單沒有跟著長。
+> 前端是**獨立來源**的 SPA(nginx 只發靜態資產,不 proxy `/api`),漏一個方法,
+> 對應端點的 preflight 就直接 403,那些功能在瀏覽器端完全打不通——
+> 而伺服器端測試全綠,只有 preflight 整合測試驗得到。現行清單:
+> `GET, POST, PUT, PATCH, DELETE`。**新增端點時同步這份清單是硬性步驟。**
 
 **`application.yml`（共用）關鍵對應**
 

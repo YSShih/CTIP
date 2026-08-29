@@ -42,9 +42,25 @@ class CorsPreflightTest extends AbstractPostgresIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"GET", "POST", "DELETE"})
+    @ValueSource(strings = {"GET", "POST", "PUT", "PATCH", "DELETE"})
     void preflightIsAllowedForTheConfiguredOriginAndMethods(String method) throws Exception {
         mvc.perform(preflight("/api/v1/api-keys", method).header("Access-Control-Request-Headers", "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", ORIGIN));
+    }
+
+    /**
+     * 迴歸鎖:每一個實際存在的 HTTP 方法都必須在 CORS 清單裡。
+     *
+     * <p>{@code PATCH /notifications/{id}/read}(Phase 20)與 {@code PUT /threats/{id}/status}
+     * (Phase 18)曾因清單只有 GET/POST/DELETE 而在瀏覽器端完全打不通:preflight 403,
+     * 伺服器端測試卻全綠——只有這一層驗得到。
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"PATCH", "PUT"})
+    void preflightIsAllowedForTheMethodsUsedByWriteEndpoints(String method) throws Exception {
+        mvc.perform(preflight("/api/v1/notifications/" + java.util.UUID.randomUUID() + "/read", method)
+                        .header("Access-Control-Request-Headers", "authorization"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", ORIGIN));
     }

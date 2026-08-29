@@ -12,6 +12,7 @@ import com.ctip.application.ingestion.RecordOutcome;
 import com.ctip.application.ingestion.RejectionReason;
 import com.ctip.domain.indicator.IndicatorId;
 import com.ctip.infrastructure.security.TenantContext;
+import com.ctip.infrastructure.web.RequestBodySizeLimits;
 import com.ctip.interfaces.rest.dto.ioc.FalsePositiveRequest;
 import com.ctip.interfaces.rest.dto.ioc.ImportJobDto;
 import com.ctip.interfaces.rest.dto.ioc.IocDto;
@@ -46,8 +47,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/iocs")
 class IocWriteController implements IocWriteApi {
 
-    /** 匯入請求本文的位元組上限;ENTERPRISE 的 500,000 列 CSV 約 30 MB,留兩倍餘裕。 */
-    private static final int MAX_IMPORT_BYTES = 64 * 1024 * 1024;
+    /**
+     * 匯入請求本文的位元組上限。<strong>真正的防線是 {@code RequestBodySizeLimitFilter}</strong>
+     * ——它在 Spring 把整包讀成 byte 陣列<em>之前</em>就中止;這裡的檢查只是 filter 若未註冊時的兜底。
+     */
+    private static final int MAX_IMPORT_BYTES = RequestBodySizeLimits.MAX_IMPORT_BYTES;
 
     private static final MediaType TEXT_CSV = MediaType.valueOf("text/csv");
 

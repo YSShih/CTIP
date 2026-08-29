@@ -156,6 +156,27 @@ class UserTest {
         assertThat(user.lastLoginAt()).isEqualTo(NOW);
     }
 
+    /**
+     * 迴歸鎖:鎖定期滿後計數重新起算(U7 的「連續」)。
+     *
+     * <p>不歸零的話 {@code failedLoginCount} 會永遠停在 10,鎖定過期後的第一次失敗就再鎖 15 分鐘
+     * ——攻擊者每 15 分鐘一個錯密碼即可讓受害帳號永久登不進來。
+     */
+    @Test
+    void u7CounterRestartsAfterTheLockExpires() {
+        User user = user();
+        for (int attempt = 0; attempt < 10; attempt++) {
+            user.recordFailedLogin(NOW, 10, Duration.ofMinutes(15));
+        }
+        assertThat(user.isLocked(NOW)).isTrue();
+
+        Instant afterLock = NOW.plus(Duration.ofMinutes(16));
+        user.recordFailedLogin(afterLock, 10, Duration.ofMinutes(15));
+
+        assertThat(user.failedLoginCount()).isEqualTo(1);
+        assertThat(user.isLocked(afterLock)).isFalse();
+    }
+
     @Test
     void changePasswordReplacesTheHash() {
         User user = user();

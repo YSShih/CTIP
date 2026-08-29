@@ -28,6 +28,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
@@ -200,6 +202,28 @@ class NotificationApiTest extends AbstractPostgresIntegrationTest {
                         .content("""
                                 {"name":"insecure","targetUrl":"http://hooks.ctip-sample.invalid/x",\
                                 "eventTypes":["NEW_IOC"]}"""))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * SSRF:送達是伺服器主動對租戶指定的 URL 發 POST。只擋 {@code http://} 的話,
+     * 任何持 {@code webhook:manage} 的租戶都能把平台變成內網掃描器與雲端 metadata 的取用管道。
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "https://127.0.0.1:9200/_cluster/health",
+                "https://169.254.169.254/latest/meta-data/",
+                "https://10.0.0.5:8080/admin",
+                "https://localhost/hook",
+                "https://[::1]/hook"
+            })
+    void targetsInsideThePlatformNetworkAreRejectedWithFourHundred(String targetUrl) throws Exception {
+        AuthSession session = premium("hook-ssrf-" + Math.abs(targetUrl.hashCode()));
+        mvc.perform(authorized(post("/api/v1/webhooks"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"name\":\"ssrf\",\"targetUrl\":\"" + targetUrl + "\",\"eventTypes\":[\"NEW_IOC\"]}"))
                 .andExpect(status().isBadRequest());
     }
 
