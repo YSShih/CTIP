@@ -477,6 +477,14 @@ classDiagram
 
 **W5**：`matches()` 在伺服器端執行，不得把全部事件推給 client 再過濾。
 
+> **簽章的輸入型別(2026-08-29,Phase 20;[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 1 節)**:
+> 圖中的 `matches(DomainEvent)` / `accepts(DomainEvent)` 實際為 **`NotificationEvent`**
+> ——[02 §2.4](02-ddd-model.md#24-domain-event-清單) 的 domain event 身上沒有
+> `WebhookFilter` 需要的 `severity` / `tags` / `sourceIds`(它們是多來源合併之後才定的),
+> 而 [13 §13.1](13-platform-ops.md#131-事件與-kafka-phase-20--m3) 明文「不修改任何發佈端」。
+> `NotificationEvent` 是 domain event 的通知形狀投影,由 application 層在送出前從聚合補齊。
+> **W5 不變**:過濾仍完全在伺服器端。
+
 ---
 
 ## 3.3 ERD

@@ -2,7 +2,6 @@ package com.ctip.infrastructure.security;
 
 import com.ctip.application.identity.ApiKeyAuthenticator;
 import com.ctip.application.identity.AuthenticatedIdentity;
-import com.ctip.application.port.AccessTokenPort;
 import com.ctip.application.port.AccessTokenVerification;
 import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.application.rbac.RoleCode;
@@ -13,7 +12,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
-import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,14 +30,14 @@ public class CtipAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(CtipAuthenticationFilter.class);
     private static final String BEARER = "Bearer ";
 
-    private final AccessTokenPort accessTokens;
+    private final AccessTokenIdentityResolver accessTokens;
     private final ApiKeyAuthenticator apiKeys;
     private final RolePermissionRepository rolePermissions;
     private final TenantContext tenantContext;
     private final FilterErrorWriter errorWriter;
 
     public CtipAuthenticationFilter(
-            AccessTokenPort accessTokens,
+            AccessTokenIdentityResolver accessTokens,
             ApiKeyAuthenticator apiKeys,
             RolePermissionRepository rolePermissions,
             TenantContext tenantContext,
@@ -79,25 +77,16 @@ public class CtipAuthenticationFilter extends OncePerRequestFilter {
 
     private boolean authenticateWithJwt(String token, HttpServletRequest request, HttpServletResponse response)
             throws IOException {
-        AccessTokenVerification verification = accessTokens.verify(token);
-        if (verification.status() == AccessTokenVerification.Status.EXPIRED) {
+        AccessTokenIdentityResolver.Resolution resolution = accessTokens.resolve(token);
+        if (resolution.status() == AccessTokenVerification.Status.EXPIRED) {
             errorWriter.write(request, response, 401, "TOKEN_EXPIRED", "Access token expired");
             return false;
         }
-        if (verification.status() != AccessTokenVerification.Status.VALID) {
+        if (!resolution.isValid()) {
             errorWriter.write(request, response, 401, "UNAUTHENTICATED", "Invalid credentials");
             return false;
         }
-        Optional<RoleCode> role = roleFrom(verification);
-        if (role.isEmpty()) {
-            errorWriter.write(request, response, 401, "UNAUTHENTICATED", "Invalid credentials");
-            return false;
-        }
-        bindAuthenticated(AuthenticatedIdentity.ofUser(
-                verification.claims().userId(),
-                verification.claims().tenantId(),
-                role.get(),
-                verification.claims().permissions()));
+        bindAuthenticated(resolution.identity());
         return true;
     }
 
@@ -125,21 +114,6 @@ public class CtipAuthenticationFilter extends OncePerRequestFilter {
                         null,
                         CtipAuthorities.of(RoleCode.ANONYMOUS, rolePermissions.permissionsOf(RoleCode.ANONYMOUS)),
                         false));
-    }
-
-    /**
-     * roles claim 是單元素陣列(一使用者在一租戶內恰一個角色,表 14 的 PK 保證)。
-     * 缺漏或無法辨識的角色代表 token 不是本系統簽的形狀,一律當作無效憑證——
-     * 舊版退回 {@code RoleCode.USER},那是 fail-open,而且 {@code valueOf} 還會丟例外變成 500。
-     */
-    private static Optional<RoleCode> roleFrom(AccessTokenVerification verification) {
-        return verification.claims().roles().stream().findFirst().flatMap(CtipAuthenticationFilter::parseRole);
-    }
-
-    private static Optional<RoleCode> parseRole(String code) {
-        return Stream.of(RoleCode.values())
-                .filter(role -> role.name().equals(code))
-                .findFirst();
     }
 
     private static boolean isBearer(String authorization) {

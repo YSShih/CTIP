@@ -127,6 +127,21 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-elasticsearch</artifactId>
     </dependency>
+    <!--
+      Kafka(docs/spec/13-platform-ops.md §13.1、06 §6.2.2 的 [P20] 兩列)。
+      Boot 4 模組化:autoconfig 在 spring-boot-kafka,由 starter 帶入(06 §6.3.6 第 1 條的座標對照表);
+      缺它 spring.kafka.* 完全惰性。broker 只屬 full profile,mvp/dev 以
+      ctip.notification.transport=in-process 完全不接觸它。
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-kafka</artifactId>
+    </dependency>
+    <!-- 原生 WebSocket 通知(09 §9.1「即時推送」;06 §6.2.2 的 [P20] 第三列。不使用 STOMP/SockJS) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-websocket</artifactId>
+    </dependency>
     <!-- ES 降級的 circuit breaker(§13.7 明文要求 Resilience4j;版本見 parent properties) -->
     <dependency>
       <groupId>io.github.resilience4j</groupId>
@@ -197,6 +212,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-elasticsearch</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- L4(heavy)的 Kafka 測試容器(06 §6.2.2 的 [P20] 第二列) -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-kafka</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- org.testcontainers 2.x 沒有 redis module;BOM 納管的是這個第三方座標(06 §6.2.2、§6.3.6 第 2 條) -->

@@ -495,16 +495,16 @@ CONSTRAINT ux_permissions_code UNIQUE (code)
 CONSTRAINT ck_permissions_fmt  CHECK (code ~ '^[a-z]+:[a-z-]+$')
 ```
 
-完整權限清單（種子資料，共 22 項）：
+完整權限清單（種子資料，共 24 項）：
 
 ```text
 ioc:read      ioc:export     ioc:submit      ioc:import      ioc:report-fp   ioc:publish
-threat:read   stix:export
+threat:read   threat:manage  stix:export
 source:read   stats:read
 sync:bloom    sync:delta
 apikey:create apikey:revoke
 webhook:manage
-subscription:read
+subscription:read notification:read
 tenant:manage user:manage
 audit:read
 source:manage source:sync
@@ -523,6 +523,13 @@ system:admin
 > 新增 `subscription:read`（`GET /subscription`、`/subscription/usage` 的授權碼，
 > [ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md) 第 9 節定調，歸屬 `LOGGED_IN`），
 > 種子由 `V29__seed_plans_and_permissions.sql` 補入。合計 **22 項**。
+>
+> **實作回饋修訂（2026-08-29，Phase 20；[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md)）**：
+> 兩件事。一、補回 `threat:manage`——它由 Phase 18 新增並寫進 [10 §10.3](10-identity-plans.md)
+> （該節標題已是「23 項」）與 `V31__create_threats.sql` 的種子，**但本清單漏了**，
+> 兩份權限清單因此差一項。二、新增 `notification:read`（`GET /notifications`、
+> `PATCH /notifications/{id}/read` 的授權碼，[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)
+> 第 5 節定調，歸屬 `LOGGED_IN`），種子由 `V32__create_notifications.sql` 補入。合計 **24 項**。
 
 **`role_permissions`**（關聯）
 

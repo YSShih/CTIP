@@ -62,13 +62,17 @@ class ConfigSymmetryTest {
      * 即使 {@code SEARCH_BACKEND=postgres}、一個 ES bean 都沒建立(autoconfig 是 Boot 自己的,
      * 不受本專案的條件裝配影響)。這一條在 mvp 的 backend 上是 crash-loop,由 DoD M2-01 抓到。
      *
+     * <p>{@code KAFKA_BOOTSTRAP_SERVERS}(Phase 20)是同一個型態:Boot 的 Kafka autoconfig 對空
+     * {@code bootstrap-servers} 丟 {@code ConfigException},即使 {@code NOTIFICATION_TRANSPORT=in-process}
+     * 也一樣。此處預先納入,不必等到再壞一次 mvp 才發現。
+     *
      * <p>守衛放在這裡而不是 {@code StartupValidator}:autoconfig 在 context refresh 期間就失敗了,
      * 任何 bean 形式的檢查都來不及執行——那會是一條永遠不會觸發的規則(執行規則 16)。
      */
     @Test
     void variablesBoundToAutoConfigurationHaveNonEmptyComposeDefaults() throws IOException {
         String compose = Files.readString(repoRoot().resolve("environment/docker-compose.yml"));
-        for (String name : List.of("ELASTICSEARCH_URL")) {
+        for (String name : List.of("ELASTICSEARCH_URL", "KAFKA_BOOTSTRAP_SERVERS")) {
             Matcher matcher = Pattern.compile("\\$\\{" + name + "(:-([^}]*))?}").matcher(compose);
             assertThat(matcher.find()).as("compose 必須宣告 %s", name).isTrue();
             assertThat(matcher.group(2))

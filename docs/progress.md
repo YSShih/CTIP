@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
 | M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
-| M3 — Production | 20–23 | 未開始:下一步 Phase 20 |
+| M3 — Production | 20–23 | 進行中:Phase 20 完成,下一步 Phase 21 |
 
 ---
 
@@ -1498,5 +1498,103 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   `00 §0.25` 加第 16–19 項、ADR 0028 第 17 節
 - **驗證**:互斥鎖三種情境實測 ✅;`dod.sh full --only M3-24` ✅;
   `dod.sh mvp --only M1-01/M1-14`(鎖 + 結果行格式)✅;全部 `.sh` 過 `bash -n` ✅
+
+---
+## Phase 20 — Kafka + 通知(WebSocket / SSE / Webhook)`[M3]`
+
+- **狀態**:done(2026-08-29)
+- **執行單**:`docs/spec/phases/phase-20.md`
+- **Commit**:見 git log,message `Phase 20: kafka, notifications and webhooks`
+- **完成判準結果**:全綠 —
+  - `test -Ptest-all -Dtest='KafkaEventTest,EventIdempotencyTest,KafkaUnavailableTest,WebhookDeliveryTest,WebhookFilterTest'`
+    (逐字)✅ **23/23**
+  - `cd frontend && npx playwright test websocket` ✅ **3/3**(M3-05)
+  - `clean verify -Ptest-integration` 無過濾 ✅ **931 tests**
+    (sdk 13 + core 406 + adapters 33 + app 479;Spotless / Checkstyle / JaCoCo 全過)
+  - frontend `tsc` / `eslint --max-warnings 0` / `prettier --check` / `vitest`(155)/ `playwright`(6)✅
+  - `dod.sh full --only M3-24`(規格交叉引用)✅
+  - **staging 實機驗證**(`up.sh staging`,八個服務全 healthy):
+    六個 topic 全部建立且分割數為宣告的 3;註冊 → `TenantCreated`／`UserRegistered` 進
+    `ctip.audit.events.v1`(信封五欄齊全、識別碼為字串);提交 IOC → `IndicatorCreated` 進
+    `ctip.indicator.updated.v1`,通知投影進 `ctip.notification.events.v1`
+    (**severity=HIGH、tags、sourceIds 都是從聚合補齊的**,證明 ADR 0029 §1 的設計對真資料成立),
+    consumer 落庫後 `GET /notifications` 讀得到;`GET /events` 回 200 + `text/event-stream`
+    (匿名 403);`POST /webhooks` 回 201 且密鑰只此一次
+  - **反向驗證(判準不是假綠)**:
+    - 拿掉 `WebhookDeliveryService` 的 `events::publish` → `fiveConsecutiveAbandonedEventsDisableTheWebhookAndRaiseWebhookDisabled` 轉紅
+      (⚠️ 第一次做這個實驗時只跑了 `-pl ctip-app`,ctip-core 沒重建,結果假綠——
+       改動 core 的反向驗證**必須**一併重建 core)
+    - `KafkaEventTest` 斷言 topic 的**分割數**而非只斷言存在——正是這條抓到 `List<NewTopic>` 不被 `KafkaAdmin` 讀取
+- **交付物**:
+  - Flyway `V32`:`webhooks`／`webhook_deliveries`／`notifications` + `notification:read` 權限種子
+  - core `domain/notification/`:`Webhook`(W1–W6)、`WebhookFilter`、`HmacSecret`、`WebhookSignature`、
+    `WebhookRetryPolicy`、`NotificationEvent`、`EventContext`、`NotificationType`／`WebhookStatus`／`DeliveryStatus`;
+    `domain/event/WebhookEvents.WebhookDisabled`
+  - core `application/notification/`:`NotificationService`(唯一的 dispatch 入口)、
+    `NotificationTransactions`(AFTER_COMMIT 的交易邊界集中處)、`WebhookDeliveryService`、
+    `WebhookManagementService`、`NotificationEventFactory`、`NotificationContent`、
+    `DeliveryOutcome`／`NewWebhookCommand`／`NotificationRecord`／`WebhookDeliveryAttempt`／`WebhookRequest`
+  - core `application/port/`:`NotificationPort`、`WebhookRepository`、`WebhookDeliveryPort`、
+    `WebhookSenderPort`、`WebhookPayloadPort`、`RealtimePushPort`、`SecretCipherPort`;
+    `QuotaService` 加 `requireWebhookHeadroom`／`requireRealtimePush`
+  - app `infrastructure/kafka/`:`KafkaTopics`(六個 topic + 事件對應)、`EventJsonCodec`、
+    `ValueObjectJsonModule`、`KafkaEventForwarder`(有界佇列、非阻塞)、`NotificationEventConsumer`
+  - app `infrastructure/`:`notification/InProcessEventForwarder`、`scheduling/NotificationSchedulers`、
+    `security/AesGcmSecretCipher`、`security/AccessTokenIdentityResolver`(REST 與 WS 握手共用)、
+    persistence 三組 entity/repository/adapter + 兩個 native 述句類別
+  - app `interfaces/websocket/`:`NotificationWebSocketHandler`、`WebSocketAuthInterceptor`、
+    `WebSocketConfig`、`RealtimeSessionRegistry`(含 30s 心跳)、`SseSubscriber`、`RealtimeStreams`、
+    `NotificationStreamController`(SSE)
+  - app `interfaces/webhook/`:`HttpWebhookSender`、`WebhookHttpRequests`、`WebhookHeaders`、`WebhookPayloadCodec`
+  - app `interfaces/rest/`:`NotificationController`、`WebhookController` + DTO／mapper／OpenAPI 介面
+  - 設定:`ctip.notification.*`(`NOTIFICATION_TRANSPORT`／`WEBHOOK_SECRET_KEK`／`NOTIFICATION_RETRY_CRON`)、
+    `spring.kafka.*`、compose + §5.4 + 五份樣板;`StartupValidator` 的 prod KEK 守衛
+  - 前端:`features/notification/`(api／hooks／components,含不依賴 React 的重連狀態機)、
+    `pages/NotificationCenterPage`、`pages/WebhooksPage`、路由與導覽、`apiPatch`
+  - 文件:`docs/api/events/`(README 對照表 + 兩份 JSON Schema)、`docs/api/webhooks.md`(接收端契約)
+  - 測試:`KafkaEventTest`(L4,4)、`EventIdempotencyTest`(4)、`KafkaUnavailableTest`(4)、
+    `WebhookDeliveryTest`(5)、`WebhookFilterTest`(6)、`NotificationApiTest`(10)、`RealtimePushTest`(5)、
+    `NotificationPipelineTest`(8)、`NotificationEventFactoryTest`(10)、`WebhookAggregateTest`(13)、
+    `WebhookFilterSemanticsTest`(6)、`AesGcmSecretCipherTest`(6)、`EventJsonCodecTest`(5)、
+    `KafkaTopicsTest`(6)、`WebhookHttpRequestsTest`(2);前端 `notificationStream.test.ts`(10)、
+    兩個頁面測試、`e2e/websocket.spec.ts`(3)
+- **偏離事項 / ADR**:11 節見 `docs/architecture/decisions/0029-phase20-kafka-and-notifications.md`;
+  規格回寫 `00 §0.26`(13 §13.1/§13.2、02 §2.3/§2.4、03 §3.2.9、09 §9.1、
+  04 權限清單、10 §10.3、12 §12.5、05 §5.4/§5.5/§5.8.3/§5.10、06 §6.3.6、14 §14.1)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **`WebhookFilter` 要的 severity / tags / sourceIds 不在 domain event 上**——它們是多來源合併之後
+     才定的,而 §13.1 禁止修改發佈端。照 §3.2.9 的 `matches(DomainEvent)` 字面實作,
+     過濾條件永遠比對到空集合。解法是 `NotificationEvent` 投影(W5 不變)
+  2. **§13.1 規則 7 照字面實作仍會癱瘓業務路徑**:`KafkaTemplate.send()` 取不到 metadata 時
+     **同步阻塞 60 秒**。回 200 卻等一分鐘,與失敗沒有差別 → 轉發移出業務執行緒
+  3. **`KafkaAdmin` 看不見 `List<NewTopic>` 型別的 bean**——topic 只能靠 broker auto-create
+     (分割數變成預設值),關閉 auto-create 的正式環境則直接沒有 topic
+  4. ⚠️ **`up.sh` 從來不重建 image**(Phase 19 加了 `image:` tag 之後的副作用):
+     staging 跑的是上一次建置的 jar,而八個服務全 healthy、log 完全正常。
+     第一次實跑 staging 時六個 topic 一個都沒建立,最後是看 `/app/app.jar` 的時間戳才找到原因。
+     **這個缺陷從 Phase 19 起就影響每一次實機驗證**
+  5. **測試 context 的連線池會撞上 `max_connections`**:context 是快取的,每個都有自己的 10 條池。
+     新增五個 context 之後整批爆掉,而 `FATAL: remaining connection slots are reserved`
+     出現在**後面**才載入的 context 上,看起來完全像那個測試自己的問題
+  6. **02 §2.4 的「REQUIRED 會使寫入不落庫也不報錯」在本專案沒有重現**(實測)。
+     規則照留但敘述已修正。**反過來**確有一件事必須在交易內做:聚合發出的事件若在
+     `REQUIRES_NEW` 交易**外**發佈,會掛到已走完 afterCommit 的交易上而永不觸發
+  7. **SSE 的回應標頭要等到第一次寫入才 flush**,`curl -N` 會一直等到逾時 → 開連線後立刻送
+     一行 `:keepalive`
+  8. **`04` 的權限清單漏掉 `threat:manage`**(Phase 18 只同步了 §10.3 與種子),兩份清單差一項
+- **給下一 session 的注意事項(下一步 Phase 21 = Audit Log + 資料保留)**:
+  - **M3 的 gate 尚未執行**(`dod.sh full` 25 項);M3-01 要求 mvp 與 phase2 兩個 gate 仍全綠
+  - `ctip.audit.events.v1` 已經在收事件(`TenantCreated`／`UserRegistered`／`TokenReuseDetected`／
+    `ApiKeyCreated`／`ApiKeyRevoked`／`SubscriptionChanged`／`WebhookDisabled`),
+    Phase 21 的稽核消費端直接接上去即可;對照表在 `docs/api/events/README.md`
+  - **`V33` 是稽核表**(04 §4.7 已指派);RBAC 種子若要新增權限,依 V31/V32 的慣例寫在建表 migration 內
+  - `DELIVERY_CLEANUP_CRON` 與 `INDICATOR_CLEANUP_CRON` 兩個變數**已存在於 compose 與 application.yml
+    但仍然沒有任何任務會讀**(ADR 0021 第 6 節列的六項保留任務,Phase 21 交付)
+  - 新的整合測試請自己分配 client IP(本 phase 用 `10.70.0.11/.12`);
+    **新增 Spring context 時記得它會多佔 4 條資料庫連線**
+  - webhook 送達端在測試中一律以 `RecordingWebhookSender` 取代(`WebhookTestConfig`);
+    三個 webhook 測試共用同一個 `@Import`,拆開會多起兩個 context
+  - **實機驗證前先確認跑的是新 jar**:`up.sh` 現在帶 `--build`,但若手動下 `docker compose up`
+    仍要自己加
 
 ---

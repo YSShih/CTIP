@@ -4,7 +4,8 @@
 |---|---|
 | [`openapi.json`](openapi.json) | **對外契約的單一來源**。由建置產生(`OpenApiCompletenessTest`)並進版控;CI 比對 drift 與破壞性變更,**不得手改** |
 | [`sync-client-contract.md`](sync-client-contract.md) | Bloom 同步的 client 契約(六條強制規則、位元格式、`addedBits` 編碼、同步流程) |
-| `events/` | Domain event 的版本化 schema 與 topic 對照(Phase 23) |
+| [`events/`](events/README.md) | Domain event 的版本化 schema 與 domain event → topic 對照表(Phase 20;13 §13.1 明文要求) |
+| [`webhooks.md`](webhooks.md) | Webhook 接收端契約(五個送達標頭、簽章與 5 分鐘時鐘偏差、重試與停用;13 §13.2 明文要求寫入本目錄) |
 
 互動式文件:`/swagger-ui/index.html`(`mvp` / `dev` / `staging` 開啟;`prod` 預設關閉)。
 規格本體在 [`docs/spec/09-api.md`](../spec/09-api.md)。

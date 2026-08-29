@@ -243,7 +243,8 @@ BACKEND_BIND  BACKEND_DEBUG_BIND  FRONTEND_BIND  POSTGRES_BIND  REDIS_BIND
 ```text
 POSTGRES_DB  POSTGRES_USER  POSTGRES_PASSWORD  POSTGRES_HOST  POSTGRES_PORT
 REDIS_HOST  REDIS_PORT  REDIS_PASSWORD
-KAFKA_BOOTSTRAP_SERVERS
+KAFKA_BOOTSTRAP_SERVERS         # 預設 kafka:9092;**不得留空**,見 §5.5 的空字串預設值那一條
+NOTIFICATION_TRANSPORT          # in-process | kafka,預設 in-process（13 §13.1;kafka 僅 full profile）
 ELASTICSEARCH_URL  ELASTICSEARCH_USERNAME  ELASTICSEARCH_PASSWORD
 ES_JAVA_OPTS                   # 預設 -Xms1g -Xmx1g
 ES_SECURITY_ENABLED            # 預設 false（僅 dev/staging；prod 必須 true）
@@ -276,6 +277,8 @@ BACKEND_PORT  FRONTEND_PORT
 SERVER_PORT                    # 容器內的 backend 監聽埠;compose 由 BACKEND_PORT 供給
 
 JWT_SECRET                     # >= 32 bytes，prod 必須來自 secret manager
+WEBHOOK_SECRET_KEK             # [M3] webhook 簽章密鑰的 AES-GCM 金鑰(不變量 W2 定調,ADR 0021);
+                               #      >= 32 bytes,prod 必須來自 secret manager,啟動守衛比照 JWT_SECRET
 JWT_ACCESS_TOKEN_EXPIRATION    # 秒，預設 900
 JWT_REFRESH_TOKEN_EXPIRATION   # 秒，預設 2592000
 
@@ -299,6 +302,7 @@ SOURCE_SYNC_CRON               # 預設 0 */5 * * * *（08 §8.7）
 IOC_EXPIRY_CRON                # 預設 0 0 3 * * *
 INGESTION_RETRY_CRON           # 預設 0 */15 * * * *
 ES_RECONCILE_CRON              # 預設 0 0 5 * * *（08 §8.7；DB 與 ES 對帳，13 §13.7）
+NOTIFICATION_RETRY_CRON        # [M3] 預設 0 */5 * * * *（08 §8.7；webhook 送達重試）
 INGESTION_ENABLED
 INGESTION_BATCH_SIZE           # 預設 500
 NORMALIZATION_STRIP_WWW        # 預設 false（07 §7.2）
@@ -371,6 +375,8 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 | `RESTART_POLICY` | `no` | `no` | `unless-stopped` | `always` |
 | `SPRING_PROFILES_ACTIVE` | `mvp` | `dev` | `staging` | `prod` |
 | `RATE_LIMIT_BACKEND` | `memory` | `redis` | `redis` | `redis` |
+| `SEARCH_BACKEND` | `postgres` | `postgres` | `elasticsearch` | `elasticsearch` |
+| `NOTIFICATION_TRANSPORT` | `in-process` | `in-process` | `kafka` | `kafka` |
 | `SWAGGER_ENABLED` | `true` | `true` | `true` | `false` |
 | `SCHEDULER_ENABLED` | `true` | `true` | `true` | `true` |
 | `*_BIND`（其餘） | `127.0.0.1:*` | `127.0.0.1:*` | `0.0.0.0:*` | 由代理層決定 |
@@ -736,6 +742,13 @@ v2.0 初版仍有四項照字面實作必然失敗的缺陷，於 Phase 3 實測
 > 第 1 條的 Redis 前例互為對照：**該條講的是「autoconfig 不在 classpath 上，屬性靜默失效」，
 > 這裡是「autoconfig 在 classpath 上，空屬性直接讓應用死掉」**。
 
+### <a id="583-image-重建與-sse-標頭"></a>5.8.3 實作回饋修正（2026-08-29，Phase 20 實跑 `up.sh staging` 時發現；[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md)）
+
+| # | 缺陷 | 症狀 | 修正處 |
+|---|---|---|---|
+| 6 | **`up.sh` 沒有 `--build`**。§5.8.2 為兩個 build target 加上不同的 `image:` tag 之後，`docker compose up` 只在 image **不存在**時才建置——tag 一旦存在，之後每一次 `up` 都沿用它 | **程式改了也不會重建**：staging 跑的是上一次建置的 jar，而所有 healthcheck 都是綠的、log 也沒有任何異常。本 phase 就是這樣，第一次實跑 staging 時六個 topic 一個都沒建立（跑的是 Phase 19 的 jar），完全看不出原因 | 5.10 第 6 步：`compose up -d --build --remove-orphans`。原始碼沒變時 Docker 的 layer cache 讓這一步幾乎不花時間 |
+| 7 | **`SseEmitter` 的回應標頭要等到第一次寫入才 flush** | client（與中間的反向代理）在第一則通知抵達之前都不知道連線已經建立;`curl -N /api/v1/events` 會一直等到逾時，看起來像端點壞掉 | 建立連線後立刻送一行 `:keepalive` 註解（`RealtimeStreams.open`） |
+
 ---
 
 ## 5.9 Flyway
@@ -776,7 +789,14 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
    > `mvnw -o` 的 dev 容器必然啟動失敗(Phase 10 實測:Phase 5 的 resilience4j 起全數缺件)。
    > 改為離線 go-offline 探測,首次與相依變更後皆會自動重新預熱,其餘啟動只多一次快速離線檢查。
 6. **先收掉不屬於本 profile 的服務**，再執行
-   `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d --remove-orphans`
+   `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d --build --remove-orphans`
+
+   > **`--build` 為 2026-08-29(Phase 20)補上**([ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md)):
+   > §5.8.2 給兩個 build target 不同的 `image:` tag 之後,`docker compose up` **只在 image 不存在時才建置**
+   > ——tag 一旦存在,之後每一次 `up` 都沿用它,**程式改了也不會重建**。
+   > 症狀是 staging 跑的是上一次建置的 jar,而所有 healthcheck 都是綠的、log 也沒有異常。
+   > 本 phase 第一次實跑 staging 時六個 Kafka topic 一個都沒建立,原因正是這個。
+   > 原始碼沒變時 Docker 的 layer cache 讓這一步幾乎不花時間。
 
    > **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
    > 四個環境共用同一個 compose 專案名（`name: ${PROJECT_NAME:-ctip}`），服務差異只靠 profile，

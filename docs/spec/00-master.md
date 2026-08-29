@@ -686,4 +686,38 @@ Elasticsearch 搜尋、降級與 reconciliation,逐項見
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.25）。*
+## 0.26 實作回饋修訂（2026-08-29，Phase 20）
+
+Kafka、事件 schema、站內通知、WebSocket／SSE 與 webhook 送達,逐項見
+[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | ⚠️ **`WebhookFilter` 要的四個過濾維度不在 domain event 上**:§3.2.9 寫 `matches(DomainEvent)`,但 §2.4 的事件沒有 severity / tags / sourceIds(它們是合併之後才定的),而 §13.1 明文「不修改任何發佈端」——照字面實作,過濾條件永遠比對到空集合 | 新增值物件 `NotificationEvent`(domain event 的通知形狀投影),由 application 層在送出前從聚合補齊;`matches` / `accepts` 改收它。不變量 W5 完全保留 | [02 §2.3](02-ddd-model.md#webhook)、[03 §3.2.9](03-diagrams.md#329-webhook-聚合-m3) |
+| 2 | **七種通知型別容不下三個事件**:§2.4 給 `SourceRecovered`、`IngestionFailed`、`IndicatorMerged` 的消費者都含 Notification(M3),而 §13.2 的型別清單是封閉的七項 | 前兩者映射到 `SOURCE_FAILURE`(來源健康頻道,severity 各異)、後者到 `NEW_IOC`;不新增第八種型別。對照表寫入 `docs/api/events/README.md`,並由 `KafkaTopicsTest` 與 §2.4 三方綁定 | [13 §13.2](13-platform-ops.md#132-通知-phase-20--m3) |
+| 3 | **`@TransactionalEventListener(AFTER_COMMIT)` 是多餘的**:`SpringEventPublisherAdapter` 自 Phase 6 起就已在 `afterCommit` 回呼裡才發佈信封 | 轉發 listener 一律 `@EventListener`(同 Phase 18 的 `ThreatConsistencyListener`);§13.1 的演進圖加註 | [13 §13.1](13-platform-ops.md#131-事件與-kafka-phase-20--m3) |
+| 3b | **02 §2.4 的「REQUIRED 會使寫入不落庫也不報錯」在本專案沒有重現**(實測:改回 `REQUIRED`,`EventIdempotencyTest` 仍通過——連線歸還時會一併提交) | 規則照留(`REQUIRES_NEW` 讓寫入有明確的提交邊界),但敘述改為不宣稱那個症狀。**反過來確有一件事必須在交易內做**:聚合發出的 `WebhookDisabled` 若在交易外發佈,會掛到已走完 afterCommit 的交易上,永遠不觸發 | [02 §2.4](02-ddd-model.md#24-domain-event-清單) |
+| 4 | ⚠️ **§13.1 規則 7 照字面實作仍會癱瘓業務路徑**:`KafkaTemplate.send()` 取不到 metadata 時同步阻塞到 `max.block.ms`(預設 60 秒),broker 掛掉時每個事件都讓請求多等一分鐘——回 200 但等一分鐘與失敗沒有差別 | 轉發移出業務執行緒(單執行緒 + 有界佇列,滿了丟棄並記錄);producer 的 `max.block.ms` 收到 5 秒。規則 7 補上「不得阻塞業務執行緒」 | [13 §13.1](13-platform-ops.md#131-事件與-kafka-phase-20--m3) |
+| 5 | **`KafkaAdmin` 看不見 `List<NewTopic>` 型別的 bean**——topic 只能靠 broker auto-create 產生(分割數變成預設值),關閉 auto-create 的正式環境則直接沒有 topic | 改用 `KafkaAdmin.NewTopics`;`06 §6.3.6` 補第 12 條。`KafkaEventTest` 一併斷言**分割數**——只驗「topic 存在」會被 auto-create 蒙混過去,這個缺陷就是被那條斷言抓到的 | [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+| 6 | **SSE fallback 沒有方案閘門**:§9.1 只在 WebSocket 那一列寫 `websocket_enabled`,任何 client 改連 `/events` 就繞過方案限制 | 兩者共用同一個閘門(它們是同一個能力的兩種傳輸);§9.1 的表格同步 | [09 §9.1](09-api.md#91-端點清單) |
+| 6b | 握手的子協定只定義了 client 送什麼,沒說伺服器回什麼——原樣回送等於把 token 寫進反向代理與瀏覽器的 log | client 同時提供 `ctip.auth` 與 `ctip.auth.<jwt>`,伺服器選前者;§9.1 補列 | [09 §9.1](09-api.md#91-端點清單) |
+| 7 | **表 25 沒有 payload 欄位,而重試在數分鐘後才發生**——各自重新組裝會讓 body 漂移,而 body 是簽章的一部分,接收端第二次驗簽必失敗 | 送達 body 定義為 `notifications` 那一列的**純函數**(欄位順序寫死);§13.2 補列 | [13 §13.2](13-platform-ops.md#132-通知-phase-20--m3) |
+| 7b | **W3 與 W4 的計數對象未定義**:`consecutiveFailures` 若計「嘗試」,一個用盡五次嘗試的事件就會立刻觸發 W3,W3 便完全等同於 W4 | 定調計「事件」——連續五個事件用盡重試才停用;§2.3 的 W3 補註 | [02 §2.3](02-ddd-model.md#webhook) |
+| 8 | **`04` 的權限清單漏掉 `threat:manage`**:Phase 18 寫進了 §10.3 與 `V31` 種子,但沒有同步 `04`,兩份清單差一項 | 補回,並一併新增 `notification:read`(ADR 0021 第 5 節指派給本 phase);合計 24 項,矩陣 120 格 | [04 §4.3](04-data-dictionary.md)、[10 §10.3](10-identity-plans.md#103-使用者與-rbac-phase-13--m2) |
+| 9 | `12 §12.5` 的頁面表沒有 webhook 管理頁,而 `09` 有三個 `/webhooks` 端點與 `webhook:manage`(ADR 0022 的孤兒交付物) | 補 `/settings/webhooks`(需登入 + `webhook:manage`) | [12 §12.5](12-frontend.md#125-頁面) |
+| 10 | `13 §13.2` 要求 timestamp 偏差規則「必須寫入 `docs/api/`」,ADR 0022 把它排到 Phase 23——但本 phase 就已經有接收端需要它 | 提前交付 `docs/api/webhooks.md`(五個標頭、驗簽三步驟、重試與停用、過濾語意) | `docs/api/webhooks.md` |
+| 11 | **測試 context 的連線池會撞上 `max_connections`**:context 是快取的,每個都有自己的 10 條池;Phase 20 新增五個 context 之後整批爆掉。症狀 `FATAL: remaining connection slots are reserved` 出現在**後面**才載入的 context 上,看起來完全像那個測試自己的問題 | `AbstractPostgresIntegrationTest` 把池上限固定為 4;`DistributedRateLimitTest` 的第二個實例同步 | [14 §14.1](14-testing.md) |
+| 12 | `KAFKA_BOOTSTRAP_SERVERS` 的 compose 預設值是空字串——與 Phase 19 的 `ELASTICSEARCH_URL` 同一個型態(Boot 的 Kafka autoconfig 對空 bootstrap-servers 丟 `ConfigException`) | 預設值改為 `kafka:9092`,並把它納入 `ConfigSymmetryTest` 的「不得空字串預設值」清單——不必等它再壞一次 mvp | [05 §5.4](05-environment.md#54-環境變數清單) |
+| 13 | ⚠️ **`up.sh` 從來不重建 image**:Phase 19 給兩個 build target 不同的 `image:` tag 之後,`docker compose up` 只在 image **不存在**時才建置——tag 一旦存在,之後每次 `up` 都沿用它。staging 因此跑的是上一次建置的 jar,而八個服務全 healthy、log 沒有任何異常。本 phase 第一次實跑時六個 topic 一個都沒建立,查了環境變數與條件裝配才在 `/app/app.jar` 的時間戳上找到原因 | `up.sh` 第 6 步改為 `up -d --build --remove-orphans`;原始碼沒變時 layer cache 幾乎不花時間 | [05 §5.10](05-environment.md#510-腳本契約)、[05 §5.8.3](05-environment.md#583-image-重建與-sse-標頭) |
+| 14 | **`SseEmitter` 的回應標頭要等到第一次寫入才 flush**——client 與中間的反向代理在第一則通知抵達之前不知道連線已建立;`curl -N /api/v1/events` 會一直等到逾時,看起來像端點壞掉 | 建立連線後立刻送一行 `:keepalive` 註解 | [09 §9.1](09-api.md#91-端點清單)、[05 §5.8.3](05-environment.md#583-image-重建與-sse-標頭) |
+
+> **未實作並回報(規則 17)**:
+> ① §13.2 提到的 **FCM / APNs adapter** 不在本 phase 交付;擴充點是 `RealtimePushPort`。
+> ② 即時推送的連線登記簿在**記憶體**,前提與 08 §8.7 的排程相同(M1–M3 單一實例);
+> 多實例需要共用的 pub/sub。
+> ③ `ctip.notification.events.v1` 以外的五個 topic **目前沒有消費端**——它們是對外的事件串流契約
+> (schema 已定版),Phase 21 的稽核消費端會讀 `ctip.audit.events.v1`。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.26）。*

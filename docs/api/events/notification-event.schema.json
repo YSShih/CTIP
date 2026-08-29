@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctip.example.com/schemas/events/notification-event.v1.json",
+  "title": "CTIP notification event (v1)",
+  "description": "ctip.notification.events.v1 的訊息格式:domain event 的通知形狀投影。過濾所需的欄位 (severity、tags、sourceIds) 由發佈端從聚合補齊,因為 §2.4 的 domain event 身上沒有它們,而 §13.1 明文禁止修改發佈端。見 ADR 0029。",
+  "type": "object",
+  "required": ["eventId", "eventType", "occurredAt", "tenantId", "title", "severity", "iocTypes", "tags", "sourceIds"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "沿用來源 domain event 的 eventId;冪等鍵 (§13.1 規則 5)。"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "通知型別。清單為封閉的七項 (13 §13.2、04 §4.5)。",
+      "enum": [
+        "NEW_IOC",
+        "THREAT_UPDATED",
+        "IOC_REVOKED",
+        "SOURCE_FAILURE",
+        "SUBSCRIPTION_CHANGED",
+        "SYNC_SNAPSHOT_READY",
+        "SYSTEM_ALERT"
+      ]
+    },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "public tenant 代表平台範圍,對所有已認證租戶可見 (§7.9 的 IN (current, public))。"
+    },
+    "traceId": { "type": ["string", "null"] },
+    "title": { "type": "string", "maxLength": 255 },
+    "body": { "type": ["string", "null"] },
+    "severity": {
+      "type": "string",
+      "enum": ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"],
+      "description": "對應 WebhookFilter.minSeverity 的比較基準。"
+    },
+    "resourceType": {
+      "type": ["string", "null"],
+      "description": "例:indicator、threat、source、subscription、webhook、bloom、user。"
+    },
+    "resourceId": { "type": ["string", "null"], "format": "uuid" },
+    "userId": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "null = 全租戶廣播;非 null = 只有該使用者看得到 (例:token 重用)。"
+    },
+    "iocTypes": {
+      "type": "array",
+      "description": "過濾用。空陣列代表此事件與 IOC 型別無關,指定了 filterIocTypes 的 webhook 不會收到它。",
+      "items": { "type": "string", "enum": ["IPV4", "IPV6", "DOMAIN", "URL", "FILE_HASH", "EMAIL"] }
+    },
+    "tags": {
+      "type": "array",
+      "description": "過濾用;來自 Indicator/Threat 聚合合併後的標籤聯集。",
+      "items": { "type": "string" }
+    },
+    "sourceIds": {
+      "type": "array",
+      "description": "過濾用;來自聚合的來源記錄。",
+      "items": { "type": "string", "format": "uuid" }
+    }
+  }
+}

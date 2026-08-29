@@ -78,8 +78,21 @@ public abstract class AbstractPostgresIntegrationTest {
         }
     }
 
+    /**
+     * 每個 Spring context 的連線池上限。
+     *
+     * <p>Spring 的 test context 是<strong>快取的</strong>——整批測試跑完之前,每一個不同組態的
+     * context 都還活著,而每個都有自己的 HikariCP 池。預設的 10 條 × 二十幾個 context
+     * 會撞上 PostgreSQL 的 {@code max_connections}(預設 100),症狀是
+     * {@code FATAL: remaining connection slots are reserved} ——它出現在<strong>後面</strong>
+     * 才載入的那個 context 上,看起來完全像是那個測試自己的問題(Phase 20 實測)。
+     * 整合測試是單執行緒的,4 條綽綽有餘。
+     */
+    private static final int TEST_POOL_SIZE = 4;
+
     @DynamicPropertySource
     static void ctipEnvironment(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> TEST_POOL_SIZE);
         registry.add("POSTGRES_HOST", POSTGRES::getHost);
         registry.add("POSTGRES_PORT", POSTGRES::getFirstMappedPort);
         registry.add("POSTGRES_DB", POSTGRES::getDatabaseName);
@@ -89,6 +102,8 @@ public abstract class AbstractPostgresIntegrationTest {
         registry.add("POSTGRES_APP_PASSWORD", () -> APP_PASSWORD);
         registry.add("ENVIRONMENT", () -> "mvp");
         registry.add("JWT_SECRET", () -> TEST_JWT_SECRET);
+        // webhook 簽章密鑰的 KEK(不變量 W2 定調,ADR 0021);測試用固定值,與 prod 無關
+        registry.add("WEBHOOK_SECRET_KEK", () -> "integration-test-only-webhook-kek-0123456789");
         registry.add("CORS_ALLOWED_ORIGINS", () -> "http://localhost:5173");
         // 排程在測試中一律關閉,避免 @Scheduled 任務與測試資料互相干擾(docs/spec/08 §8.7 總開關)
         registry.add("SCHEDULER_ENABLED", () -> "false");

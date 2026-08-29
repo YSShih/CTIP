@@ -128,6 +128,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subscribe to the notification stream (SSE)
+         * @description text/event-stream fallback for clients that cannot use the WebSocket endpoint at GET /api/v1/ws. Messages have the same shape on both transports; a `: keepalive` comment line is sent every 30 seconds. The connection is bound to the caller's tenant at subscription time and cannot be redirected to another tenant. The WebSocket endpoint carries its token in `Sec-WebSocket-Protocol: ctip.auth.<jwt>` because the browser API cannot set headers; this endpoint uses the ordinary header. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read,且方案必須開啟 websocket_enabled。
+         */
+        get: operations["subscribe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -310,6 +330,46 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List notifications
+         * @description Cursor-paginated notifications visible to the caller: the caller's own tenant plus platform-wide notifications, and within those either broadcasts or notifications addressed to the caller. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read。
+         */
+        get: operations["listNotifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Mark a notification as read
+         * @description Marks one notification as read. A notification outside the caller's visible scope is reported as 404 rather than 403 so that existence is not disclosed. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read。
+         */
+        patch: operations["markRead"];
         trace?: never;
     };
     "/api/v1/sources": {
@@ -700,6 +760,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List webhooks
+         * @description All webhooks owned by the caller's tenant. The signing secret is never returned here; it is disclosed once, at creation (invariant W2). 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。
+         */
+        get: operations["listWebhooks"];
+        put?: never;
+        /**
+         * Register a webhook
+         * @description Creates a webhook and returns the HMAC signing secret exactly once (invariant W2). targetUrl must be https (W1). Deliveries are signed as HMAC-SHA256(secret, timestamp + \".\" + body) and carry the five X-CTIP-* headers. The number of webhooks per tenant is capped by plans.max_webhooks (W6). 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。
+         */
+        post: operations["createWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a webhook
+         * @description Removes a webhook owned by the caller's tenant, together with its delivery history. A webhook belonging to another tenant is reported as 404, not 403. 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。
+         */
+        delete: operations["deleteWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -997,6 +1101,10 @@ export interface components {
             /** @example ctip_mvp_aB3xY9kQ7fLm2pR8sT4uV6wX0yZ1cD5e */
             key?: string;
         };
+        IssuedWebhookDto: {
+            secret?: string;
+            webhook?: components["schemas"]["WebhookDto"];
+        };
         LoginRequest: {
             /** @example analyst@example.org */
             email: string;
@@ -1009,9 +1117,28 @@ export interface components {
         LookupResponse: {
             results?: components["schemas"]["Result"][];
         };
+        NotificationDto: {
+            body?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            eventType?: string;
+            /** Format: uuid */
+            id?: string;
+            read?: boolean;
+            /** Format: uuid */
+            resourceId?: string;
+            resourceType?: string;
+            severity?: string;
+            title?: string;
+        };
         PageResponse: {
             hasMore?: boolean;
             items?: unknown[];
+            nextCursor?: string;
+        };
+        PageResponseNotificationDto: {
+            hasMore?: boolean;
+            items?: components["schemas"]["NotificationDto"][];
             nextCursor?: string;
         };
         PlanQuotasDto: {
@@ -1186,6 +1313,10 @@ export interface components {
             /** Format: date-time */
             lastSyncAt?: string;
             status?: string;
+        };
+        SseEmitter: {
+            /** Format: int64 */
+            timeout?: number;
         };
         StatsSummaryDto: {
             byType?: {
@@ -1376,6 +1507,38 @@ export interface components {
         VersionDto: {
             apiVersion?: string;
             version?: string;
+        };
+        WebhookCreateRequest: {
+            eventTypes: string[];
+            filterIocTypes?: string[];
+            filterMinSeverity?: string;
+            filterSourceIds?: string[];
+            filterTags?: string[];
+            name: string;
+            targetUrl: string;
+        };
+        WebhookDto: {
+            /** Format: int32 */
+            consecutiveFailures?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            eventTypes?: string[];
+            filter?: components["schemas"]["WebhookFilterDto"];
+            /** Format: uuid */
+            id?: string;
+            /** Format: date-time */
+            lastDeliveryAt?: string;
+            /** Format: date-time */
+            lastSuccessAt?: string;
+            name?: string;
+            status?: string;
+            targetUrl?: string;
+        };
+        WebhookFilterDto: {
+            iocTypes?: string[];
+            minSeverity?: string;
+            sourceIds?: string[];
+            tags?: string[];
         };
     };
     responses: never;
@@ -1823,6 +1986,59 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    subscribe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An open event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example event: notification
+                     *     data: {"type":"NEW_IOC","eventId":"6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33","payload":{"id":"…","title":"新增 IOC:198.51.100.7","severity":"MEDIUM"}}
+                     *
+                     *     : keepalive
+                     */
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Missing notification:read, or the plan has no realtime push */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SseEmitter"];
                 };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
@@ -2645,6 +2861,132 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listNotifications: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                unreadOnly?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of notifications, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "hasMore": false,
+                     *       "items": [
+                     *         {
+                     *           "body": "型別 IPV4,TLP CLEAR",
+                     *           "createdAt": "2026-08-29T09:15:04Z",
+                     *           "eventType": "NEW_IOC",
+                     *           "id": "6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33",
+                     *           "read": false,
+                     *           "resourceId": "3f4a1c0e-2b7d-4f10-9c11-8a2e5d6b7c90",
+                     *           "resourceType": "indicator",
+                     *           "severity": "MEDIUM",
+                     *           "title": "新增 IOC:198.51.100.7"
+                     *         }
+                     *       ],
+                     *       "nextCursor": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PageResponse"];
+                };
+            };
+            /** @description Cursor cannot be parsed (INVALID_CURSOR) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseNotificationDto"];
+                };
+            };
+            /** @description Missing notification:read permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseNotificationDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    markRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked as read */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description No such notification in the caller's scope, or it was already read (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
             429: {
@@ -4097,6 +4439,213 @@ export interface operations {
                      */
                     "application/json": components["schemas"]["VersionDto"];
                 };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listWebhooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tenant's webhooks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "consecutiveFailures": 0,
+                     *         "createdAt": "2026-08-29T09:00:00Z",
+                     *         "eventTypes": [
+                     *           "NEW_IOC",
+                     *           "IOC_REVOKED"
+                     *         ],
+                     *         "filter": {
+                     *           "iocTypes": [
+                     *             "IPV4"
+                     *           ],
+                     *           "minSeverity": "HIGH",
+                     *           "sourceIds": [],
+                     *           "tags": []
+                     *         },
+                     *         "id": "9d2b7d3e-1a44-4f0b-9a2f-0c1d2e3f4a5b",
+                     *         "lastDeliveryAt": null,
+                     *         "lastSuccessAt": null,
+                     *         "name": "SOC pipeline",
+                     *         "status": "ACTIVE",
+                     *         "targetUrl": "https://soc.example.com/hooks/ctip"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["WebhookDto"][];
+                };
+            };
+            /** @description Missing webhook:manage permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["WebhookDto"][];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created; secret returned once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "secret": "3Qp7…只此一次…",
+                     *       "webhook": {
+                     *         "consecutiveFailures": 0,
+                     *         "createdAt": "2026-08-29T09:00:00Z",
+                     *         "eventTypes": [
+                     *           "NEW_IOC",
+                     *           "IOC_REVOKED"
+                     *         ],
+                     *         "filter": {
+                     *           "iocTypes": [
+                     *             "IPV4"
+                     *           ],
+                     *           "minSeverity": "HIGH",
+                     *           "sourceIds": [],
+                     *           "tags": []
+                     *         },
+                     *         "id": "9d2b7d3e-1a44-4f0b-9a2f-0c1d2e3f4a5b",
+                     *         "lastDeliveryAt": null,
+                     *         "lastSuccessAt": null,
+                     *         "name": "SOC pipeline",
+                     *         "status": "ACTIVE",
+                     *         "targetUrl": "https://soc.example.com/hooks/ctip"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IssuedWebhookDto"];
+                };
+            };
+            /** @description Invalid target URL or event type (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IssuedWebhookDto"];
+                };
+            };
+            /** @description Plan webhook quota exhausted (PLAN_LIMIT_EXCEEDED) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IssuedWebhookDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description No such webhook in the caller's tenant (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
             429: {

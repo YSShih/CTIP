@@ -63,7 +63,7 @@ status: ACTIVE
 ANONYMOUS | USER | PREMIUM_USER | TENANT_ADMIN | SYSTEM_ADMIN
 ```
 
-### 權限（23 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
+### 權限（24 項，完整清單見 [04-data-dictionary.md](04-data-dictionary.md)）
 
 ```text
 ioc:read       ioc:export      ioc:submit    ioc:import    ioc:report-fp   ioc:publish
@@ -71,7 +71,7 @@ threat:read    threat:manage   stix:export
 source:read    stats:read
 sync:bloom     sync:delta
 apikey:create  apikey:revoke
-webhook:manage subscription:read
+webhook:manage subscription:read notification:read
 tenant:manage  user:manage
 audit:read
 source:manage  source:sync
@@ -100,6 +100,7 @@ system:admin
 | `apikey:create` / `apikey:revoke` | — | ✓ | ✓ | ✓ | ✓ |
 | `webhook:manage` | — | — | ✓ | ✓ | ✓ |
 | `subscription:read` | — | ✓ | ✓ | ✓ | ✓ |
+| `notification:read` | — | ✓ | ✓ | ✓ | ✓ |
 | `threat:manage` | — | — | — | ✓ | ✓ |
 | `user:manage` | — | — | — | ✓ | ✓ |
 | `tenant:manage` | — | — | — | ✓ | ✓ |
@@ -115,9 +116,11 @@ system:admin
 > （§9.7 既有規則，`SYSTEM_ADMIN` 才有）。三處同步:本節的清單與矩陣、`V31__create_threats.sql`
 > 的冪等種子、`RbacMatrix` 測試常數。矩陣格數 105 → **110**。
 >
-> **Phase 20 必須新增 `notification:read`（2026-08-28；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)）**：
-> `GET /notifications` 與 `PATCH /notifications/{id}/read` 原本也沒有權限碼。
-> 同樣三處同步（本節清單與矩陣、seed migration、`RbacMatrix` 常數）。建議歸屬 `LOGGED_IN`。
+> **`notification:read` 已於 Phase 20 加入（2026-08-29；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md) 第 5 節、[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md)）**：
+> `GET /notifications` 與 `PATCH /notifications/{id}/read` 原本沒有權限碼。三處已同步:
+> 本節的清單與矩陣、`V32__create_notifications.sql` 的冪等種子、`RbacMatrix` 測試常數。
+> 歸屬 `LOGGED_IN`(通知一律屬於某個租戶,匿名沒有可讀的通知)。矩陣格數 110 → **120**。
+> WebSocket／SSE 的即時推送另需方案的 `websocket_enabled`(§10.6),那是配額而非權限。
 >
 > **`subscription:read` 已於 Phase 14 加入（2026-08-28；[ADR 0023](../architecture/decisions/0023-phase14-plans-and-write-endpoints.md)）**：
 > [09 §9.1](09-api.md#91-端點清單) 的 `GET /subscription` 與 `/subscription/usage` 原本沒有權限欄，

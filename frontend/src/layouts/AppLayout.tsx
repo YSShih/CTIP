@@ -1,4 +1,5 @@
 import {
+  Bell,
   CreditCard,
   KeyRound,
   LogIn,
@@ -9,6 +10,7 @@ import {
   Radar,
   Sun,
   Upload,
+  Webhook,
 } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { Toaster } from '../components/Toaster/Toaster';
@@ -80,6 +82,8 @@ export function AppLayout() {
   const canSubmitIocs = useHasPermission('ioc:submit');
   const canImportIocs = useHasPermission('ioc:import');
   const canReadSubscription = useHasPermission('subscription:read');
+  const canReadNotifications = useHasPermission('notification:read');
+  const canManageWebhooks = useHasPermission('webhook:manage');
   const logout = useLogout();
 
   async function handleLogout() {
@@ -126,6 +130,18 @@ export function AppLayout() {
                   <NavLink to="/settings/subscription" className={secondaryLinkClass}>
                     <CreditCard aria-hidden className="size-4" />
                     方案
+                  </NavLink>
+                ) : null}
+                {canReadNotifications ? (
+                  <NavLink to="/notifications" className={secondaryLinkClass}>
+                    <Bell aria-hidden className="size-4" />
+                    通知
+                  </NavLink>
+                ) : null}
+                {canManageWebhooks ? (
+                  <NavLink to="/settings/webhooks" className={secondaryLinkClass}>
+                    <Webhook aria-hidden className="size-4" />
+                    Webhook
                   </NavLink>
                 ) : null}
                 {canManageApiKeys ? (

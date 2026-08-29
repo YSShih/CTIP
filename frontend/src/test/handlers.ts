@@ -160,6 +160,54 @@ export const notFoundError = {
   traceId: '00000000000000000000000000000abc',
 } satisfies ApiSchemas['ErrorResponse'];
 
+type NotificationDto = ApiSchemas['NotificationDto'];
+type WebhookDto = ApiSchemas['WebhookDto'];
+
+export const sampleNotification = {
+  id: '6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33',
+  eventType: 'NEW_IOC',
+  title: '新增 IOC:198.51.100.7',
+  body: '型別 IPV4,TLP CLEAR',
+  severity: 'MEDIUM',
+  resourceType: 'indicator',
+  resourceId: '1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e',
+  read: false,
+  createdAt: '2026-08-29T09:15:04Z',
+} satisfies NotificationDto;
+
+export const readNotification = {
+  ...sampleNotification,
+  id: '7a2e3f63-7f1b-4b70-8b10-3f2c7e1b2d44',
+  eventType: 'SOURCE_FAILURE',
+  title: '來源已停用',
+  severity: 'HIGH',
+  read: true,
+} satisfies NotificationDto;
+
+export const sampleNotificationPage = {
+  items: [sampleNotification, readNotification],
+  nextCursor: undefined,
+  hasMore: false,
+} satisfies PageOf<NotificationDto>;
+
+export const sampleWebhook = {
+  id: '9d2b7d3e-1a44-4f0b-9a2f-0c1d2e3f4a5b',
+  name: 'SOC pipeline',
+  targetUrl: 'https://soc.example.test/hooks/ctip',
+  eventTypes: ['NEW_IOC', 'IOC_REVOKED'],
+  filter: { iocTypes: ['IPV4'], minSeverity: 'HIGH', tags: [], sourceIds: [] },
+  status: 'ACTIVE',
+  consecutiveFailures: 0,
+  lastDeliveryAt: undefined,
+  lastSuccessAt: undefined,
+  createdAt: '2026-08-29T09:00:00Z',
+} satisfies WebhookDto;
+
+export const issuedWebhook = {
+  secret: 'whsec-only-shown-once-0123456789',
+  webhook: sampleWebhook,
+} satisfies ApiSchemas['IssuedWebhookDto'];
+
 export const sampleSession = {
   accessToken: 'access-token-1',
   refreshToken: 'refresh-token-1',
@@ -334,4 +382,9 @@ export const handlers = [
   http.get('*/api/v1/subscription', () => HttpResponse.json(sampleSubscription)),
   http.get('*/api/v1/subscription/usage', () => HttpResponse.json(sampleUsage)),
   http.get('*/api/v1/sync/manifest', () => HttpResponse.json(sampleSyncManifest)),
+  http.get('*/api/v1/notifications', () => HttpResponse.json(sampleNotificationPage)),
+  http.patch('*/api/v1/notifications/:id/read', () => new HttpResponse(null, { status: 204 })),
+  http.get('*/api/v1/webhooks', () => HttpResponse.json([sampleWebhook])),
+  http.post('*/api/v1/webhooks', () => HttpResponse.json(issuedWebhook, { status: 201 })),
+  http.delete('*/api/v1/webhooks/:id', () => new HttpResponse(null, { status: 204 })),
 ];

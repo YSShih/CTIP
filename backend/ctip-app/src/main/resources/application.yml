@@ -28,6 +28,22 @@ spring:
       password: ${REDIS_PASSWORD:}
   # Elasticsearch 讀取索引(13 §13.7);只有 full profile(staging/prod)啟動 es,
   # 因此 SEARCH_BACKEND 預設 postgres,mvp/dev 完全不接觸它。
+  # Kafka(13 §13.1);只有 full profile(staging/prod)啟動 broker,因此 NOTIFICATION_TRANSPORT
+  # 預設 in-process,mvp/dev 完全不接觸它。bootstrap-servers 的預設值刻意非空——
+  # 空字串會讓 Boot 的 Kafka autoconfig 在 context refresh 期間就丟 ConfigException(同 ELASTICSEARCH_URL 的坑)。
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      # broker 不可用時的等待上限。轉發本身已經移出業務執行緒(KafkaEventForwarder),
+      # 但預設的 60 秒 max.block + 120 秒 delivery timeout 會讓轉發執行緒對每個事件卡兩分鐘,
+      # 佇列很快就滿。刻意不開環境變數:§5.5 對稱性,值與部署無關。
+      properties:
+        max.block.ms: 5000
+        delivery.timeout.ms: 10000
+        request.timeout.ms: 3000
+    consumer:
+      group-id: ctip-notification
+      auto-offset-reset: earliest
   elasticsearch:
     uris: ${ELASTICSEARCH_URL:http://elasticsearch:9200}
     username: ${ELASTICSEARCH_USERNAME:}
@@ -96,6 +112,17 @@ ctip:
     backend: ${SEARCH_BACKEND:postgres}
     # DB 與 ES 的對帳,每日 05:00(08 §8.7 的 ES_RECONCILE_CRON)
     reconcile-cron: "${ES_RECONCILE_CRON:0 0 5 * * *}"
+  notification:
+    # in-process | kafka(13 §13.1)。與 search.backend 同型態的軟開關,不是硬切換。
+    transport: ${NOTIFICATION_TRANSPORT:in-process}
+    # webhook 簽章密鑰的加密金鑰(不變量 W2 定調,ADR 0021);prod 必須來自 secret manager
+    webhook-secret-kek: ${WEBHOOK_SECRET_KEK}
+    # 送達重試掃描,每 5 分鐘(08 §8.7)
+    retry-cron: "${NOTIFICATION_RETRY_CRON:0 */5 * * * *}"
+    # 單次掃描的上限與單次送達的逾時。刻意不開環境變數:compose 與 .env 樣板
+    # 不宣告的變數不得在此使用(§5.5 對稱性),同 security 段。
+    retry-batch-size: 200
+    delivery-timeout-seconds: 10
   normalization:
     strip-www: ${NORMALIZATION_STRIP_WWW:false}
   api:

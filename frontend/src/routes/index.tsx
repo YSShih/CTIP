@@ -8,11 +8,13 @@ import IocSearchPage from '../pages/IocSearchPage';
 import IocSubmitPage from '../pages/IocSubmitPage';
 import LoginPage from '../pages/LoginPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import NotificationCenterPage from '../pages/NotificationCenterPage';
 import RegisterPage from '../pages/RegisterPage';
 import SubscriptionPage from '../pages/SubscriptionPage';
 import SyncPage from '../pages/SyncPage';
 import ThreatDetailPage from '../pages/ThreatDetailPage';
 import ThreatFeedPage from '../pages/ThreatFeedPage';
+import WebhooksPage from '../pages/WebhooksPage';
 import { RequireAuth } from './RequireAuth';
 import { RequirePermission } from './RequirePermission';
 import { RootErrorBoundary } from './RootErrorBoundary';
@@ -57,6 +59,14 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="ioc:import" />,
             children: [{ path: 'iocs/import', element: <IocImportPage /> }],
+          },
+          {
+            element: <RequirePermission permission="notification:read" />,
+            children: [{ path: 'notifications', element: <NotificationCenterPage /> }],
+          },
+          {
+            element: <RequirePermission permission="webhook:manage" />,
+            children: [{ path: 'settings/webhooks', element: <WebhooksPage /> }],
           },
         ],
       },

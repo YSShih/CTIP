@@ -14,7 +14,7 @@ export type ErrorResponse = ApiSchemas['ErrorResponse'];
  */
 export type PageOf<T> = Omit<ApiSchemas['PageResponse'], 'items'> & { items: T[] };
 
-type OpsOf<M extends 'get' | 'post' | 'delete'> = {
+type OpsOf<M extends 'get' | 'post' | 'patch' | 'delete'> = {
   [P in keyof paths]: paths[P][M] extends { responses: unknown } ? P : never;
 }[keyof paths];
 
@@ -236,6 +236,23 @@ export async function apiPostRaw<P extends OpsOf<'post'>>(
     },
     options.autoRefresh ?? true,
   );
+}
+
+interface PatchOptions {
+  path?: Record<string, string>;
+  signal?: AbortSignal;
+}
+
+/**
+ * 無 body 的 PATCH(目前唯一的使用者是 {@code PATCH /notifications/{id}/read})。
+ * 端點回 204,{@link readBody} 會回 undefined。
+ */
+export async function apiPatch<P extends OpsOf<'patch'>>(
+  path: P,
+  options: PatchOptions = {},
+): Promise<void> {
+  const url = buildUrl(path, options.path, undefined);
+  await request<void>(url, { method: 'PATCH', signal: options.signal ?? null });
 }
 
 interface DeleteOptions {

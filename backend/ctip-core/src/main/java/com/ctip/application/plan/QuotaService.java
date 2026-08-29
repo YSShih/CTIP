@@ -121,6 +121,29 @@ public class QuotaService {
         }
     }
 
+    /** Webhook 數量上限(不變量 W6;§9.7 → 403,非時間窗)。 */
+    public void requireWebhookHeadroom(TenantId tenantId, long existingCount) {
+        QuotaLimit limit = planFor(tenantId).maxWebhooks();
+        if (limit.isDisabled()) {
+            throw new PlanLimitExceededException("Webhooks are not available on this plan");
+        }
+        if (limit.isExceededBy(existingCount + 1)) {
+            throw new PlanLimitExceededException("Webhook quota exhausted");
+        }
+    }
+
+    /**
+     * 即時推送的方案閘門(§10.6 {@code websocket_enabled};09 §9.1「即時推送」的授權列)。
+     *
+     * <p>SSE fallback 一併受此閘門管制:它與 WebSocket 是同一個能力的兩種傳輸,
+     * 只擋 WebSocket 等於任何 client 改用 {@code /events} 就繞過方案限制。
+     */
+    public void requireRealtimePush(TenantId tenantId) {
+        if (!planFor(tenantId).websocketEnabled()) {
+            throw new PlanLimitExceededException("Realtime push is not available on this plan");
+        }
+    }
+
     /**
      * 扣減手動提交的每日配額(§10.6 {@code max_manual_submissions_per_day})。
      *

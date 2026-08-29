@@ -65,7 +65,12 @@ if [ -n "${SURPLUS// /}" ]; then
 fi
 
 info "啟動 ${ENV_NAME} 環境……"
-compose "$ENV_NAME" up -d --remove-orphans
+# --build 不可省(2026-08-29,Phase 20 實跑發現):Phase 19 為兩個 build target 加上不同的
+# `image:` tag 之後,`docker compose up` 只在 image **不存在**時才建置——tag 一旦存在,
+# 之後每一次 up 都沿用它,程式改了也一樣。症狀是 staging 跑的是幾小時前的 jar,
+# 而所有 healthcheck 都是綠的、log 也沒有任何異常,完全看不出來。
+# 原始碼沒變時 Docker 的 layer cache 會讓這一步幾乎不花時間。
+compose "$ENV_NAME" up -d --build --remove-orphans
 
 # 6. 等待 healthcheck 並印出狀態與存取網址
 info "等待服務 healthcheck……"

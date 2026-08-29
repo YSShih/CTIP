@@ -542,6 +542,17 @@
         },
         "type" : "object"
       },
+      "IssuedWebhookDto" : {
+        "properties" : {
+          "secret" : {
+            "type" : "string"
+          },
+          "webhook" : {
+            "$ref" : "#/components/schemas/WebhookDto"
+          }
+        },
+        "type" : "object"
+      },
       "LoginRequest" : {
         "properties" : {
           "email" : {
@@ -584,6 +595,41 @@
         },
         "type" : "object"
       },
+      "NotificationDto" : {
+        "properties" : {
+          "body" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "eventType" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "read" : {
+            "type" : "boolean"
+          },
+          "resourceId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "resourceType" : {
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "title" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PageResponse" : {
         "properties" : {
           "hasMore" : {
@@ -591,6 +637,23 @@
           },
           "items" : {
             "items" : { },
+            "type" : "array"
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PageResponseNotificationDto" : {
+        "properties" : {
+          "hasMore" : {
+            "type" : "boolean"
+          },
+          "items" : {
+            "items" : {
+              "$ref" : "#/components/schemas/NotificationDto"
+            },
             "type" : "array"
           },
           "nextCursor" : {
@@ -930,6 +993,15 @@
           },
           "status" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SseEmitter" : {
+        "properties" : {
+          "timeout" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -1275,6 +1347,122 @@
           },
           "version" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "WebhookCreateRequest" : {
+        "properties" : {
+          "eventTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "minItems" : 1,
+            "type" : "array"
+          },
+          "filterIocTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "filterMinSeverity" : {
+            "type" : "string"
+          },
+          "filterSourceIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "filterTags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "name" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "targetUrl" : {
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "pattern" : "^https://.+",
+            "type" : "string"
+          }
+        },
+        "required" : [ "eventTypes", "name", "targetUrl" ],
+        "type" : "object"
+      },
+      "WebhookDto" : {
+        "properties" : {
+          "consecutiveFailures" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "eventTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "filter" : {
+            "$ref" : "#/components/schemas/WebhookFilterDto"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "lastDeliveryAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSuccessAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "targetUrl" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "WebhookFilterDto" : {
+        "properties" : {
+          "iocTypes" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "minSeverity" : {
+            "type" : "string"
+          },
+          "sourceIds" : {
+            "items" : {
+              "format" : "uuid",
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "tags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
           }
         },
         "type" : "object"
@@ -1809,6 +1997,62 @@
         "security" : [ ],
         "summary" : "Register a new account",
         "tags" : [ "Auth" ]
+      }
+    },
+    "/api/v1/events" : {
+      "get" : {
+        "description" : "text/event-stream fallback for clients that cannot use the WebSocket endpoint at GET /api/v1/ws. Messages have the same shape on both transports; a `: keepalive` comment line is sent every 30 seconds. The connection is bound to the caller's tenant at subscription time and cannot be redirected to another tenant. The WebSocket endpoint carries its token in `Sec-WebSocket-Protocol: ctip.auth.<jwt>` because the browser API cannot set headers; this endpoint uses the ordinary header. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read,且方案必須開啟 websocket_enabled。",
+        "operationId" : "subscribe",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/event-stream" : {
+                "example" : "event: notification\ndata: {\"type\":\"NEW_IOC\",\"eventId\":\"6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33\",\"payload\":{\"id\":\"…\",\"title\":\"新增 IOC:198.51.100.7\",\"severity\":\"MEDIUM\"}}\n\n: keepalive\n",
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "An open event stream"
+          },
+          "403" : {
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SseEmitter"
+                }
+              }
+            },
+            "description" : "Missing notification:read, or the plan has no realtime push"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Subscribe to the notification stream (SSE)",
+        "tags" : [ "Realtime" ]
       }
     },
     "/api/v1/health" : {
@@ -2820,6 +3064,170 @@
         "security" : [ ],
         "summary" : "Get IOC source records",
         "tags" : [ "IOC" ]
+      }
+    },
+    "/api/v1/notifications" : {
+      "get" : {
+        "description" : "Cursor-paginated notifications visible to the caller: the caller's own tenant plus platform-wide notifications, and within those either broadcasts or notifications addressed to the caller. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read。",
+        "operationId" : "listNotifications",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "unreadOnly",
+          "required" : false,
+          "schema" : {
+            "default" : false,
+            "type" : "boolean"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "hasMore" : false,
+                  "items" : [ {
+                    "body" : "型別 IPV4,TLP CLEAR",
+                    "createdAt" : "2026-08-29T09:15:04Z",
+                    "eventType" : "NEW_IOC",
+                    "id" : "6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33",
+                    "read" : false,
+                    "resourceId" : "3f4a1c0e-2b7d-4f10-9c11-8a2e5d6b7c90",
+                    "resourceType" : "indicator",
+                    "severity" : "MEDIUM",
+                    "title" : "新增 IOC:198.51.100.7"
+                  } ],
+                  "nextCursor" : null
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponse"
+                }
+              }
+            },
+            "description" : "One page of notifications, newest first"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseNotificationDto"
+                }
+              }
+            },
+            "description" : "Cursor cannot be parsed (INVALID_CURSOR)"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponseNotificationDto"
+                }
+              }
+            },
+            "description" : "Missing notification:read permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "List notifications",
+        "tags" : [ "Notification" ]
+      }
+    },
+    "/api/v1/notifications/{id}/read" : {
+      "patch" : {
+        "description" : "Marks one notification as read. A notification outside the caller's visible scope is reported as 404 rather than 403 so that existence is not disclosed. 認證:需要 Bearer JWT 或 X-API-Key,權限 notification:read。",
+        "operationId" : "markRead",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "content" : {
+              "application/json" : {
+                "examples" : {
+                  "empty" : {
+                    "description" : "empty",
+                    "value" : null
+                  }
+                }
+              }
+            },
+            "description" : "Marked as read"
+          },
+          "404" : {
+            "description" : "No such notification in the caller's scope, or it was already read (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Mark a notification as read",
+        "tags" : [ "Notification" ]
       }
     },
     "/api/v1/sources" : {
@@ -4529,6 +4937,237 @@
         "summary" : "API and build version",
         "tags" : [ "System" ]
       }
+    },
+    "/api/v1/webhooks" : {
+      "get" : {
+        "description" : "All webhooks owned by the caller's tenant. The signing secret is never returned here; it is disclosed once, at creation (invariant W2). 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。",
+        "operationId" : "listWebhooks",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "consecutiveFailures" : 0,
+                  "createdAt" : "2026-08-29T09:00:00Z",
+                  "eventTypes" : [ "NEW_IOC", "IOC_REVOKED" ],
+                  "filter" : {
+                    "iocTypes" : [ "IPV4" ],
+                    "minSeverity" : "HIGH",
+                    "sourceIds" : [ ],
+                    "tags" : [ ]
+                  },
+                  "id" : "9d2b7d3e-1a44-4f0b-9a2f-0c1d2e3f4a5b",
+                  "lastDeliveryAt" : null,
+                  "lastSuccessAt" : null,
+                  "name" : "SOC pipeline",
+                  "status" : "ACTIVE",
+                  "targetUrl" : "https://soc.example.com/hooks/ctip"
+                } ],
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/WebhookDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "The tenant's webhooks"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/WebhookDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "Missing webhook:manage permission (FORBIDDEN)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "List webhooks",
+        "tags" : [ "Webhook" ]
+      },
+      "post" : {
+        "description" : "Creates a webhook and returns the HMAC signing secret exactly once (invariant W2). targetUrl must be https (W1). Deliveries are signed as HMAC-SHA256(secret, timestamp + \\\".\\\" + body) and carry the five X-CTIP-* headers. The number of webhooks per tenant is capped by plans.max_webhooks (W6). 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。",
+        "operationId" : "createWebhook",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/WebhookCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "secret" : "3Qp7…只此一次…",
+                  "webhook" : {
+                    "consecutiveFailures" : 0,
+                    "createdAt" : "2026-08-29T09:00:00Z",
+                    "eventTypes" : [ "NEW_IOC", "IOC_REVOKED" ],
+                    "filter" : {
+                      "iocTypes" : [ "IPV4" ],
+                      "minSeverity" : "HIGH",
+                      "sourceIds" : [ ],
+                      "tags" : [ ]
+                    },
+                    "id" : "9d2b7d3e-1a44-4f0b-9a2f-0c1d2e3f4a5b",
+                    "lastDeliveryAt" : null,
+                    "lastSuccessAt" : null,
+                    "name" : "SOC pipeline",
+                    "status" : "ACTIVE",
+                    "targetUrl" : "https://soc.example.com/hooks/ctip"
+                  }
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedWebhookDto"
+                }
+              }
+            },
+            "description" : "Created; secret returned once"
+          },
+          "400" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedWebhookDto"
+                }
+              }
+            },
+            "description" : "Invalid target URL or event type (INVALID_REQUEST)"
+          },
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/IssuedWebhookDto"
+                }
+              }
+            },
+            "description" : "Plan webhook quota exhausted (PLAN_LIMIT_EXCEEDED)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Register a webhook",
+        "tags" : [ "Webhook" ]
+      }
+    },
+    "/api/v1/webhooks/{id}" : {
+      "delete" : {
+        "description" : "Removes a webhook owned by the caller's tenant, together with its delivery history. A webhook belonging to another tenant is reported as 404, not 403. 認證:需要 Bearer JWT 或 X-API-Key,權限 webhook:manage。",
+        "operationId" : "deleteWebhook",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "204" : {
+            "content" : {
+              "application/json" : {
+                "examples" : {
+                  "empty" : {
+                    "description" : "empty",
+                    "value" : null
+                  }
+                }
+              }
+            },
+            "description" : "Deleted"
+          },
+          "404" : {
+            "description" : "No such webhook in the caller's tenant (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Delete a webhook",
+        "tags" : [ "Webhook" ]
+      }
     }
   },
   "servers" : [ {
@@ -4539,11 +5178,26 @@
     "description" : "Curation of threats: create, link/unlink IOCs, add external references, change status.",
     "name" : "Threat Write"
   }, {
+    "description" : "Registration, login, refresh-token rotation and logout.",
+    "name" : "Auth"
+  }, {
+    "description" : "Server-sent notification stream (fallback for WebSocket).",
+    "name" : "Realtime"
+  }, {
+    "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
+    "name" : "IOC"
+  }, {
+    "description" : "Outbound webhook subscriptions for the caller's tenant.",
+    "name" : "Webhook"
+  }, {
+    "description" : "Manual submission, bulk import and false-positive reporting.",
+    "name" : "IOC Write"
+  }, {
     "description" : "Public dashboard statistics. Authentication: anonymous.",
     "name" : "Stats"
   }, {
-    "description" : "Registration, login, refresh-token rotation and logout.",
-    "name" : "Auth"
+    "description" : "In-app notifications for the caller's tenant.",
+    "name" : "Notification"
   }, {
     "description" : "Threat source catalog and health. Authentication: anonymous.",
     "name" : "Source"
@@ -4557,17 +5211,11 @@
     "description" : "Bloom filter manifest, snapshot download and delta sync (11 §11.5). A Bloom hit means MAYBE PRESENT and must be verified with POST /api/v1/iocs/lookup; a miss only means the value is not in that Bloom's member set — TLP:GREEN has no Bloom coverage.",
     "name" : "Sync"
   }, {
-    "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
-    "name" : "IOC"
-  }, {
     "description" : "Read access to threats (campaigns, malware families, actors) and their linked indicators. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
     "name" : "Threat"
   }, {
     "description" : "Machine-to-machine credentials scoped to the caller's tenant.",
     "name" : "API Keys"
-  }, {
-    "description" : "Manual submission, bulk import and false-positive reporting.",
-    "name" : "IOC Write"
   }, {
     "description" : "STIX 2.1 objects and bundle export (07 §7.8).",
     "name" : "STIX"

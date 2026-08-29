@@ -65,7 +65,14 @@ export const STUB_SESSION = {
     userId: '3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10',
     tenantId: '8b1a9c33-2f4e-4d55-9f6a-0c1d2e3f4a5b',
     role: 'TENANT_ADMIN',
-    permissions: ['ioc:read', 'ioc:submit', 'apikey:create', 'apikey:revoke'],
+    permissions: [
+      'ioc:read',
+      'ioc:submit',
+      'apikey:create',
+      'apikey:revoke',
+      'notification:read',
+      'webhook:manage',
+    ],
     displayName: 'Alice Analyst',
   },
 };
@@ -79,6 +86,20 @@ export const STUB_ISSUED_KEY = {
 };
 
 const IOC_PAGE = { items: [STUB_IOC], hasMore: false, nextCursor: null };
+
+export const STUB_NOTIFICATION = {
+  id: '6f1d2f52-6f0a-4a6f-9a0f-2f1b6d0a1c33',
+  eventType: 'NEW_IOC',
+  title: '新增 IOC:198.51.100.7',
+  body: '型別 IPV4,TLP CLEAR',
+  severity: 'MEDIUM',
+  resourceType: 'indicator',
+  resourceId: '1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e',
+  read: false,
+  createdAt: '2026-08-29T09:15:04Z',
+};
+
+const NOTIFICATION_PAGE = { items: [STUB_NOTIFICATION], hasMore: false, nextCursor: null };
 
 const STUBS: readonly Stub[] = [
   { method: 'GET', pattern: /\/api\/v1\/sync\/manifest$/, body: STUB_MANIFEST },
@@ -100,6 +121,14 @@ const STUBS: readonly Stub[] = [
     },
   },
   { method: 'GET', pattern: /\/api\/v1\/stats\/sources$/, body: [] },
+  { method: 'GET', pattern: /\/api\/v1\/notifications(\?|$)/, body: NOTIFICATION_PAGE },
+  {
+    method: 'PATCH',
+    pattern: /\/api\/v1\/notifications\/[0-9a-f-]+\/read$/,
+    status: 204,
+    body: null,
+  },
+  { method: 'GET', pattern: /\/api\/v1\/webhooks$/, body: [] },
 ];
 
 export async function stubApi(page: Page): Promise<void> {

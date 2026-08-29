@@ -303,6 +303,15 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
    注意 IDE 自動 import 很容易誤引 fasterxml——classpath 上兩者可能並存
    （test-scope 工具如 json-schema-validator 會傳遞引入 Jackson 2）。
 
+12. **`KafkaAdmin` 只看得到 `NewTopic` 與 `KafkaAdmin.NewTopics` 兩種型別的 bean**
+    （2026-08-29 Phase 20 實測補入；[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 5 節）。
+    把 topic 宣告成 `List<NewTopic>` 的 bean **完全不會被讀到**——topic 於是只能靠 broker 的
+    auto-create 產生（分割數與副本數變成 broker 預設值），而在關閉 auto-create 的正式環境
+    會直接沒有 topic。
+
+    > 對應的測試必須斷言**分割數**而不只是「topic 存在」:auto-create 會讓後者照樣通過。
+    > 本專案的 `KafkaEventTest` 就是靠這條斷言抓到這個缺陷的。
+
 ---
 
 7. **spring-boot-maven-plugin 4.x:run mojo 的 `directories` 參數更名 `additionalClasspathElements`**

@@ -22,7 +22,13 @@ M3:     聚合 → DomainEvent → ApplicationEventPublisher → 程序內 liste
 > 發佈端已就位、消費端尚無需求，這是刻意的——但本圖不得讀成「已有 listener 在運作」。
 > Phase 20 的 `KafkaForwardingListener` 會是**第一個**消費者。
 
-M3 只新增一個 `@TransactionalEventListener(phase = AFTER_COMMIT)` 的 listener 把 domain event 轉發到 Kafka。**不修改任何發佈端。**
+M3 只新增一個 listener 把 domain event 轉發到 Kafka。**不修改任何發佈端。**
+
+> **修訂(2026-08-29,Phase 20;[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 3 節)**:
+> 原文寫 `@TransactionalEventListener(phase = AFTER_COMMIT)`,但 `SpringEventPublisherAdapter`
+> **自 Phase 6 起就已經在 `afterCommit` 回呼裡才發佈信封**——事件抵達 listener 時交易早已提交,
+> 再宣告一次 transactional phase 沒有作用。轉發 listener 一律 `@EventListener`
+> (與 Phase 18 的 `ThreatConsistencyListener` 同一個判斷)。
 
 ### 部署
 
@@ -53,7 +59,19 @@ Domain event → topic 對應表必須寫入 `docs/api/events/README.md`。
 | 4 | 每個事件含 `eventId`、`eventType`、`occurredAt`、`tenantId`、`traceId` |
 | 5 | 消費端必須**冪等**（以 `eventId` 去重，去重表或 Redis SETNX） |
 | 6 | 事件於 `AFTER_COMMIT` 發佈 |
-| 7 | Kafka 不可用時**不得**使業務操作失敗——轉發 listener 失敗只記錄並排入重試 |
+| 7 | Kafka 不可用時**不得**使業務操作失敗——轉發 listener 失敗只記錄並排入重試,**且不得阻塞業務執行緒** |
+
+> **規則 7 的「不得阻塞」是 2026-08-29(Phase 20;ADR 0029 第 4 節)補的**:
+> 照原文實作(在 listener 裡直接 `KafkaTemplate.send()`)滿足字面,但 `send()` 在取不到 metadata 時
+> 會**同步阻塞**到 `max.block.ms`(預設 60 秒)——broker 掛掉時,每一個事件都讓剛提交完交易的
+> 那個請求多等一分鐘。回 200 但要等一分鐘,實務上與失敗沒有差別。
+> 實作:轉發交給單執行緒 + **有界**佇列的 executor(滿了丟棄並記錄;無界佇列在長時間斷線下
+> 會把堆積吃光,那才是真的讓業務操作失敗),producer 的 `max.block.ms` 一併收到 5 秒。
+>
+> **`KafkaAdmin` 只看得到 `NewTopic` 與 `KafkaAdmin.NewTopics` 兩種型別的 bean**
+> ——宣告成 `List<NewTopic>` 完全不會被讀到,topic 只能靠 broker 的 auto-create 產生
+> (分割數變成 broker 預設值),關閉 auto-create 的正式環境則直接沒有 topic。
+> 對應的測試因此必須斷言**分割數**,只驗「topic 存在」會被 auto-create 蒙混過去(06 §6.3.6 第 12 條)。
 
 ---
 
@@ -88,6 +106,15 @@ SUBSCRIPTION_CHANGED | SYNC_SNAPSHOT_READY | SYSTEM_ALERT
 > 02 的 W3 已更正。
 | 訂閱過濾**在伺服器端執行**，不得把全部事件推給 client 再過濾 |
 | WebSocket 僅 `plans.websocket_enabled` 為 true 的方案可連線 |
+
+> **通知型別的對應與過濾輸入(2026-08-29,Phase 20;ADR 0029 第 1、2、7 節)**
+>
+> | 項目 | 定調 |
+> |---|---|
+> | 過濾的輸入型別 | `Webhook.matches` / `WebhookFilter.accepts` 收的是 **`NotificationEvent`**(domain event 的通知形狀投影),不是 `DomainEvent`。§2.4 的事件身上沒有 severity / tags / sourceIds,而 §13.1 禁止修改發佈端;投影由 application 層在送出前從聚合補齊,**過濾仍完全在伺服器端**(W5 不變) |
+> | 七種型別容不下的三個事件 | `SourceRecovered`、`IngestionFailed` → `SOURCE_FAILURE`(來源健康頻道,severity 各異);`IndicatorMerged` → `NEW_IOC`。**不新增第八種型別** |
+> | 送達 body | 是 `notifications` 那一列的**純函數**(欄位順序寫死)。表 25 沒有 payload 欄位,而重試在數分鐘後才發生——各自重新組裝會讓 body 漂移,而 body 是簽章的一部分,接收端第二次驗簽必失敗 |
+> | 完整對照表 | [`docs/api/events/README.md`](../api/events/README.md);接收端契約 [`docs/api/webhooks.md`](../api/webhooks.md) |
 
 ### Webhook 送達標頭
 

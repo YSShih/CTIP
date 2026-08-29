@@ -147,6 +147,10 @@ class DistributedRateLimitTest extends AbstractPostgresIntegrationTest {
         properties.put("POSTGRES_APP_PASSWORD", APP_PASSWORD);
         properties.put("ENVIRONMENT", "mvp");
         properties.put("JWT_SECRET", TEST_JWT_SECRET);
+        properties.put("WEBHOOK_SECRET_KEK", "integration-test-only-webhook-kek-0123456789");
+        // 與 AbstractPostgresIntegrationTest 同一個理由:每個 context 一個連線池,
+        // 預設 10 條乘上快取住的 context 數會撞上 PostgreSQL 的 max_connections
+        properties.put("spring.datasource.hikari.maximum-pool-size", 4);
         properties.put("CORS_ALLOWED_ORIGINS", "http://localhost:5173");
         properties.put("SCHEDULER_ENABLED", "false");
         properties.put("BLOOM_STORAGE_DIR", BLOOM_DIR.toString());

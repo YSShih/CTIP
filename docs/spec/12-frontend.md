@@ -138,8 +138,15 @@ npm run api:check       # 重新產生後 git diff --exit-code src/api/generated
 | Settings | M2 | ✗ | `/settings` |
 | STIX Viewer | M3 | ✓ | `/stix/:id` |
 | Notification Center | M3 | ✗ | `/notifications` |
+| Webhook 管理 | M3 | ✗ | `/settings/webhooks` |
 | Audit Log | M3 | ✗ | `/audit` |
 | Admin Panel | M3 | ✗ | `/admin` |
+
+> **Webhook 管理頁為 2026-08-29(Phase 20)補列**([ADR 0022](../architecture/decisions/0022-orphan-deliverables.md)、
+> [ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 8 節):
+> [09 §9.1](09-api.md#91-端點清單) 有三個 `/webhooks` 端點與 `webhook:manage` 權限,
+> 而本表原本沒有對應頁——那三個端點在 UI 上永遠不可達。
+> 需登入 + `webhook:manage`;簽章密鑰只在建立當下顯示一次(不變量 W2)。
 
 需登入的頁面必須在路由層強制授權（`RequireAuth` / `RequirePermission` 元件），**並在後端再次驗證**。
 

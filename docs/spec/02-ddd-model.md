@@ -293,6 +293,15 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 > 而 webhook 簽章是**產生**(必須持有原文)。
 | W3 | `consecutiveFailures` 達 5 → `DISABLED`，並發出 `WebhookDisabled` 事件（2026-08-28 更正，原寫 `SystemAlert`——該事件不在 §2.4 清單中；[ADR 0021](../architecture/decisions/0021-phase20-23-spec-resolutions.md)） |
 | W4 | 送達重試最多 5 次，指數退避 |
+
+> **W3 與 W4 的計數對象(2026-08-29,Phase 20;[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 7 節)**:
+> `consecutiveFailures` 計的是**事件**,不是**嘗試**——連續五個事件各自用盡 W4 的五次嘗試才停用。
+> 若計嘗試次數,單一個用盡重試的事件就會立刻觸發 W3,W3 便完全等同於 W4,
+> 規格不會把它們分成兩條不變量。
+>
+> **`matches()` / `accepts()` 的輸入型別**改為 `NotificationEvent`(ADR 0029 第 1 節):
+> §2.4 的 domain event 身上沒有 `WebhookFilter` 要的 severity / tags / sourceIds,
+> 而 §13.1 禁止修改發佈端。過濾仍完全在伺服器端執行(W5 不變)。
 | W5 | 訂閱過濾**必須在伺服器端執行**，不得把全部事件推給 client 再過濾 |
 | W6 | 每租戶數量上限由 `plans.maxWebhooks` 於建立時檢查 |
 
@@ -342,8 +351,18 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 規則：
 - **不得**把 JPA entity 當作事件 payload
 - **AFTER_COMMIT 的消費端若要寫入資料庫,必須 `REQUIRES_NEW`**——那個回呼仍在已提交交易的
-  synchronization 範圍內,預設的 `REQUIRED` 會參與一個已結束的交易,寫入不落庫也不報錯
-  (2026-08-29 實測;ADR 0027)
+  synchronization 範圍內,預設的 `REQUIRED` 會去參與一個已經結束的交易,寫入沒有自己的提交邊界
+  (ADR 0027)
+  > **修訂(2026-08-29,Phase 20;[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 3 節)**:
+  > 原文寫「寫入不落庫也不報錯」。實測把 `NotificationAdapter.recordIfAbsent` 改回 `REQUIRED`,
+  > `EventIdempotencyTest` **仍然通過**——afterCommit 回呼期間連線尚未歸還,歸還(還原 autoCommit)
+  > 時會一併提交。規則照留(`REQUIRES_NEW` 讓寫入有明確的提交邊界),但那個症狀在本專案的
+  > JPA + PostgreSQL 組合下沒有重現,不應被當成既成事實引用。
+  >
+  > **反過來,有一件事必須在 `REQUIRES_NEW` 交易「內」做**:聚合因此發出的事件
+  > (例如 `WebhookDisabled`)必須在那個交易內 `publish`。`EventPublisherPort` 會把它掛在
+  > **當前交易**的 AFTER_COMMIT 上;在交易外呼叫,它會掛到一個已經走完 afterCommit 階段的交易上,
+  > **永遠不會被觸發**。
 - 事件欄位獨立於持久化模型；schema 版本化，存於 `docs/api/events/`
 - 消費端必須冪等（以 `eventId` 去重）
 - 事件在**交易提交後**發佈（`@TransactionalEventListener(phase = AFTER_COMMIT)`）

@@ -14,10 +14,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class StartupValidator implements InitializingBean {
 
-    /** JWT_SECRET 樣板值的標記字串,與 environment/.env.*.example 及 up.sh 的檢查一致。 */
+    /** 樣板值的標記字串,與 environment/.env.*.example 及 up.sh 的檢查一致。 */
     static final String JWT_SECRET_TEMPLATE_MARKER = "CHANGE_ME";
 
     private static final int JWT_SECRET_MIN_BYTES = 32;
+
+    /** WEBHOOK_SECRET_KEK 的最小長度。它是 AES-256 金鑰的來源(SHA-256 導出),熵不足等於形同無加密。 */
+    private static final int KEK_MIN_BYTES = 32;
+
     private static final Logger log = LoggerFactory.getLogger(StartupValidator.class);
 
     private final CtipProperties properties;
@@ -36,6 +40,7 @@ public class StartupValidator implements InitializingBean {
     void validate() {
         if (properties.environment() == CtipProperties.Environment.PROD) {
             requireRealJwtSecret();
+            requireRealWebhookKek();
             requireRestrictedCors();
             warnIfSwaggerEnabled();
         }
@@ -53,6 +58,20 @@ public class StartupValidator implements InitializingBean {
         }
         if (secret.getBytes(StandardCharsets.UTF_8).length < JWT_SECRET_MIN_BYTES) {
             throw new IllegalStateException("ENVIRONMENT=prod 但 JWT_SECRET 長度不足 " + JWT_SECRET_MIN_BYTES + " bytes");
+        }
+    }
+
+    /**
+     * webhook 簽章密鑰以這把 KEK 加密儲存(不變量 W2 定調,ADR 0021)。
+     * 樣板值等於全世界都能解出 secret 並偽造送達簽章,與樣板 JWT_SECRET 同級。
+     */
+    private void requireRealWebhookKek() {
+        String kek = properties.notification().webhookSecretKek();
+        if (kek.contains(JWT_SECRET_TEMPLATE_MARKER)) {
+            throw new IllegalStateException("ENVIRONMENT=prod 但 WEBHOOK_SECRET_KEK 仍是樣板值;請改用 secret manager 提供的真實值");
+        }
+        if (kek.getBytes(StandardCharsets.UTF_8).length < KEK_MIN_BYTES) {
+            throw new IllegalStateException("ENVIRONMENT=prod 但 WEBHOOK_SECRET_KEK 長度不足 " + KEK_MIN_BYTES + " bytes");
         }
     }
 

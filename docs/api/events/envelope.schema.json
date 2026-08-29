@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ctip.example.com/schemas/events/envelope.v1.json",
+  "title": "CTIP domain event envelope (v1)",
+  "description": "五個領域 topic (ctip.threat.ingest.v1、ctip.threat.normalized.v1、ctip.indicator.updated.v1、ctip.audit.events.v1、ctip.system.alert.v1) 的訊息格式。docs/spec/13-platform-ops.md §13.1 規則 1-4。",
+  "type": "object",
+  "required": ["eventId", "eventType", "occurredAt", "tenantId", "traceId", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "冪等鍵。消費端必須以它去重 (§13.1 規則 5);同時是 Kafka 的訊息 key。"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "domain event 的型別名稱,對照表見 README.md。",
+      "enum": [
+        "IndicatorCreated",
+        "IndicatorMerged",
+        "IndicatorExpired",
+        "IndicatorRevoked",
+        "IndicatorFalsePositiveReported",
+        "IndicatorTlpTightened",
+        "ThreatUpdated",
+        "IngestionStarted",
+        "IngestionCompleted",
+        "IngestionFailed",
+        "SourceDegraded",
+        "SourceFailed",
+        "SourceRecovered",
+        "BloomSnapshotReady",
+        "TenantCreated",
+        "UserRegistered",
+        "TokenReuseDetected",
+        "ApiKeyCreated",
+        "ApiKeyRevoked",
+        "SubscriptionChanged",
+        "WebhookDisabled"
+      ]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "事件發生時間 (UTC, ISO-8601)。由發佈端以 ClockPort 補齊。"
+    },
+    "tenantId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "事件歸屬租戶。全為 0 的 UUID 是 public tenant,代表平台範圍的事件。"
+    },
+    "traceId": {
+      "type": ["string", "null"],
+      "description": "請求追蹤碼;排程與啟動流程觸發的事件沒有對應請求,為 null。"
+    },
+    "payload": {
+      "type": "object",
+      "description": "domain event 的欄位,獨立於持久化模型。識別碼值物件序列化為字串。不得放 JPA entity (§13.1 規則 2)。"
+    }
+  }
+}

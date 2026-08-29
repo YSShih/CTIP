@@ -33,6 +33,7 @@ public record CtipProperties(
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
         @NotNull @Valid Search search,
+        @NotNull @Valid Notification notification,
         @NotNull @Valid Retention retention) {
 
     /** 執行環境,對應環境變數 ENVIRONMENT(mvp | dev | staging | prod)。 */
@@ -147,6 +148,38 @@ public record CtipProperties(
             @Min(1) @Max(1000) int maxDeltaChain,
             @NotBlank String storageDir,
             @NotNull BloomCompression compression) {}
+
+    /**
+     * 通知與事件傳輸(docs/spec/13-platform-ops.md §13.1、§13.2)。
+     *
+     * <p>{@code transport} 與 {@code ctip.search.backend} 同型態的軟開關:{@code IN_PROCESS} 時
+     * 完全不接觸 Kafka(mvp/dev 的 compose 根本不啟動 broker),{@code KAFKA} 時才建立
+     * topic、producer 與 consumer。<strong>不是</strong>硬切換——§13.1 規則 7 明文
+     * 「Kafka 不可用時不得使業務操作失敗」,執行期的不可用由轉發端的 try/catch 承擔,
+     * 這個屬性只決定「有沒有 Kafka 這條路」。
+     *
+     * @param webhookSecretKek webhook 簽章密鑰的加密金鑰(AES-GCM;不變量 W2 定調,ADR 0021)。
+     *     prod 必須來自 secret manager,啟動守衛比照 {@code JWT_SECRET}
+     * @param retryCron 送達重試掃描(每 5 分鐘;08 §8.7 的 {@code NOTIFICATION_RETRY_CRON})
+     * @param retryBatchSize 單次掃描最多處理幾列
+     * @param deliveryTimeoutSeconds 單次 HTTP 送達的連線 + 讀取逾時
+     */
+    public record Notification(
+            @NotNull Transport transport,
+            @NotBlank String webhookSecretKek,
+            @NotBlank String retryCron,
+            @Positive int retryBatchSize,
+            @Positive int deliveryTimeoutSeconds) {
+
+        public enum Transport {
+            IN_PROCESS,
+            KAFKA
+        }
+
+        public boolean usesKafka() {
+            return transport == Transport.KAFKA;
+        }
+    }
 
     /** 資料保留政策(天數;bloomArtifactKeep 為保留份數)。 */
     public record Retention(

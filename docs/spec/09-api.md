@@ -187,6 +187,13 @@ GET    /api/v1/events                              （見下）      SSE fallbac
 > | 訂閱範圍 | 連線綁 `tenantId`，只推送該租戶可見的事件（沿用 §7.9 的輸出過濾） |
 > | SSE fallback | `GET /api/v1/events`，`text/event-stream`；認證走一般 `Authorization` 標頭。事件格式同上 |
 > | 心跳 | WS 每 30s ping；SSE 每 30s 送 `: keepalive` 註解行 |
+>
+> **補列(2026-08-29,Phase 20;[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 6 節)**:
+>
+> | 項目 | 規格 |
+> |---|---|
+> | SSE 的授權 | **與 WebSocket 共用同一個閘門**:同樣需要 `plans.websocket_enabled` 與 `notification:read`。只擋 WebSocket 等於任何 client 改連 `/events` 就繞過方案限制——兩者是同一個能力的兩種傳輸 |
+> | 伺服器回選的子協定 | client 同時提供 `ctip.auth` 與 `ctip.auth.<jwt>`,**伺服器選前者**。回應標頭會進反向代理與瀏覽器的 log,不得把 token 原樣送回 |
 
 ### 通知與稽核 `[M3]`
 

@@ -30,6 +30,16 @@ L1 測試**不得**使用 `@SpringBootTest`、`@MockBean` 或任何 Spring 註�
 
 ---
 
+> **測試 context 的連線池上限（2026-08-29，Phase 20；[ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 9 節）**：
+> Spring 的 test context 是**快取的**——整批測試跑完之前，每一個不同組態的 context 都還活著，
+> 而每個都有自己的 HikariCP 池。預設的 10 條乘上二十幾個 context 會撞上 PostgreSQL 的
+> `max_connections`（預設 100）。
+>
+> 症狀極具誤導性：`FATAL: remaining connection slots are reserved` 出現在**後面**才載入的
+> 那個 context 上，看起來完全像是那個測試自己的問題。
+> `AbstractPostgresIntegrationTest` 因此把池上限固定為 4（整合測試是單執行緒的）；
+> 另起實例的測試（`DistributedRateLimitTest`）必須同步設定。
+
 ## 14.2 後端必須包含的測試
 
 | 類型 | 重點 |

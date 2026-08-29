@@ -10,6 +10,7 @@ import com.ctip.application.port.PasswordHasherPort;
 import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.application.port.SecureTokenGeneratorPort;
 import com.ctip.infrastructure.ratelimit.IdentityRateLimitFilter;
+import com.ctip.infrastructure.security.AccessTokenIdentityResolver;
 import com.ctip.infrastructure.security.BCryptPasswordHasher;
 import com.ctip.infrastructure.security.CtipAuthenticationFilter;
 import com.ctip.infrastructure.security.CtipPermissionEvaluator;
@@ -105,9 +106,15 @@ public class SecurityConfig {
         return handler;
     }
 
+    /** JWT → 身分的解析點;REST filter 與 WebSocket 握手共用(09 §9.1)。 */
+    @Bean
+    AccessTokenIdentityResolver accessTokenIdentityResolver(AccessTokenPort accessTokens) {
+        return new AccessTokenIdentityResolver(accessTokens);
+    }
+
     @Bean
     CtipAuthenticationFilter ctipAuthenticationFilter(
-            AccessTokenPort accessTokens,
+            AccessTokenIdentityResolver accessTokens,
             ApiKeyAuthenticator apiKeys,
             RolePermissionRepository rolePermissions,
             TenantContext tenantContext,

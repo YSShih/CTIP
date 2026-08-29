@@ -38,7 +38,15 @@ services:
       REDIS_HOST:                     ${REDIS_HOST:-redis}
       REDIS_PORT:                     ${REDIS_PORT:-6379}
       REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
-      KAFKA_BOOTSTRAP_SERVERS:        ${KAFKA_BOOTSTRAP_SERVERS:-}
+      # 同 ELASTICSEARCH_URL:預設值不得為空字串。Boot 的 Kafka autoconfig 對空
+      # bootstrap-servers 直接丟 ConfigException,即使 NOTIFICATION_TRANSPORT=in-process
+      # 也一樣——autoconfig 是 Boot 自己的,不受本專案的條件裝配影響(13 §13.1)
+      KAFKA_BOOTSTRAP_SERVERS:        ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      # 事件傳輸(13 §13.1):kafka 屬 full profile,mvp/dev 一律 in-process
+      NOTIFICATION_TRANSPORT:         ${NOTIFICATION_TRANSPORT:-in-process}
+      NOTIFICATION_RETRY_CRON:        ${NOTIFICATION_RETRY_CRON:-0 */5 * * * *}
+      # webhook 簽章密鑰的加密金鑰(不變量 W2 定調,ADR 0021);prod 必須來自 secret manager
+      WEBHOOK_SECRET_KEK:             ${WEBHOOK_SECRET_KEK:?}
       # 預設值不得為空字串:Boot 的 ES autoconfig 對空 uris 直接丟
       # 「hosts must not be null nor empty」而使應用**完全無法啟動**——
       # 即使 SEARCH_BACKEND=postgres、根本不會用到那個 client(13 §13.7)

@@ -193,7 +193,9 @@ class ArchitectureTest {
                         "co.elastic.clients..",
                         "org.elasticsearch..",
                         "org.springframework.data.elasticsearch..",
-                        "io.github.resilience4j..")
+                        "io.github.resilience4j..",
+                        "org.apache.kafka..",
+                        "org.springframework.kafka..")
                 .check(classes);
     }
 
