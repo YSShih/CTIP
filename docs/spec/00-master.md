@@ -675,6 +675,11 @@ Elasticsearch 搜尋、降級與 reconciliation,逐項見
 
 | 15 | **`up.sh` 切換環境時不收掉上一個 profile 的服務**——四個環境共用同一個 compose 專案名、服務差異只靠 profile,先 staging(`full`)再 mvp 會留下五個容器,`M1-14`「只有三個容器」因此不可能通過:**`dod.sh phase2` 跑完一次就再也重跑不了**(M2-25 把環境留在 staging)。⚠️ `--remove-orphans` **解決不了**(compose 刻意不把 profile 停用的服務當 orphan) | `up.sh` 第 6 步以 `ps --services` 減 `config --services` 算差集並 `rm -sfv`;§5.10 與 §5.8.2 同步 | [05 §5.10](05-environment.md#510-腳本契約)、[05 §5.8.2](05-environment.md#582-image-tag-與-build-target) |
 
+| 16 | **兩個 gate 並行執行會產生「看似有結論」的假分數**:共用 `backend/*/target`,一邊 `clean` 就抽掉另一邊的 classes(症狀是 `cannot find symbol`,完全不像併發問題),容器又互搶記憶體(Testcontainers `Timed out waiting for log output`)。本 phase 因此白丟一輪 26/27 | `dod.sh` 加互斥鎖(以 pid 記錄、殘鎖自動接手;巢狀呼叫以環境變數傳遞持有權);規則寫進 §15.0 | [15 §15.0](15-dod-gates.md#150-執行方式)、[05 §5.10](05-environment.md#510-腳本契約) |
+| 17 | **以 log 內容判斷 gate 是否結束必然誤判**:`M2-01` 巢狀執行整個 `dod.sh mvp`,它的 `=== 結果` 行會先出現在同一份 log 裡——外層還在跑就被當成結束(這就是第 16 項的起因) | 結果行改帶 gate 名稱 `=== 結果(<gate>):N/M 通過 ===`;§15.0 明訂**判斷完成一律用行程結束/退出碼** | [15 §15.0](15-dod-gates.md#150-執行方式) |
+| 18 | **`up.sh` 逾時只說「未就緒」**,而 crash-loop 的容器在 `ps` 裡看起來只是「一直在 restart」——本 phase 連續三次靠人工 `docker logs` 才找到原因(資料庫憑證、空的 ES uris、image 用錯 target) | 失敗時印出未就緒服務的日誌尾段,並以 `diagnose_startup_failure` 把三種症狀翻譯成可執行的修法;§5.10 第 7 步同步 | [05 §5.10](05-environment.md#510-腳本契約) |
+| 19 | 四個環境共用同一個 compose 專案與具名 volume 的兩個後果(`POSTGRES_*` 必須一致、切換環境要收掉上一個 profile 的服務)散落在各處,沒有寫在最該看到的地方 | 收進 §5.5 的開頭 | [05 §5.5](05-environment.md#55-四種-profile-差異表) |
+
 > **未實作並回報(規則 17)**:§13.7 修訂 3 的「自由排序留待 M2 與 Elasticsearch 一併設計」**不在 Phase 19 交付**
 > ——每種排序鍵需要一套 cursor 編碼,而降級可以發生在翻頁的任何一頁、兩邊的 cursor 必須可以互換,
 > 兩者直接衝突。排序維持固定 `lastSeen DESC, id DESC`。Threat 的搜尋同樣不在執行單交付物內。

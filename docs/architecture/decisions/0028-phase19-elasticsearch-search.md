@@ -232,7 +232,29 @@ profile 停用的服務視為 orphan——它們畢竟寫在同一份 compose �
 (本 profile 啟用的),對差集 `rm -sfv`,之後才 `up -d`。這不只是 gate 的問題——
 日常在 mvp / dev / staging 之間切換也會累積殘留容器。規格 `05 §5.10` 同步。
 
-## 17. 其他
+## 17. 閘門必須跑得出可信的結論:互斥鎖、完成判斷、失敗診斷
+
+這三項不是 Phase 19 的功能,而是本 phase 在**跑閘門的過程中**付出真實代價才看見的工具缺陷。
+它們不修的話,每一個後續 phase 都會再付一次。
+
+**(a) `dod.sh` 加互斥鎖。** 兩個 gate 並行會共用 `backend/*/target`,一邊 `clean` 就抽掉另一邊的
+classes;容器與 Testcontainers 又互搶記憶體。實測看到的是 `cannot find symbol: CtipProperties`
+與 `Timed out waiting for log output`——**完全不像併發問題**,而那一輪的 26/27 是假的。
+寧可拒絕啟動,也不要產出一份看似有結論的報告。鎖以 pid 記錄(殘鎖自動接手),
+`M2-01` 巢狀呼叫 `dod.sh mvp` 時以 `CTIP_DOD_LOCK` 傳遞持有權,不重複取鎖也不誤刪。
+
+**(b) 完成判斷只能用行程結束/退出碼。** 上面那次並行的起因是:`M2-01` 巢狀執行整個 mvp gate,
+它的 `=== 結果:37/38` 會**先**出現在同一份 log 裡,於是「等到 `=== 結果` 就當成跑完」在外層還在跑時
+就誤判。結果行自本版起帶 gate 名稱(`=== 結果(phase2):27/27 通過 ===`)以降低誤判,
+但正確作法仍是等行程結束——已寫進 `15 §15.0`。
+
+**(c) `up.sh` 失敗時要印日誌並診斷。** 原本只說「等待 healthcheck 逾時,未就緒:backend」,
+而 crash-loop 的容器在 `ps` 裡看起來只是「一直在 restart」。本 phase 連續三次靠人工
+`docker logs` 才找到原因(資料庫憑證、空的 ES uris、image 用錯 build target)——**三種都只有一種成因**,
+完全可以自動翻譯成修法。`diagnose_startup_failure` 現在就做這件事;比對用 bash 的 `case` 而非
+`| grep -q`(pipefail 下 `grep -q` 提早退出會讓左側吃 SIGPIPE,條件假性不成立——同一個坑 M1-37 踩過)。
+
+## 18. 其他
 
 - **索引寫入不強制 refresh**:索引是最終一致的讀取副本,強制 refresh 會把每一批攝取變成一次段合併。
   需要立刻可見的只有測試,由測試自己 refresh(`SearchIndexControl`)。

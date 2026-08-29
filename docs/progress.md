@@ -1457,12 +1457,46 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - **自由排序未實作**(§13.7 修訂 3 提到「留待 M2 與 ES 一併設計」):每種排序鍵要一套 cursor 編碼,
     而降級可以發生在翻頁的任何一頁、兩邊 cursor 必須可互換,兩者直接衝突。要做的話得先解這個矛盾
   - Threat 的搜尋不在 Phase 19 的交付物內;`ThreatUpdated` 事件與 `ThreatConsistencyListener` 是現成接入點
-  - 本機跑 `dod.sh phase2` 的注意事項:**不要同時跑兩個 gate 或另一個 `mvn clean`**
-    ——它們會互相清掉 `target/`、也會把 Docker 的記憶體吃光,症狀是莫名的編譯失敗與
-    Testcontainers「Timed out waiting for log output」(本 phase 因此白跑一輪)
+  - **`dod.sh` 現在有互斥鎖**,同一個 repo 同時只能跑一個 gate(見下方「收尾強化」);
+    但**它擋不住 host 端的 `mvn clean`**——gate 執行期間仍不得在 host 跑任何 Maven 指令
+  - **判斷 gate 是否跑完一律用行程結束/退出碼**,不要比對 log 內容:`M2-01` 會巢狀印出
+    自己的 `=== 結果` 行。結果行現在帶 gate 名稱(`=== 結果(phase2):…`)以降低誤判
   - `environment/.env.staging` 的 `POSTGRES_*` 密碼必須與 `.env.mvp` 一致:兩個環境共用同一個
     compose 專案名與 `postgres-data` volume,密碼不同會使後切換的那一個認證失敗
+    (`up.sh` 現在會偵測並直接告訴你修法)
   - 新的整合測試請自己分配 client IP(本 phase 用 `10.60.0.11/.12`);L4 的 ES 測試共用
     `ElasticsearchTestContainer` 單例,`SearchIndexControl` 提供 refresh / 投毒 / 重建
+
+---
+
+## Phase 19 收尾強化 — 閘門與 up.sh 的可信度(2026-08-29,Phase 19 之後)
+
+- **狀態**:done(使用者指示:把這次踩到的坑做成機制,規格一併更新)
+- **Commit**:(見 git log,message `Tooling: make the DoD gate and up.sh fail loudly instead of misleadingly`)
+- **背景**:Phase 19 的實跑本身暴露了三個工具缺陷,它們造成的浪費比 phase 的實作還多。
+  不修的話每個後續 phase 都會再付一次。
+- **內容**:
+  1. **`dod.sh` 互斥鎖**:同一個 repo 同時只能有一個 gate 在跑。兩個 gate 並行會共用
+     `backend/*/target`(一邊 `clean` 抽掉另一邊的 classes)、又互搶 Docker 記憶體;
+     症狀是 `cannot find symbol: CtipProperties` 與 Testcontainers
+     `Timed out waiting for log output`,**完全不像併發問題**,而那一輪的分數是假的。
+     鎖以 pid 記錄(殘鎖自動接手);`M2-01` 巢狀呼叫 `dod.sh mvp` 時以 `CTIP_DOD_LOCK`
+     傳遞持有權,不重複取鎖也不誤刪。已實測:第二個實例被拒、結束後鎖釋放、巢狀不受影響
+  2. **結果行帶 gate 名稱**(`=== 結果(phase2):27/27 通過 ===`)。上面那次並行的起因是
+     「等到 log 出現 `=== 結果` 就當成跑完」,而 `M2-01` 的巢狀 mvp gate 會先印一行。
+     §15.0 同時明訂:**判斷完成一律用行程結束/退出碼**
+  3. **`up.sh` 失敗時印日誌並診斷**:原本只說「未就緒:backend」,而 crash-loop 的容器在 `ps` 裡
+     看起來只是「一直在 restart」。本 phase 連續三次靠人工 `docker logs` 才找到原因,
+     三種都只有一種成因:`password authentication failed`(共用 volume 的憑證不一致)、
+     `hosts must not be null nor empty`(空的 `ELASTICSEARCH_URL`)、
+     `mvnw: No such file or directory` / `Could not read package.json`(image 用錯 build target)。
+     `_common.sh` 的 `diagnose_startup_failure` 現在把三者翻譯成可執行的修法;
+     比對用 bash 的 `case` 而非 `| grep -q`(pipefail 下 SIGPIPE 會使條件假性不成立,同 M1-37 的坑)
+  4. **§5.5 開頭補「四個環境共用同一個 compose 專案與具名 volume」的兩個後果**:
+     `POSTGRES_*` 必須一致、切換環境要收掉上一個 profile 的服務
+- **規格回寫**:`15 §15.0`(dod.sh 契約加兩列 + 修訂 4/5)、`05 §5.5`、`05 §5.10`(第 7 步 + 腳本表)、
+  `00 §0.25` 加第 16–19 項、ADR 0028 第 17 節
+- **驗證**:互斥鎖三種情境實測 ✅;`dod.sh full --only M3-24` ✅;
+  `dod.sh mvp --only M1-01/M1-14`(鎖 + 結果行格式)✅;全部 `.sh` 過 `bash -n` ✅
 
 ---

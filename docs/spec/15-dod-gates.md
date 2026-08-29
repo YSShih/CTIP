@@ -24,6 +24,8 @@
 | 支援 `--only <id>` 與 `--skip <id>` |
 | **不得**因為某項失敗就中止後續檢查（要一次看到全部問題） |
 | 結尾必須印出「需人工確認」清單，並提示這些項目未被自動驗證 |
+| **同一個 repo 同時只能有一個 gate 在執行**（互斥鎖）；巢狀呼叫（`M2-01` → `dod.sh mvp`）不受限 |
+| 結果行必須帶 gate 名稱：`=== 結果(<gate>):N/M 通過 ===` |
 
 > 判準中的 `./backend/mvnw … -Dtest=<類名>` 在多 module reactor 下依賴 parent pom 的 surefire 設定
 > `failIfNoSpecifiedTests=false`（[06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) 第 4 點）；缺少該設定時，沒有該測試類的 module 會使整個指令失敗。
@@ -38,6 +40,21 @@
 > 3. **`failIfNoSpecifiedTests=false` 的反面代價**：測試類**不存在**時 surefire 跑 0 個測試、build 仍成功，
 >    於是尚未實作的 phase 的 DoD 項目會一路 `[PASS]`。實測 Phase 14/15/16 一行程式都沒有時，
 >    `dod.sh phase2` 仍回報 27/27 全綠。`dod.sh` 現在會**先確認測試類檔案存在**再交給 Maven。
+
+> **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**——
+> 兩項讓閘門「跑得出可信結論」的強制規則：
+>
+> 4. **gate 不得並行執行,`dod.sh` 以互斥鎖強制**。兩個 gate 共用 `backend/*/target`，
+>    一邊 `clean` 就把另一邊的 classes 抽掉；容器與 Testcontainers 也會互搶記憶體。
+>    症狀完全不像併發問題——實測見到的是 `cannot find symbol: CtipProperties` 與
+>    Testcontainers `Timed out waiting for log output`，而那一輪的分數（26/27）**完全不可信**。
+>    寧可拒絕啟動，也不要產出一份看似有結論的報告。鎖以 pid 記錄，殘鎖（上次被 kill）會自動接手；
+>    `M2-01` 巢狀呼叫 `dod.sh mvp` 時以環境變數傳遞持有權，不重複取鎖。
+>    **同理，gate 執行期間不得在 host 端跑任何 Maven 指令**（[05 §5.10](05-environment.md#510-腳本契約) 已記同一個坑）。
+> 5. ⚠️ **判斷 gate 是否結束一律用「行程結束／退出碼」，不得比對 log 內容**。
+>    `M2-01` 會巢狀執行整個 `dod.sh mvp`，它的結果行會**先**出現在同一份 log 裡；
+>    以 `=== 結果` 為完成條件會在外層還在跑時就誤判結束（Phase 19 因此啟動了第二輪，見第 4 點）。
+>    結果行自本版起帶 gate 名稱以降低誤判，但**正確的作法仍是等行程結束**。
 
 ---
 

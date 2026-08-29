@@ -23,6 +23,48 @@ ok()   { printf '%s[OK]%s %s\n' "${C_GREEN}" "${C_RESET}" "$*"; }
 warn() { printf '%s[WARN]%s %s\n' "${C_YELLOW}" "${C_RESET}" "$*" >&2; }
 die()  { printf '%s[ERROR]%s %s\n' "${C_RED}" "${C_RESET}" "$*" >&2; exit 1; }
 
+# 啟動失敗時,把「訊息看不出原因、但只有一種成因」的症狀翻譯成可執行的修法。
+# 用法:diagnose_startup_failure <env> <未就緒的服務清單>
+#
+# 比對一律用 bash 的 case 而非 `| grep -q`:pipefail 下 grep -q 提早退出會讓左側吃 SIGPIPE,
+# 條件因此可能假性不成立(§5.10 已記過同一個坑)。
+diagnose_startup_failure() {
+  local e="$1" services="$2" logs project
+  # shellcheck disable=SC2086
+  logs="$(compose "$e" logs --tail 200 $services 2>&1 || true)"
+  project="$(env_get "$(env_file_path "$e")" PROJECT_NAME)"
+  project="${project:-ctip}"
+
+  # 四個環境共用同一個 compose 專案名與 postgres-data volume(§5.5)。volume 一旦被某個
+  # 環境初始化,POSTGRES_PASSWORD 就固定了——換一組密碼的環境只會拿到認證失敗,
+  # 而錯誤訊息裡完全沒有「你換了環境」這件事(2026-08-29 Phase 19 實測)。
+  case "$logs" in
+    *"password authentication failed"*)
+      warn "偵測到資料庫認證失敗。四個環境共用同一個 compose 專案與 postgres-data volume,"
+      warn "volume 已被另一個環境以不同的 POSTGRES_PASSWORD 初始化。二選一:"
+      warn "  1) 讓 environment/.env.${e} 的 POSTGRES_* 與先前啟動過的環境一致(建議)"
+      warn "  2) 清掉資料重來:docker volume rm ${project}_postgres-data"
+      ;;
+  esac
+
+  # Boot 的 ES autoconfig 對空 uris 直接讓應用死掉,即使 SEARCH_BACKEND=postgres(13 §13.7)
+  case "$logs" in
+    *"hosts must not be null nor empty"*)
+      warn "偵測到 Elasticsearch client 因空的 uris 而無法建立。"
+      warn "請確認 compose 對 ELASTICSEARCH_URL 的預設值不是空字串(05 §5.8.2 第 7 項)。"
+      ;;
+  esac
+
+  # image 沿用了另一個 build target(05 §5.8.2 第 5 項)
+  case "$logs" in
+    *"mvnw: No such file or directory"*|*"Could not read package.json"*)
+      warn "偵測到 production 的檔案系統配上 development 的 CMD(或反之)——image 沿用了另一個"
+      warn "build target。重建該服務:"
+      warn "  docker compose --env-file environment/.env.${e} -f environment/docker-compose.yml build <service>"
+      ;;
+  esac
+}
+
 # 驗證環境參數為 mvp|dev|staging|prod
 validate_env() {
   case "${1:-}" in

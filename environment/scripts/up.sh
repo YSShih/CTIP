@@ -84,6 +84,14 @@ while :; do
   [ -z "$NOT_READY" ] && break
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
     compose "$ENV_NAME" ps -a
+    # 印出未就緒服務的日誌尾段(§5.10 第 7 步):只說「逾時」的話,呼叫端要再自己去挖 logs,
+    # 而 crash-loop 的容器在 `ps` 裡看起來只是「一直在 restart」,完全看不出原因
+    for svc in $NOT_READY; do
+      info ""
+      info "--- ${svc} 最後 30 行日誌 ---"
+      compose "$ENV_NAME" logs --tail 30 "$svc" 2>&1 || true
+    done
+    diagnose_startup_failure "$ENV_NAME" "$NOT_READY"
     die "等待 healthcheck 逾時(300s)。未就緒:$(printf '%s' "$NOT_READY" | tr '\n' ' ')"
   fi
   sleep 3

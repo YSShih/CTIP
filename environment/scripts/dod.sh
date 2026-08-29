@@ -54,10 +54,42 @@ should_run() {
 }
 
 # ---------------------------------------------------------------------------
+# 互斥鎖(§15.0):同一個 repo 同時只能有一個 gate 在跑
+#
+# 兩個 gate 並行會共用 backend/*/target,一邊 clean 就把另一邊的 classes 抽掉,
+# 症狀是 `cannot find symbol` 之類完全不像併發問題的編譯錯誤;容器與 Testcontainers
+# 也會互搶記憶體(「Timed out waiting for log output」)。這種失敗的分數完全不可信,
+# 因此寧可拒絕啟動也不要產生一份看似有結論的報告(2026-08-29 Phase 19 實測)。
+#
+# M2-01 會巢狀呼叫 `dod.sh mvp`:子行程繼承 CTIP_DOD_LOCK,不再取鎖也不刪鎖。
+# ---------------------------------------------------------------------------
+if [ -z "${CTIP_DOD_LOCK:-}" ]; then
+  LOCK_DIR="${TMPDIR:-/tmp}/ctip-dod-$(printf '%s' "$REPO_ROOT" | cksum | tr -d ' ' | tr -s ' ' '_')"
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    LOCK_PID="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
+    if [ -n "$LOCK_PID" ] && kill -0 "$LOCK_PID" 2>/dev/null; then
+      die "已有另一個 dod.sh 在執行(pid ${LOCK_PID})。gate 會跑數十分鐘,並行執行的分數不可信;
+     請等它結束(它的退出碼才是結論),或 kill 後重跑。鎖:${LOCK_DIR}"
+    fi
+    # 上一次被 kill 而沒清掉的殘鎖:接手
+    warn "接手殘留的 dod.sh 鎖(pid ${LOCK_PID:-未知} 已不存在)"
+    rm -rf "$LOCK_DIR" && mkdir "$LOCK_DIR"
+  fi
+  printf '%s' "$$" > "${LOCK_DIR}/pid"
+  export CTIP_DOD_LOCK="$LOCK_DIR"
+  CTIP_DOD_LOCK_OWNER=1
+fi
+
+# ---------------------------------------------------------------------------
 # 檢查執行框架(含記憶化:規格中「同上」的項目共用同一指令,不重跑)
 # ---------------------------------------------------------------------------
 WORKDIR="$(mktemp -d)"
-trap 'rm -rf "$WORKDIR"' EXIT
+cleanup() {
+  rm -rf "$WORKDIR"
+  [ -n "${CTIP_DOD_LOCK_OWNER:-}" ] && rm -rf "${CTIP_DOD_LOCK}"
+  return 0
+}
+trap cleanup EXIT
 
 TOTAL=0
 PASS_COUNT=0
@@ -447,7 +479,9 @@ case "$GATE" in
 esac
 
 info ""
-info "=== 結果:${PASS_COUNT}/${TOTAL} 通過 ==="
+# 帶 gate 名稱:M2-01 會巢狀印出自己的結果行,不標名的話用 log 內容判斷完成必然誤判
+# ——外層還在跑就以為結束、於是啟動第二輪(§15.0)。判斷完成請一律用退出碼。
+info "=== 結果(${GATE}):${PASS_COUNT}/${TOTAL} 通過 ==="
 if [ -n "$FAILED_IDS" ]; then
   printf '%s失敗項目:%s%s\n' "${C_RED}" "${FAILED_IDS}" "${C_RESET}"
 fi

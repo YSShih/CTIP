@@ -343,6 +343,18 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 
 ## 5.5 四種 Profile 差異表
 
+> **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+> 四個環境**共用同一個 compose 專案名**（`name: ${PROJECT_NAME:-ctip}`）**與同一組具名 volume**，
+> 差異只靠 profile。兩個後果必須記住：
+>
+> 1. **`POSTGRES_*` 憑證在四份 `.env` 之間必須一致**——`postgres-data` volume 一旦被某個環境
+>    初始化，密碼就固定了，換一組密碼的環境只會拿到 `password authentication failed`，
+>    而錯誤訊息裡完全沒有「你換了環境」這件事。要用不同憑證就得先刪 volume。
+> 2. **切換環境時必須收掉上一個 profile 的服務**（§5.10 第 6 步）；`--remove-orphans` 做不到這件事。
+>
+> `up.sh` 失敗時會針對第 1 點給出可執行的提示（§5.10 第 7 步）。
+
+
 | 變數 | mvp | dev | staging | prod |
 |---|---|---|---|---|
 | `ENVIRONMENT` | `mvp` | `dev` | `staging` | `prod` |
@@ -777,6 +789,22 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
    > 對差集執行 `rm -sfv`。
 7. 等待 healthcheck 並印出服務狀態與存取網址；**任何服務異常退出（exited）視為失敗，不空等逾時**
 
+   > **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+   > 失敗時**必須印出未就緒服務的日誌尾段**，並對「訊息看不出原因、但只有一種成因」的症狀
+   > 給出可執行的修法（`_common.sh` 的 `diagnose_startup_failure`）。
+   > 只說「逾時」的話，crash-loop 的容器在 `ps` 裡看起來只是「一直在 restart」——
+   > Phase 19 為此連續三次靠人工 `docker logs` 才找到原因（資料庫憑證、空的 ES uris、image 用錯 target）。
+   > 目前翻譯三種症狀：
+   >
+   > | 日誌訊息 | 真正的成因 | 提示的修法 |
+   > |---|---|---|
+   > | `password authentication failed` | 四個環境共用同一個 `postgres-data` volume，已被另一個環境以不同密碼初始化 | 對齊 `POSTGRES_*`，或刪 volume 重來 |
+   > | `hosts must not be null nor empty` | `ELASTICSEARCH_URL` 為空（§5.8.2 第 7 項） | 檢查 compose 預設值 |
+   > | `mvnw: No such file or directory` / `Could not read package.json` | image 沿用了另一個 build target（§5.8.2 第 5 項） | 重建該服務的 image |
+   >
+   > 比對一律用 bash 的 `case` 而非 `| grep -q`：`pipefail` 下 `grep -q` 提早退出會讓左側吃 SIGPIPE，
+   > 條件因此可能假性不成立（本節下方 `dod.sh` M1-37 已記過同一個坑）。
+
 其餘腳本：
 
 | 腳本 | 用途 |
@@ -786,7 +814,7 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
 | `logs.sh <service> <env>` | 追蹤日誌 |
 | `migrate.sh <env>` | 手動觸發 Flyway（`mvn flyway:migrate`） |
 | **`reload.sh <service> <env>`** | **重新編譯並熱替換，見 5.11** |
-| **`dod.sh <gate>`** | **執行 DoD Gate 檢查，見 [15-dod-gates.md](15-dod-gates.md)** |
+| **`dod.sh <gate>`** | **執行 DoD Gate 檢查，見 [15-dod-gates.md](15-dod-gates.md)**；同一個 repo 以互斥鎖限制**同時只能有一個 gate 在跑**（[15 §15.0](15-dod-gates.md#150-執行方式)） |
 
 共用邏輯放 `_common.sh`。**不得要求開發者記憶複雜的 Compose 指令。**
 
