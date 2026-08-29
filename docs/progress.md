@@ -1299,7 +1299,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-29)
 - **執行單**:`docs/spec/phases/phase-18.md`
-- **Commit**:(見 git log,message `Phase 18: threat entity, relationships and M2 STIX objects`)
+- **Commit**:`1619b90`(`Phase 18: threat entity, relationships and M2 STIX objects`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest='ThreatIntegrationTest,StixSchemaValidationTest'`(逐字)✅ **23/23**
   - `cd frontend && npm run test -- ThreatFeedPage ThreatDetailPage`(逐字)✅ **10/10**
@@ -1307,7 +1307,8 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     (sdk 13 + core 360 + adapters 33 + app 409;Spotless / Checkstyle / JaCoCo 全過)
   - 前端 `npm run test` ✅ 131、`npx tsc --noEmit` ✅、`npm run lint` ✅、`format:check` ✅
   - `dod.sh phase2 --only M2-21`(Threat 三張表可用)✅;`--only M2-04/06/07/20/27` ✅ 5/5
-  - `dod.sh mvp` 回歸 ✅ **38/38**
+  - `dod.sh mvp` 回歸 ✅ **37/38 → 38/38**:M1-10(`npm run api:check`)比對的是 **committed** 的
+    generated 型別,commit 前必然紅;commit 後單獨複跑 `--only M1-10` ✅(同 Phase 16)
 - **交付物**:
   - migration `V31`:表 19–21 + V7 保留的 `fk_so_threat` + **表 8 漏掉的 `ix_so_threat`**
     + `threat:manage` 權限種子(冪等;放在同一個 migration 的理由見 ADR 0027 §7)
