@@ -17,6 +17,7 @@ import com.ctip.application.ingestion.StixProjectionStage;
 import com.ctip.application.ingestion.ValidateStage;
 import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.StixObjectPort;
+import com.ctip.application.search.SearchIndexWriter;
 import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.domain.event.DomainEvent;
 import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
@@ -78,7 +79,8 @@ public final class ManualIngestionHarness {
                 new EventPublishStage(events::add)));
         this.executor = new IngestionBatchExecutor(
                 new IngestionBatchProcessor(pipeline, rejections::add, new IngestionSettings(true, 500)),
-                new StixProjectionWriter(stixObjects));
+                new StixProjectionWriter(stixObjects),
+                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()));
     }
 
     public IngestionBatchExecutor executor() {

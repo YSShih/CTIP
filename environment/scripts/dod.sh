@@ -400,7 +400,7 @@ gate_phase2() {
   check M2-19 "匯入超出方案上限回 413" "${MVNT}ManualSubmissionTest"
   check M2-20 "誤判回報後 status 由合併規則決定(非呼叫端指定)" "${MVNT}FalsePositiveReportTest"
   check M2-21 "Threat 實體與 threat_indicators、threat_external_references 可用" "${MVNT}ThreatIntegrationTest"
-  check M2-22 "Elasticsearch 索引建立、搜尋正確" "${MVN} verify -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ElasticsearchSearchTest"
+  check M2-22 "Elasticsearch 索引建立、搜尋正確" "${MVNT}ElasticsearchSearchTest"
   check M2-23 "ES 掛掉時 API 降級為 PostgreSQL(200 + X-Search-Backend: postgres)" "${MVNT}SearchFallbackTest"
   check M2-24 "Reconciliation 能偵測並修正 DB 與 ES 差異" "${MVNT}SearchReconciliationTest"
   check M2-25 "up.sh staging 成功且未掛載原始碼" dod_up_staging_no_mount

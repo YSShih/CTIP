@@ -16,3 +16,7 @@ management:
   health:
     redis:
       enabled: false
+    # 同理:spring-boot-elasticsearch 一在 classpath 上,actuator 就會加一個 ES 健康檢查。
+    # es 只屬 full profile(§5.5),mvp/dev 都沒有它——不關掉容器永遠 unhealthy(13 §13.7、06 §6.3.6)。
+    elasticsearch:
+      enabled: false

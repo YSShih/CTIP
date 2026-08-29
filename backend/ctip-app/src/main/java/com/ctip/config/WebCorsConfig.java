@@ -41,7 +41,10 @@ class WebCorsConfig implements WebMvcConfigurer {
                         "X-Bloom-Checksum",
                         "X-Bloom-Compression",
                         "X-Bloom-Bit-Size",
-                        "X-Bloom-Hash-Count")
+                        "X-Bloom-Hash-Count",
+                        // X-Search-Backend(13 §13.7):ES 降級時 API 仍回 200,
+                        // 「這次結果來自哪個後端」只透過這個標頭表達——讀不到就等於沒有降級告知
+                        "X-Search-Backend")
                 .maxAge(3600);
     }
 

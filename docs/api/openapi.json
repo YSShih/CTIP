@@ -741,6 +741,9 @@
           "cursor" : {
             "type" : "string"
           },
+          "fuzzy" : {
+            "type" : "boolean"
+          },
           "includeExpired" : {
             "type" : "boolean"
           },
@@ -2452,7 +2455,7 @@
     },
     "/api/v1/iocs/search" : {
       "post" : {
-        "description" : "Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
+        "description" : "Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. Set `fuzzy: true` for typosquatting detection (Levenshtein matching) — it is an Elasticsearch-only capability and is ignored when the request is served by PostgreSQL. Every response carries `X-Search-Backend: elasticsearch|postgres` so callers can tell which engine answered; a degraded search still returns 200. 認證:匿名。",
         "operationId" : "search",
         "requestBody" : {
           "content" : {
@@ -2505,7 +2508,16 @@
                 }
               }
             },
-            "description" : "One page of matches"
+            "description" : "One page of matches",
+            "headers" : {
+              "X-Search-Backend" : {
+                "description" : "Which engine served this query: elasticsearch or postgres (postgres means the Elasticsearch path was unavailable and the request was degraded — fuzzy matching does not apply)",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
           },
           "400" : {
             "content" : {

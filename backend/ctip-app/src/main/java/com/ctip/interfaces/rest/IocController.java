@@ -4,6 +4,8 @@ import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.indicator.IndicatorQueryService;
 import com.ctip.application.indicator.IntRange;
 import com.ctip.application.indicator.TimeRange;
+import com.ctip.application.port.SearchQuery;
+import com.ctip.application.port.SearchResult;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
 import com.ctip.domain.indicator.IndicatorStatus;
@@ -26,6 +28,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,6 +50,9 @@ import org.springframework.web.bind.annotation.RestController;
 class IocController implements IocApi {
 
     private static final int MAX_OFFSET = 10_000;
+
+    /** 13 §13.7:哪個後端服務了這次搜尋;必須列入 CORS exposedHeaders,瀏覽器 client 才讀得到。 */
+    static final String SEARCH_BACKEND_HEADER = "X-Search-Backend";
 
     private final IndicatorQueryService query;
     private final TenantContext tenantContext;
@@ -114,7 +120,7 @@ class IocController implements IocApi {
     @Override
     @PostMapping("/search")
     @PreAuthorize("hasAuthority('ioc:read')")
-    public PageResponse<IocDto> search(@Valid @RequestBody SearchRequest request) {
+    public ResponseEntity<PageResponse<IocDto>> search(@Valid @RequestBody SearchRequest request) {
         IndicatorFilter filter = new IndicatorFilter(
                 parseEnum(IocType.class, request.type(), "type"),
                 parseEnum(Severity.class, request.severity(), "severity"),
@@ -127,10 +133,18 @@ class IocController implements IocApi {
                 IntRange.of(request.scoreMin(), request.scoreMax()),
                 TimeRange.of(request.lastSeenFrom(), request.lastSeenTo()));
         Cursor after = cursorCodec.decode(request.cursor());
-        int pageSize = clampLimit(request.limit());
-        return assembler.toPage(
-                query.search(request.query(), filter, tenantContext.visibility(), after, pageSize),
-                tenantContext.tenantId());
+        SearchQuery searchQuery = new SearchQuery(
+                request.query(),
+                Boolean.TRUE.equals(request.fuzzy()),
+                filter,
+                tenantContext.visibility(),
+                after,
+                clampLimit(request.limit()));
+        SearchResult result = query.search(searchQuery);
+        // 這裡不判斷降級(13 §13.7 明令),只把 FallbackSearchAdapter 已經決定好的答案寫進標頭
+        return ResponseEntity.ok()
+                .header(SEARCH_BACKEND_HEADER, result.backend().headerValue())
+                .body(assembler.toPage(result.page(), tenantContext.tenantId()));
     }
 
     @Override

@@ -8,3 +8,10 @@ spring:
     restart:
       # ADR 0010:只在 reload.sh 觸碰 trigger file 時重啟,host 端建置不再觸發(避免半寫入 classpath)
       trigger-file: .reloadtrigger
+
+# dev 是 standard profile(frontend/backend/postgres/redis),沒有 elasticsearch;
+# 不關掉 actuator 的 ES 健康檢查,容器 healthcheck 會永遠失敗(同 mvp 的 redis 前例)。
+management:
+  health:
+    elasticsearch:
+      enabled: false

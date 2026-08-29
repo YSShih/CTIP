@@ -119,7 +119,7 @@
 | M2-19 | 匯入超出方案上限回 `413` | 同 M2-18 |
 | M2-20 | 誤判回報後 status 由合併規則決定（非呼叫端指定） | `test -Dtest=FalsePositiveReportTest` |
 | M2-21 | Threat 實體與 `threat_indicators`、`threat_external_references` 可用 | `test -Dtest=ThreatIntegrationTest` |
-| M2-22 | Elasticsearch 索引建立、搜尋正確 | `./mvnw verify -Ptest-all -Dtest=ElasticsearchSearchTest` |
+| M2-22 | Elasticsearch 索引建立、搜尋正確 | `test -Ptest-all -Dtest=ElasticsearchSearchTest` ³ |
 | M2-23 | ES 掛掉時 API 降級為 PostgreSQL（回 200 + `X-Search-Backend: postgres`） | `test -Dtest=SearchFallbackTest` |
 | M2-24 | Reconciliation 能偵測並修正 DB 與 ES 差異 | `test -Dtest=SearchReconciliationTest` |
 | M2-25 | `up.sh staging` 成功且未掛載原始碼 | `./environment/scripts/dod.sh phase2 M2-25` |
@@ -137,6 +137,12 @@
 > `webServer` 會自己跑 `npm run build && npm run preview`，因此不需要另外起 dev server。
 > 四個情境以 `page.route` 攔截 API 邊界執行（[12 §12.8](12-frontend.md#128-前端測試)）；
 > 整套環境的驗證由 M2-25 與 M3-05 負責。
+>
+> ³ **改用 `test` 並走 `dod.sh` 的存在性守衛（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+> 原指令是本節唯一用 `verify` 的過濾式判準，違反 [§15.0](#150-執行方式) 自訂的
+> 「過濾式判準一律用 `test`」（`verify` 綁 JaCoCo `check`，單一測試類不可能滿足門檻）；
+> 更嚴重的是它因此**繞過 `dod.sh` 的 `mvn_test` 存在性守衛**（[ADR 0017](../architecture/decisions/0017-gate-credibility.md)），
+> 在 `ElasticsearchSearchTest` 尚未存在時是 0 個測試的**空轉通過**。已與 M2-23／M2-24 統一。
 
 **27 項，全部可執行。**
 

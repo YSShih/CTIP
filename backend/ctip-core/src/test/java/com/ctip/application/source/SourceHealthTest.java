@@ -8,6 +8,7 @@ import com.ctip.application.ingestion.IngestionPipeline;
 import com.ctip.application.ingestion.IngestionSettings;
 import com.ctip.application.port.AdapterRegistryPort;
 import com.ctip.application.port.SourceSyncLogPort;
+import com.ctip.application.search.SearchIndexWriter;
 import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.domain.event.SourceEvents.SourceDegraded;
 import com.ctip.domain.event.SourceEvents.SourceFailed;
@@ -28,6 +29,8 @@ import com.ctip.sdk.SourceType;
 import com.ctip.sdk.ThreatSourceAdapter;
 import com.ctip.sdk.Tlp;
 import com.ctip.testing.FixedClockPort;
+import com.ctip.testing.InMemorySearchDocuments;
+import com.ctip.testing.InMemorySearchIndex;
 import com.ctip.testing.InMemorySourceRepository;
 import com.ctip.testing.InMemoryStixObjects;
 import com.ctip.testing.RecordingEventPublisher;
@@ -154,8 +157,10 @@ class SourceHealthTest {
         AdapterRegistryPort registry = type -> Optional.ofNullable(adapters.get(type));
         IngestionBatchProcessor processor = new IngestionBatchProcessor(
                 new IngestionPipeline(List.of()), r -> {}, new IngestionSettings(true, 500));
-        IngestionBatchExecutor executor =
-                new IngestionBatchExecutor(processor, new StixProjectionWriter(new InMemoryStixObjects()));
+        IngestionBatchExecutor executor = new IngestionBatchExecutor(
+                processor,
+                new StixProjectionWriter(new InMemoryStixObjects()),
+                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()));
         SourceSyncRecorder recorder = new SourceSyncRecorder(new NoopSyncLog(), healthService, events, clock);
         return new SourceSyncService(sources, registry, executor, recorder, clock);
     }

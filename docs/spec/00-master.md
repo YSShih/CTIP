@@ -649,4 +649,36 @@ Threat 實體與關聯 + M2 的 STIX 物件,逐項見
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.24）。*
+## 0.25 實作回饋修訂（2026-08-29，Phase 19）
+
+Elasticsearch 搜尋、降級與 reconciliation,逐項見
+[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | **`X-Search-Backend` 沒有傳遞通道**:`SearchPort` 回 `CursorPage<Indicator>`,而 §13.7 又禁止在 controller 判斷降級(ADR 0020 §8) | `SearchPort.search(SearchQuery) → SearchResult(page, backend)`;輸入一併包成 record(多一個 `fuzzy` 會使簽章超過 checkstyle 的 `ParameterNumber ≤ 5`) | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 2 | ⚠️ **§13.7 的搜尋欄位清單不含 `ownerTenantId`、`deletedAt`、來源的再散布政策**——照字面實作,ES 路徑會整套繞過可見度與側信道防護(ADR 0015、ADR 0020 §8) | 索引另帶 `ownerTenantId`／`redistributable`／`disclosableSourceIds`,軟刪除不進索引;**且回傳的 Indicator 一律以 `findVisibleByIds` 從 PostgreSQL 取回**(兩層防護,各以測試反向驗證) | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 3 | 索引名、mapping、查詢形狀、模糊查詢的 API 契約、對帳演算法皆未定義 | 全部定案並寫回 §13.7:`ctip-indicators`／`dynamic: strict`／`wildcard` 子字串(語意等同 M1 的 `LIKE`)／`fuzzy` 旗標／歸併對帳只在共同涵蓋區間內判定 | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch)、[09 §9.1](09-api.md#91-端點清單) |
+| 4 | §13.7「一致性」表格的三條規則因引用區塊插在表頭與內容列之間而**沒有 render 成表格** | 修訂移到表格之後;三條規則內容未變,一律為強制 | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+| 5 | reconciliation 排程沒有環境變數(執行單明列);`08 §8.7` 其實已命名 `ES_RECONCILE_CRON`,但 §5.4.5、compose 與樣板都沒有 | 補 `ES_RECONCILE_CRON` 與 `SEARCH_BACKEND`(compose + §5.4 + 五份樣板;`ConfigSymmetryTest` 強制對稱) | [05 §5.4](05-environment.md#54-環境變數清單)、[05 §5.6](05-environment.md#56-compose-骨架) |
+| 6 | **`spring-boot-elasticsearch` 一在 classpath 上就會加 actuator 的 ES 健康檢查**——ES 只屬 `full` profile,mvp 與 dev 都沒有它,不關掉容器永遠 unhealthy、`dod.sh mvp` 整批紅(同 Phase 17 的 Redis,但 Redis 屬 `standard,full` 故當時只需關 mvp) | `application-mvp.yml` 與 `application-dev.yml` 皆關;`06 §6.3.6` 補第 11 條(含 Testcontainers ES 座標與 image 對應) | [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+| 7 | `ELASTICSEARCH_URL` 為空時,ES 路徑會變成「每次查詢先逾時再降級」的靜默錯誤——降級會把它蓋成看起來正常的 200,沒有人會發現 ES 從來沒被用過 | 守衛放在**設定層**:`ConfigSymmetryTest` 斷言 compose 對「有 autoconfig 綁在上面的變數」不得給空字串預設值。放 `StartupValidator` 是錯的——autoconfig 在 context refresh 期間就先失敗(見第 14 項),bean 形式的檢查永遠不會觸發,那會是一段不可達的程式碼(規則 16) | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch)、[05 §5.6](05-environment.md#56-compose-骨架) |
+| 8 | phase-19 的「ES 型別不得洩漏到 application 層」與規則 11(Phase 17 為 Redis 建立)是同一條規則 | **擴充規則 11 的套件清單而非新增規則 12**,維持 §0.3 的「11 條」契約;一併擋 Resilience4j | [01 §1.9](01-architecture.md#19-archunit-規則強制共-11-條) |
+| 9 | **`15 §15.2` 的 M2-22 是空轉通過的**:它是 DoD 全表唯一用 `verify` 的過濾式判準,違反 §15.0 自訂的規則,並因此繞過 `dod.sh` 的 `mvn_test` 存在性守衛(ADR 0017)——測試類不存在時 surefire 跑 0 個測試、build 成功、該項 `[PASS]` | 與 M2-23／M2-24 統一為 `mvn_test`;規格與 `dod.sh` 同步 | [15 §15.2](15-dod-gates.md#152-dod-phase2phase-1319) |
+| 10 | `06 §6.5` 要求的 `docs/deployment/licensing.md` 從 M1 起就不存在(M3-23 的 12 份文件之一) | 本 phase 補上(§6.5 是 phase-19 的治理規格之一,ES → OpenSearch 的替換步驟正屬此處) | [06 §6.5](06-tech-stack.md#65-授權注意事項) |
+| 11 | **compose 的 `backend`／`frontend` 沒有 `image:` 鍵,兩個 build target 共用同一個 image 名稱**——`docker compose up` 只在 image 不存在時才建置,先跑過 mvp(development)再跑 staging(production)會沿用 development 的 image,兩個容器 crash-loop | 兩個服務加 `image: ${PROJECT_NAME:-ctip}-<service>:${*_BUILD_TARGET:-production}`;補列於 §5.8.2。M2-25 是 DoD 中唯一會切換 build target 的項目,先前 phase 只跑 `--only` 子集故未浮現 | [05 §5.6](05-environment.md#56-compose-骨架)、[05 §5.8.2](05-environment.md#582-image-tag-與-build-target) |
+| 12 | **frontend 的 `HEALTHCHECK` 用 `http://localhost/`**——容器內 `localhost` 只解析到 `::1`,而 nginx 的 `listen 80;` 只綁 IPv4,busybox 的 `wget` 不回退 → production 的 frontend 永遠 `unhealthy`(用 `curl` 手動驗證看不出來,它會回退) | 改為 `http://127.0.0.1/`;補列於 §5.8.2。同樣只有 M2-25 會實際執行 production stage | [05 §5.3](05-environment.md#53-dockerfile-契約)、[05 §5.8.2](05-environment.md#582-image-tag-與-build-target) |
+
+| 13 | **全新的 ES 叢集在 05:00 的對帳之前索引是空的,而搜尋照樣回 200 並宣稱 `X-Search-Backend: elasticsearch`**——比降級更糟,降級至少會說出來(實跑 staging 才發現) | `SearchIndexBootstrap`:啟動後檢查「索引空而資料庫非空」,成立才在背景補建一次;正常重啟不付出代價 | [13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) |
+
+| 14 | **compose 對 `ELASTICSEARCH_URL` 用空字串預設值**,而 Boot 的 ES autoconfig 對空 `uris` 直接丟 `hosts must not be null nor empty`——加入 `spring-boot-elasticsearch` 之後,mvp/dev 的 backend **完全無法啟動**(即使 `SEARCH_BACKEND=postgres`、根本用不到那個 client) | 預設值改為 `http://elasticsearch:9200`;補列於 §5.8.2。與 §6.3.6 第 1 條互為對照:該條是「autoconfig 不在 classpath 上,屬性靜默失效」,這裡是「autoconfig 在 classpath 上,空屬性直接讓應用死掉」 | [05 §5.6](05-environment.md#56-compose-骨架)、[05 §5.8.2](05-environment.md#582-image-tag-與-build-target) |
+
+| 15 | **`up.sh` 切換環境時不收掉上一個 profile 的服務**——四個環境共用同一個 compose 專案名、服務差異只靠 profile,先 staging(`full`)再 mvp 會留下五個容器,`M1-14`「只有三個容器」因此不可能通過:**`dod.sh phase2` 跑完一次就再也重跑不了**(M2-25 把環境留在 staging)。⚠️ `--remove-orphans` **解決不了**(compose 刻意不把 profile 停用的服務當 orphan) | `up.sh` 第 6 步以 `ps --services` 減 `config --services` 算差集並 `rm -sfv`;§5.10 與 §5.8.2 同步 | [05 §5.10](05-environment.md#510-腳本契約)、[05 §5.8.2](05-environment.md#582-image-tag-與-build-target) |
+
+> **未實作並回報(規則 17)**:§13.7 修訂 3 的「自由排序留待 M2 與 Elasticsearch 一併設計」**不在 Phase 19 交付**
+> ——每種排序鍵需要一套 cursor 編碼,而降級可以發生在翻頁的任何一頁、兩邊的 cursor 必須可以互換,
+> 兩者直接衝突。排序維持固定 `lastSeen DESC, id DESC`。Threat 的搜尋同樣不在執行單交付物內。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.25）。*

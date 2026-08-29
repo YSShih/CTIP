@@ -9,6 +9,7 @@ import com.ctip.interfaces.rest.dto.ioc.LookupRequest;
 import com.ctip.interfaces.rest.dto.ioc.LookupResponse;
 import com.ctip.interfaces.rest.dto.ioc.SearchRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -18,6 +19,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.ResponseEntity;
 
 /** IOC 讀取端點的 OpenAPI 文件(§9.6);controller 實作本介面以繼承註解。 */
 @Tag(
@@ -109,7 +111,12 @@ public interface IocApi {
             description = "Substring search over the canonical (normalized) value with the same filters "
                     + "and cursor pagination as the list endpoint (type, severity, status, tlp, tags, "
                     + "sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL "
-                    + "(pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。",
+                    + "(pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. "
+                    + "Set `fuzzy: true` for typosquatting detection (Levenshtein matching) — it is an "
+                    + "Elasticsearch-only capability and is ignored when the request is served by "
+                    + "PostgreSQL. Every response carries `X-Search-Backend: elasticsearch|postgres` so "
+                    + "callers can tell which engine answered; a degraded search still returns 200. "
+                    + "認證:匿名。",
             requestBody =
                     @io.swagger.v3.oas.annotations.parameters.RequestBody(
                             content =
@@ -123,6 +130,13 @@ public interface IocApi {
     @ApiResponse(
             responseCode = "200",
             description = "One page of matches",
+            headers =
+                    @Header(
+                            name = "X-Search-Backend",
+                            description = "Which engine served this query: elasticsearch or postgres "
+                                    + "(postgres means the Elasticsearch path was unavailable and the "
+                                    + "request was degraded — fuzzy matching does not apply)",
+                            schema = @Schema(type = "string")),
             content =
                     @Content(
                             mediaType = "application/json",
@@ -137,7 +151,7 @@ public interface IocApi {
             description = "UNSUPPORTED_MEDIA_TYPE",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ErrorResponse.class)))
     @SecurityRequirements
-    PageResponse<IocDto> search(SearchRequest request);
+    ResponseEntity<PageResponse<IocDto>> search(SearchRequest request);
 
     @Operation(
             summary = "Batch exact lookup",

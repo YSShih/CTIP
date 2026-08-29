@@ -117,6 +117,19 @@ GET    /api/v1/sync/delta?base=<n>&scope=          sync:delta
 > 尚未產生 snapshot → `404`；同步過於頻繁 → `429` + `Retry-After`。
 > client 契約全文在 [`docs/api/sync-client-contract.md`](../api/sync-client-contract.md)（[11 §11.7](11-sync-bloom.md#117-client-契約摘要必須複製進-sdk-與-api-文件) 要求）。
 
+> **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**
+>
+> `POST /iocs/search` 的契約補兩項（[13 §13.7](13-platform-ops.md#137-搜尋-phase-12--m1postgresqlphase-19--m2elasticsearch) 只定義了行為，未定義 API 形狀）：
+>
+> | 項目 | 內容 |
+> |---|---|
+> | 請求欄位 `fuzzy`（optional，預設 `false`） | typosquatting 用的模糊比對；**僅 Elasticsearch 後端有效**，降級為 PostgreSQL 時忽略 |
+> | 回應標頭 `X-Search-Backend: elasticsearch\|postgres` | 每一個 `200` 都必帶；ES 不可用時回 `200` + `postgres`，**不得回 500** |
+>
+> `X-Search-Backend` **必須列入 CORS `exposedHeaders`**（與 `X-RateLimit-*`、`X-Bloom-*` 同一份清單）——
+> 讀不到就等於沒有降級告知，瀏覽器 client 會把降級後的結果當成完整結果。
+> 降級的判斷不得在 controller（§13.7 明令），controller 只是把 `SearchPort` 已經決定好的答案寫進標頭。
+
 ### 來源
 
 ```text

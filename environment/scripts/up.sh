@@ -50,8 +50,22 @@ if [ "$(env_get "$ENV_FILE" FRONTEND_BUILD_TARGET)" = "development" ]; then
       sh -c 'npm ci && cp /workspace/package-lock.json /workspace/node_modules/.ctip-lock-stamp'
   fi
 fi
+# 切換環境時,先收掉「上一個 profile 有、這個 profile 沒有」的服務(§5.10 第 6 步)。
+# 四個環境共用同一個 compose 專案名,服務差異只靠 profile,而 compose 刻意<不>把
+# profile 停用的服務視為 orphan(--remove-orphans 對它們無效)——因此必須自己算差集。
+# 少了這一步,先跑 staging(full)再跑 mvp 會留下 redis/kafka/elasticsearch/prometheus/grafana
+# 五個容器,M1-14 的「只有三個容器」變成不可能通過,gate 跑完一次就再也重跑不了。
+SURPLUS="$(comm -23 \
+  <(compose "$ENV_NAME" ps --services 2>/dev/null | sort) \
+  <(compose "$ENV_NAME" config --services | sort) | tr '\n' ' ')"
+if [ -n "${SURPLUS// /}" ]; then
+  info "移除不屬於 ${ENV_NAME} 的服務:${SURPLUS}"
+  # shellcheck disable=SC2086
+  compose "$ENV_NAME" rm -sfv ${SURPLUS} >/dev/null
+fi
+
 info "啟動 ${ENV_NAME} 環境……"
-compose "$ENV_NAME" up -d
+compose "$ENV_NAME" up -d --remove-orphans
 
 # 6. 等待 healthcheck 並印出狀態與存取網址
 info "等待服務 healthcheck……"

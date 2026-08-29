@@ -127,6 +127,7 @@ class StartupValidatorTest {
                         24,
                         "/var/lib/ctip/bloom",
                         BloomCompression.ZSTD),
+                new CtipProperties.Search(CtipProperties.Search.Backend.POSTGRES, "0 0 5 * * *"),
                 new Retention(180, 30, 30, 30, 365, 30));
         return new StartupValidator(properties, springEnv);
     }

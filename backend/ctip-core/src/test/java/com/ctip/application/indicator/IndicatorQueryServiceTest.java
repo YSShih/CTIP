@@ -2,7 +2,9 @@ package com.ctip.application.indicator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.ctip.application.port.SearchBackend;
 import com.ctip.application.port.SearchPort;
+import com.ctip.application.port.SearchResult;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.normalization.IocNormalizers;
 import com.ctip.domain.shared.CursorPage;
@@ -24,7 +26,7 @@ import org.junit.jupiter.api.Test;
 class IndicatorQueryServiceTest {
 
     private final InMemoryIndicatorRepository repository = new InMemoryIndicatorRepository();
-    private final SearchPort search = (term, filter, visibility, after, limit) -> CursorPage.lastPage(List.of());
+    private final SearchPort search = query -> new SearchResult(CursorPage.lastPage(List.of()), SearchBackend.POSTGRES);
     private final IndicatorQueryService service =
             new IndicatorQueryService(repository, search, new IocNormalizers(false));
 

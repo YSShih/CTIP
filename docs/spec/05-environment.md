@@ -187,10 +187,16 @@ COPY --from=build /src/dist /usr/share/nginx/html
 COPY environment/config/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
 ```
 
 `nginx:alpine` 內含 busybox 的 `wget`，故前端 healthcheck 用 `wget` 而非 `curl`。
+
+> **實作回饋修訂（2026-08-29，Phase 19 首次實跑 production target；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+> 位址必須是 `127.0.0.1` 而非 `localhost`。容器內 `localhost` 只解析到 `::1`，而
+> `config/nginx/default.conf` 的 `listen 80;` 只綁 IPv4——**busybox 的 `wget` 不會回退到 IPv4**，
+> healthcheck 因此永遠失敗、容器永遠 `unhealthy`（`curl` 會回退，所以手動驗證時看起來一切正常）。
+> 這個缺陷從 Phase 2 就存在，但 production stage 只有 `M2-25`（`up.sh staging`）會實際執行到。
 
 ---
 
@@ -241,6 +247,7 @@ KAFKA_BOOTSTRAP_SERVERS
 ELASTICSEARCH_URL  ELASTICSEARCH_USERNAME  ELASTICSEARCH_PASSWORD
 ES_JAVA_OPTS                   # 預設 -Xms1g -Xmx1g
 ES_SECURITY_ENABLED            # 預設 false（僅 dev/staging；prod 必須 true）
+SEARCH_BACKEND                 # postgres | elasticsearch，預設 postgres（13 §13.7；es 僅 full profile）
 GRAFANA_ADMIN_PASSWORD         # 僅 full profile 需要
 ```
 
@@ -291,6 +298,7 @@ SCHEDULER_ENABLED
 SOURCE_SYNC_CRON               # 預設 0 */5 * * * *（08 §8.7）
 IOC_EXPIRY_CRON                # 預設 0 0 3 * * *
 INGESTION_RETRY_CRON           # 預設 0 */15 * * * *
+ES_RECONCILE_CRON              # 預設 0 0 5 * * *（08 §8.7；DB 與 ES 對帳，13 §13.7）
 INGESTION_ENABLED
 INGESTION_BATCH_SIZE           # 預設 500
 NORMALIZATION_STRIP_WWW        # 預設 false（07 §7.2）
@@ -398,6 +406,9 @@ services:
 
   backend:
     <<: *app-common
+    # image tag 帶 build target:compose 只在 image 不存在時才建置,不帶 target 的話
+    # 切換環境會沿用另一個 target 建出來的 image(production 的檔案系統配上 development 的 CMD)
+    image: ${PROJECT_NAME:-ctip}-backend:${BACKEND_BUILD_TARGET:-production}
     build:
       context: ..
       dockerfile: environment/docker/backend/Dockerfile
@@ -416,9 +427,13 @@ services:
       REDIS_PORT:                     ${REDIS_PORT:-6379}
       REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS:        ${KAFKA_BOOTSTRAP_SERVERS:-}
-      ELASTICSEARCH_URL:              ${ELASTICSEARCH_URL:-}
+      # 預設值不得為空字串:Boot 的 ES autoconfig 對空 uris 直接丟
+      # 「hosts must not be null nor empty」而使應用**完全無法啟動**——
+      # 即使 SEARCH_BACKEND=postgres、根本不會用到那個 client(13 §13.7)
+      ELASTICSEARCH_URL:              ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
       ELASTICSEARCH_USERNAME:         ${ELASTICSEARCH_USERNAME:-}
       ELASTICSEARCH_PASSWORD:         ${ELASTICSEARCH_PASSWORD:-}
+      SEARCH_BACKEND:                 ${SEARCH_BACKEND:-postgres}
       JWT_SECRET:                     ${JWT_SECRET:?}
       JWT_ACCESS_TOKEN_EXPIRATION:    ${JWT_ACCESS_TOKEN_EXPIRATION:-900}
       JWT_REFRESH_TOKEN_EXPIRATION:   ${JWT_REFRESH_TOKEN_EXPIRATION:-2592000}
@@ -428,6 +443,7 @@ services:
       RATE_LIMIT_ENABLED:             ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_BACKEND:             ${RATE_LIMIT_BACKEND:-redis}
       SCHEDULER_ENABLED:              ${SCHEDULER_ENABLED:-true}
+      ES_RECONCILE_CRON:              ${ES_RECONCILE_CRON:-0 0 5 * * *}
       INGESTION_ENABLED:              ${INGESTION_ENABLED:-true}
       INGESTION_BATCH_SIZE:           ${INGESTION_BATCH_SIZE:-500}
       BLOOM_PUBLIC_CAPACITY:          ${BLOOM_PUBLIC_CAPACITY:-10000000}
@@ -460,6 +476,8 @@ services:
 
   frontend:
     <<: *app-common
+    # 同 backend:image tag 帶 build target,否則切換環境會沿用另一個 target 的 image
+    image: ${PROJECT_NAME:-ctip}-frontend:${FRONTEND_BUILD_TARGET:-production}
     build:
       context: ..
       dockerfile: environment/docker/frontend/Dockerfile
@@ -688,6 +706,24 @@ v2.0 初版仍有四項照字面實作必然失敗的缺陷，於 Phase 3 實測
 > 另兩項屬版本地雷而非本檔缺陷，記於 [06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)：
 > Spring Boot 4 模組化（缺 `spring-boot-flyway` 依賴則 Flyway **靜默不執行**）與 Testcontainers 2.x 座標改名。
 
+### <a id="582-image-tag-與-build-target"></a>5.8.2 實作回饋修正（2026-08-29，Phase 19 首次實跑 `up.sh staging` 時發現；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）
+
+| # | 缺陷 | 症狀 | 修正處 |
+|---|---|---|---|
+| 5 | `backend` / `frontend` 沒有 `image:` 鍵，兩個 build target 因此共用同一個 image 名稱 | `docker compose up` **只在 image 不存在時才建置**：先跑過 mvp（`development`）之後再跑 staging（`production`），compose 會沿用 development 的 image。症狀是 production 的環境配上 development 的 CMD——backend crash-loop 於 `/workspace/mvnw: No such file or directory`、frontend 於 `package.json` 不存在，而 `up.sh` 只看得到「服務一直在 restart」 | 5.6：兩個服務加 `image: ${PROJECT_NAME:-ctip}-<service>:${*_BUILD_TARGET:-production}`，不同 target 即不同 tag，compose 會自行建置缺少的那一個 |
+| 6 | frontend 的 `HEALTHCHECK` 用 `http://localhost/` | 容器內 `localhost` 只解析到 `::1`，而 nginx 的 `listen 80;` 只綁 IPv4；busybox 的 `wget` 不回退 IPv4 → **production 的 frontend 永遠 `unhealthy`**，`up.sh` 等 healthcheck 逾時而失敗（`curl` 會回退，手動驗證時看不出來） | 5.3：改為 `http://127.0.0.1/` |
+| 7 | `ELASTICSEARCH_URL` 的 compose 預設值是**空字串**（`${ELASTICSEARCH_URL:-}`） | Boot 的 ES autoconfig 對空 `uris` 直接丟 `hosts must not be null nor empty`——**應用完全無法啟動**，即使 `SEARCH_BACKEND=postgres`、根本不會用到那個 client。mvp／dev 的 backend 因此 crash-loop（Phase 19 加入 `spring-boot-elasticsearch` 之後才會發生） | 5.6：預設值改為 `http://elasticsearch:9200`（mvp／dev 連不到它，但也永遠不會用到） |
+| 8 | `up.sh` 切換環境時不收掉上一個 profile 的服務 | 四個環境共用同一個 compose 專案名，服務差異只靠 profile：先 `staging`（`full`）再 `mvp`，會留下 redis／kafka／es／prometheus／grafana 五個容器 → `M1-14`「只有三個容器」不可能通過，**`dod.sh phase2` 跑完一次就再也重跑不了**（M2-25 把環境留在 staging）。⚠️ `--remove-orphans` **解決不了**：compose 刻意不把 profile 停用的服務當成 orphan | 5.10 第 6 步：以 `ps --services` 減 `config --services` 算出差集並 `rm -sfv`，之後才 `up -d` |
+
+> 第 5、6 項到 Phase 19 才浮現，是因為 `M2-25`（`up.sh staging`）是 DoD 中唯一會切換 build target、
+> 也是唯一會實際執行 production stage 的項目，而先前的 phase 都只跑 `--only` 的子集。
+> `dod.sh phase2` 的 `M2-01` 會先把環境切回 mvp，
+> 因此**同一次閘門內就會來回切換兩次**——沒有這個修正，M2-25 永遠不可能通過。
+> 第 7 項則是 Phase 19 自己造成的：把 `spring-boot-elasticsearch` 加進 classpath 之後，
+> 一個「宣告了但沒有給值」的環境變數就足以讓 mvp 完全起不來。這與 [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷)
+> 第 1 條的 Redis 前例互為對照：**該條講的是「autoconfig 不在 classpath 上，屬性靜默失效」，
+> 這裡是「autoconfig 在 classpath 上，空屬性直接讓應用死掉」**。
+
 ---
 
 ## 5.9 Flyway
@@ -727,7 +763,18 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
    > 守衛只認目錄存在,偵測不到**相依漂移**:後續 phase 在 pom 新增相依後,舊快取使
    > `mvnw -o` 的 dev 容器必然啟動失敗(Phase 10 實測:Phase 5 的 resilience4j 起全數缺件)。
    > 改為離線 go-offline 探測,首次與相依變更後皆會自動重新預熱,其餘啟動只多一次快速離線檢查。
-6. 執行 `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d`
+6. **先收掉不屬於本 profile 的服務**，再執行
+   `docker compose --env-file environment/.env.<env> -f environment/docker-compose.yml up -d --remove-orphans`
+
+   > **實作回饋修訂（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+   > 四個環境共用同一個 compose 專案名（`name: ${PROJECT_NAME:-ctip}`），服務差異只靠 profile，
+   > 而 compose **刻意不把 profile 停用的服務視為 orphan**——`--remove-orphans` 對它們無效（已實測）。
+   > 沒有這一步，先跑 `staging`（`full`）再跑 `mvp` 會留下
+   > redis / kafka / elasticsearch / prometheus / grafana 五個容器，
+   > `M1-14`「只有 frontend/backend/postgres 三個容器」因此**不可能通過**——
+   > 也就是說 `dod.sh phase2` 跑完一次之後就再也重跑不了（M2-25 會把環境留在 staging）。
+   > 實作以差集計算：`ps --services`（專案內執行中的）減去 `config --services`（本 profile 啟用的），
+   > 對差集執行 `rm -sfv`。
 7. 等待 healthcheck 並印出服務狀態與存取網址；**任何服務異常退出（exited）視為失敗，不空等逾時**
 
 其餘腳本：

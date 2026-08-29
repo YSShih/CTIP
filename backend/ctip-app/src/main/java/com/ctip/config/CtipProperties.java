@@ -32,6 +32,7 @@ public record CtipProperties(
         @NotNull @Valid Api api,
         @NotNull @Valid DataQuality dataQuality,
         @NotNull @Valid Bloom bloom,
+        @NotNull @Valid Search search,
         @NotNull @Valid Retention retention) {
 
     /** 執行環境,對應環境變數 ENVIRONMENT(mvp | dev | staging | prod)。 */
@@ -67,6 +68,29 @@ public record CtipProperties(
         public enum Backend {
             MEMORY,
             REDIS
+        }
+    }
+
+    /**
+     * 搜尋(docs/spec/13-platform-ops.md §13.7)。{@code backend} 決定裝配哪一套實作:
+     * {@code POSTGRES} 時完全不接觸 Elasticsearch(mvp/dev 的 compose 根本不啟動它);
+     * {@code ELASTICSEARCH} 時裝配 ES 讀取索引與 {@code FallbackSearchAdapter} 的降級路徑。
+     *
+     * <p>它與 {@code ctip.rate-limit.backend} 的差別在於:限流的後端是硬切換(Redis 連不上就啟動失敗,
+     * 因為限流是安全機制),搜尋的是軟切換——§13.7 明文要求 ES 不可用時降級並回 200,
+     * 因此執行期的降級由 circuit breaker 負責,這個屬性只決定「有沒有 ES 這條路」。
+     *
+     * @param reconcileCron 對帳排程(每日 05:00;08 §8.7 的 {@code ES_RECONCILE_CRON})
+     */
+    public record Search(@NotNull Backend backend, @NotBlank String reconcileCron) {
+
+        public enum Backend {
+            POSTGRES,
+            ELASTICSEARCH
+        }
+
+        public boolean usesElasticsearch() {
+            return backend == Backend.ELASTICSEARCH;
         }
     }
 

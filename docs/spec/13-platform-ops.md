@@ -313,18 +313,82 @@ public interface SearchPort {
 | 規則 |
 |---|
 | 索引更新在 **M2 為 pipeline 內同步**（`SearchIndexStage`）、**M3 起改經 Kafka**——見下方修訂 |
+| 提供 reconciliation 排程比對 DB 與 ES 的筆數與版本（每日 05:00，`ES_RECONCILE_CRON`） |
+| **索引失敗不得使 ingestion 失敗**，只記錄並排入重試 |
+| **ES 不可用時 API 自動降級為 PostgreSQL 搜尋**，回 200 並在回應 header 帶 `X-Search-Backend: postgres`，不得回 500 |
 
 > **實作回饋修訂（2026-08-28；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md)）**：
-> 本列原寫「M2 起經 Kafka」，但 [§13.1](#131-事件與-kafka-phase-20--m3) 標明 Kafka 是
+> 第一列原寫「M2 起經 Kafka」，但 [§13.1](#131-事件與-kafka-phase-20--m3) 標明 Kafka 是
 > `[Phase 20 · M3]`，而 Phase 19（ES）在 M2。[08 §8.2](08-ingestion-sdk.md) 也寫
 > 「M2 起在 `pe` 之後插入 `BloomUpdateStage` 與 `SearchIndexStage`」——即 pipeline 內同步。
 > **定調以 08 與 phase-19 為準**：M2 是 pipeline 內同步寫入，Phase 20 引入 Kafka 後才改為非同步。
 > 「索引失敗不得使 ingestion 失敗」在兩種模式下都必須成立。
-| 提供 reconciliation 排程比對 DB 與 ES 的筆數與版本（每日 05:00） |
-| **索引失敗不得使 ingestion 失敗**，只記錄並排入重試 |
-| **ES 不可用時 API 自動降級為 PostgreSQL 搜尋**，回 200 並在回應 header 帶 `X-Search-Backend: postgres`，不得回 500 |
+>
+> （2026-08-29 排版修正：本修訂原本插在表頭與後三列之間，使那三條規則沒有 render 成表格列；
+> 已移到表格之後。三條規則的內容未變，一律為強制。）
 
 降級邏輯以 Resilience4j circuit breaker 實作於 `SearchPort` 的組合實作 `FallbackSearchAdapter`，**不在 controller 判斷**。
+
+> **實作回饋修訂（2026-08-29，Phase 19 實測；詳見 [ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**
+>
+> 本節原文只定義了「要有什麼」，索引名、mapping、查詢形狀、模糊查詢的 API 契約與對帳演算法皆未定義。
+> 以下為實作定案，`13 §13.7` 自本版起以此為準。
+>
+> 1. **`SearchPort` 簽章再次調整**（承 2026-08-26 的修訂 1）：
+>    ```java
+>    public record SearchQuery(String term, boolean fuzzy, IndicatorFilter filter,
+>                              Visibility visibility, Cursor after, int limit) {}
+>    public record SearchResult(CursorPage<Indicator> page, SearchBackend backend) {}
+>    public interface SearchPort { SearchResult search(SearchQuery query); }
+>    ```
+>    回傳型別必須承載「哪個後端服務了這次查詢」——`X-Search-Backend` 否則沒有傳遞通道，
+>    而本節同時禁止在 controller 判斷降級（ADR 0020 §8）。輸入包成 record 是因為多一個
+>    `fuzzy` 會使簽章變成 6 個參數，違反 [01 §1.8](01-architecture.md#18-可讀性硬性規則與執行機制)
+>    的 `ParameterNumber ≤ 5`。
+> 2. **⚠️ ES 只回答「哪些 id、依什麼順序」，資料一律由 PostgreSQL 取回**
+>    （`IndicatorRepository.findVisibleByIds`）。兩層防護缺一不可：ES 端仍必須完整重建可見度述詞
+>    （否則分頁與 `hasMore` 建立在錯誤的候選集合上，「本頁少了幾筆」本身就是側信道），
+>    而 source of truth 的再過濾則使索引落後、mapping 疏漏或索引被直接寫入時都不會變成跨租戶洩漏。
+> 3. **索引名 `ctip-indicators`；mapping 為 `dynamic: strict`**。除本節列出的搜尋欄位外，
+>    文件**必須**另帶三個欄位——漏掉任何一個，ES 路徑就會繞過整套過濾：
+>
+>    | 欄位 | 對應規則 |
+>    |---|---|
+>    | `ownerTenantId` | 租戶範圍（[07 §7.7](07-domain-intel.md#tlp-可見度)） |
+>    | `redistributable` | 存在非 `INTERNAL_ONLY` 的來源記錄（I14 / [07 §7.9](07-domain-intel.md#79-再散布政策法遵強制)） |
+>    | `disclosableSourceIds` | `sourceId` 過濾的揭露規則（[ADR 0015](../architecture/decisions/0015-future-phase-hardening.md) 修正 2） |
+>
+>    **軟刪除的 indicator 不進索引**（而非以旗標標記）；殘留的孤兒由對帳刪除。
+>    另存 `lastSeenNanos` / `updatedAtNanos` 兩個 `long`：ES 的 `date` 只有毫秒精度，
+>    而 keyset 分頁的鍵是 `(last_seen, id)`、對帳的版本是 `updated_at`，截斷到毫秒會使同一毫秒內的
+>    資料在翻頁時被跳過、版本兩邊永遠對不齊。
+> 4. **查詢形狀**：`normalizedValue` 為 keyword；子字串以 `wildcard` 表達（涵蓋精確與前綴查詢），
+>    語意與 M1 的 `LIKE '%term%'` 逐字相同——換後端不得讓同一個查詢回不同的結果集。
+>    使用者輸入的 `* ? \` 一律跳脫。排序仍固定 `lastSeen DESC, id DESC`：降級可以發生在翻頁的任何一頁，
+>    兩邊的 cursor 必須可以互換；**修訂 3 提到的「自由排序留待 M2 與 ES 一併設計」未於 Phase 19 實作**
+>    （它需要每種排序鍵一套 cursor 編碼，與降級的 cursor 互換性直接衝突），依規則 17 明確回報。
+> 5. **模糊查詢的 API 契約**：`POST /iocs/search` 的 optional `fuzzy` 旗標明示啟用
+>    （`fuzziness=AUTO`、`prefixLength=1`、`maxExpansions=50`）。降級為 PostgreSQL 時該旗標無效，
+>    呼叫端由 `X-Search-Backend` 得知。
+> 6. **對帳演算法**：兩邊皆以文件 id 昇冪掃描，**只在兩批共同涵蓋的 id 區間內判定漂移**——
+>    不設邊界的話，批次尾端之後的文件會在每一輪被誤判成孤兒刪掉，對帳會把索引愈修愈空。
+>    修正方向永遠是以 DB 為準：缺漏補寫、版本落後重寫、DB 沒有的刪除。
+>    本節「只記錄並**排入重試**」即由此排程承擔（不另建重啟即遺失的記憶體佇列）。
+>    **另外**：索引為空而資料庫非空時（全新的 ES 叢集、或索引被刪除後），啟動後在背景補建一次——
+>    否則新叢集要等到 05:00 才有資料，而搜尋在那之前照樣回 `200` 並宣稱
+>    `X-Search-Backend: elasticsearch`，比降級更糟：降級至少會說出來，空索引是靜默的錯誤答案。
+> 7. **circuit breaker 參數**（本節未給值）：`slidingWindowSize=10`、`minimumNumberOfCalls=3`、
+>    `failureRateThreshold=50%`、`waitDurationInOpenState=30s`——比 [08 §8.5](08-ingestion-sdk.md)
+>    的來源抓取靈敏，因為使用者查詢等不起 20 次逾時。
+> 8. **後端切換為軟切換**：`SEARCH_BACKEND=postgres|elasticsearch`（預設 `postgres`；
+>    es 只屬 `full` profile）只決定「有沒有 ES 這條路」，執行期的降級一律由 circuit breaker 負責。
+>    這與 [10 §10.7](10-identity-plans.md) 的 `RATE_LIMIT_BACKEND` 硬切換語意不同。
+>    ⚠️ **`ELASTICSEARCH_URL` 的 compose 預設值不得為空字串**：空值一方面讓 Boot 的 ES autoconfig
+>    直接丟 `hosts must not be null nor empty`（應用完全無法啟動，即使後端是 postgres），
+>    另一方面在 ES 後端下會變成「每次查詢先逾時再降級」的靜默錯誤——降級會把它蓋成看起來正常的 200。
+>    守衛在 `ConfigSymmetryTest`（設定層）；寫成啟動時的 bean 檢查是**不可達**的，autoconfig 更早失敗。
+> 9. **mvp/dev 必須關掉 actuator 的 elasticsearch 健康檢查**（見
+>    [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) 第 11 條）。
 
 ---
 

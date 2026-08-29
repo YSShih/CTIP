@@ -15,6 +15,9 @@ services:
 
   backend:
     <<: *app-common
+    # image tag 帶 build target:compose 只在 image 不存在時才建置,不帶 target 的話
+    # 切換環境會沿用另一個 target 建出來的 image(production 的檔案系統配上 development 的 CMD)
+    image: ${PROJECT_NAME:-ctip}-backend:${BACKEND_BUILD_TARGET:-production}
     build:
       context: ..
       dockerfile: environment/docker/backend/Dockerfile
@@ -36,9 +39,14 @@ services:
       REDIS_PORT:                     ${REDIS_PORT:-6379}
       REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
       KAFKA_BOOTSTRAP_SERVERS:        ${KAFKA_BOOTSTRAP_SERVERS:-}
-      ELASTICSEARCH_URL:              ${ELASTICSEARCH_URL:-}
+      # 預設值不得為空字串:Boot 的 ES autoconfig 對空 uris 直接丟
+      # 「hosts must not be null nor empty」而使應用**完全無法啟動**——
+      # 即使 SEARCH_BACKEND=postgres、根本不會用到那個 client(13 §13.7)
+      ELASTICSEARCH_URL:              ${ELASTICSEARCH_URL:-http://elasticsearch:9200}
       ELASTICSEARCH_USERNAME:         ${ELASTICSEARCH_USERNAME:-}
       ELASTICSEARCH_PASSWORD:         ${ELASTICSEARCH_PASSWORD:-}
+      # 搜尋後端(13 §13.7):es 屬 full profile,mvp/dev 一律 postgres
+      SEARCH_BACKEND:                 ${SEARCH_BACKEND:-postgres}
       JWT_SECRET:                     ${JWT_SECRET:?}
       JWT_ACCESS_TOKEN_EXPIRATION:    ${JWT_ACCESS_TOKEN_EXPIRATION:-900}
       JWT_REFRESH_TOKEN_EXPIRATION:   ${JWT_REFRESH_TOKEN_EXPIRATION:-2592000}
@@ -54,6 +62,7 @@ services:
       SOURCE_SYNC_CRON:               ${SOURCE_SYNC_CRON:-0 */5 * * * *}
       IOC_EXPIRY_CRON:                ${IOC_EXPIRY_CRON:-0 0 3 * * *}
       INGESTION_RETRY_CRON:           ${INGESTION_RETRY_CRON:-0 */15 * * * *}
+      ES_RECONCILE_CRON:              ${ES_RECONCILE_CRON:-0 0 5 * * *}
       INGESTION_ENABLED:              ${INGESTION_ENABLED:-true}
       INGESTION_BATCH_SIZE:           ${INGESTION_BATCH_SIZE:-500}
       NORMALIZATION_STRIP_WWW:        ${NORMALIZATION_STRIP_WWW:-false}
@@ -96,6 +105,8 @@ services:
 
   frontend:
     <<: *app-common
+    # 同 backend:image tag 帶 build target,否則切換環境會沿用另一個 target 的 image
+    image: ${PROJECT_NAME:-ctip}-frontend:${FRONTEND_BUILD_TARGET:-production}
     build:
       context: ..
       dockerfile: environment/docker/frontend/Dockerfile

@@ -8,8 +8,8 @@
 | Milestone | Phase | 狀態 |
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
-| M2 — Platform | 13–19 | 進行中:Phase 18 完成,下一步 Phase 19 |
-| M3 — Production | 20–23 | 未開始 |
+| M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
+| M3 — Production | 20–23 | 未開始:下一步 Phase 20 |
 
 ---
 
@@ -1373,5 +1373,96 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     若要補 UI 需另行指派
   - `db/seed/sample_data.sql` **沒有 threat 樣本**(§14.7 的清單未列);mvp/dev 環境的
     `/threats` 預設是空的,要看畫面得先用寫入端點建幾筆(或另行指派補 seed)
+
+---
+
+## Phase 19 — Elasticsearch 搜尋 + reconciliation + 降級(M2 收官)
+
+- **狀態**:done(2026-08-29)
+- **執行單**:`docs/spec/phases/phase-19.md`
+- **Commit**:(見 git log,message `Phase 19: elasticsearch search, fallback and reconciliation`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-all -Dtest='ElasticsearchSearchTest,SearchFallbackTest,SearchReconciliationTest'`(逐字)✅ **14/14**
+  - `./environment/scripts/up.sh staging` ✅ 八個服務全 healthy(含 `elasticsearch:9.5.1`)
+  - `./environment/scripts/dod.sh phase2` ✅ **27/27**
+    (第一次跑 26/27,唯一的紅是 M2-01 內的 M1-10 `npm run api:check`——它比對 **committed** 的
+    generated 型別,commit 前必然紅;commit 後複跑 `--only` 兩項皆綠,同 Phase 16/18)
+  - `clean verify -Ptest-integration` 無過濾 ✅ **836 tests**
+    (sdk 13 + core 369 + adapters 33 + app 421;Spotless / Checkstyle / JaCoCo 全過)
+  - **staging 實機驗證**:索引在啟動後自動補建 1,037 筆 → 搜尋回 `X-Search-Backend: elasticsearch`;
+    `docker stop ctip-elasticsearch-1` 之後同一個查詢仍回 **200** 且 `X-Search-Backend: postgres`,結果正確
+  - **反向驗證(判準不是假綠)**:
+    - 拿掉 ES 端的可見度述詞 → `invisibleDocumentsDoNotConsumeThePage` 與
+      `filtersAndCursorPaginationBehaveLikeTheDatabasePath` 轉紅
+    - 把 PostgreSQL 補齊改成不看可見度的 `findById` → `poisonedIndexDocumentsStillCannotEscapeVisibility` 轉紅
+    - compose 的 `ELASTICSEARCH_URL` 改回空字串預設 → `ConfigSymmetryTest` 轉紅
+- **交付物**:
+  - core `application/port/`:`SearchQuery`／`SearchResult`／`SearchBackend`(`X-Search-Backend` 的傳遞通道)、
+    `SearchPort.search(SearchQuery)`、`SearchIndexPort`／`SearchDocumentPort`／`SearchIndexDocument`／`IndexedDocument`
+  - core `application/`:`SearchIndexStage`(pipeline 第 11 格,只標記)、
+    `search/SearchIndexWriter`(交易提交後寫出,失敗只記錄)、
+    `search/SearchReconciliationService` + `ReconciliationReport`
+  - app `infrastructure/elasticsearch/`:`IndicatorSearchIndex`(索引 `ctip-indicators`、`dynamic: strict` mapping)、
+    `ElasticsearchSearchAdapter`(可見度 + filter + wildcard/fuzzy + `search_after`;**只取 id,資料由 PostgreSQL 補齊**)、
+    `ElasticsearchIndexAdapter`(bulk / count / 掃描)、`SearchVisibilityQuery`／`SearchFilterQuery`／
+    `SearchTermQuery`／`SearchFields`／`EpochNanos`
+  - app `infrastructure/search/`:`FallbackSearchAdapter`(Resilience4j circuit breaker)、
+    `NoopSearchIndexAdapter`、`SearchIndexBootstrap`(索引空而 DB 非空時,啟動後在背景補建一次)
+  - app:`SearchDocumentAdapter`、`SearchSchedulers`(每日 05:00)、`SearchConfig`(`@Primary` + ES 條件裝配)、
+    `IocController`／`IocApi`／`SearchRequest` 的 `fuzzy` 與 `X-Search-Backend`、`WebCorsConfig` 的 exposedHeaders、
+    `CtipProperties.Search`
+  - 設定:`spring.elasticsearch.*`、`ctip.search.{backend,reconcile-cron}`、
+    `SEARCH_BACKEND`／`ES_RECONCILE_CRON`(compose + §5.4 + 樣板)、
+    `application-{mvp,dev}.yml` 關閉 actuator 的 ES 健康檢查
+  - 文件:`docs/deployment/licensing.md`(§6.5 自 M1 起要求、一直不存在;含 ES → OpenSearch 與 Redis → Valkey 的替換步驟)
+  - 測試:`ElasticsearchSearchTest`(L4,6)、`SearchFallbackTest`(4)、`SearchReconciliationTest`(L4,4)、
+    `SearchReconciliationServiceTest`(5)、`SearchIndexWriterTest`、`SearchIndexStageTest`、
+    `SearchIndexBootstrapTest`、`SearchQueryBuildingTest`、`ConfigSymmetryTest` 新增一條、ArchUnit 規則 11 擴充
+- **偏離事項 / ADR**:16 節見 `docs/architecture/decisions/0028-phase19-elasticsearch-search.md`;
+  規格回寫 `00 §0.25`(13 §13.7、09 §9.1、05 §5.3/§5.4/§5.6/§5.8.2、06 §6.3.6/§6.5、01 §1.9、15 §15.2)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **§13.7 的搜尋欄位清單漏掉可見度的全部依據**(`ownerTenantId`、`deletedAt`、來源的再散布政策)。
+     照字面實作,ES 路徑會整套繞過 `TlpSpecifications` 與 ADR 0015 的 `sourceId` oracle 防護。
+     解法是兩層:ES 端完整重建述詞(否則分頁與 `hasMore` 建立在錯誤的候選集合上,
+     「本頁少了幾筆」本身就是側信道)+ 回傳前一律以 `findVisibleByIds` 從 PostgreSQL 取回
+  2. **`spring-boot-elasticsearch` 一在 classpath 上就會加 actuator 的 ES 健康檢查**——
+     ES 只屬 `full` profile,mvp 與 dev 都沒有它。同 Phase 17 的 Redis,但 Redis 屬 `standard,full`,
+     當時只需關 mvp;**這次 dev 也要關**
+  3. **compose 對 `ELASTICSEARCH_URL` 用空字串預設值,加了 ES 模組之後 mvp 完全無法啟動**
+     (`hosts must not be null nor empty`),即使 `SEARCH_BACKEND=postgres`、一個 ES bean 都沒建立
+     ——autoconfig 是 Boot 自己的,不受條件裝配影響。守衛只能放**設定層**
+     (`ConfigSymmetryTest`);寫成啟動時的 bean 檢查是不可達的,autoconfig 更早失敗(規則 16)
+  4. **compose 的 `backend`／`frontend` 沒有 `image:` 鍵,兩個 build target 共用同一個 image 名稱**。
+     `docker compose up` 只在 image 不存在時才建置,先 mvp(development)再 staging(production)
+     會沿用前者——production 的檔案系統配上 development 的 CMD,兩個容器 crash-loop
+  5. **frontend 的 `HEALTHCHECK` 用 `http://localhost/`**,而容器內 `localhost` 只解析到 `::1`、
+     nginx 的 `listen 80;` 只綁 IPv4、busybox 的 `wget` 不回退 → production 的 frontend 永遠 unhealthy
+     (用 `curl` 手動驗證看不出來,它會回退)。第 4、5 兩項從 Phase 2 就存在,
+     但 **M2-25 是 DoD 中唯一會切換 build target、也唯一會實際跑起 production stage 的項目**,
+     先前的 phase 都只跑 `--only` 子集,所以到現在才浮現
+  6. **`up.sh` 切換環境時不收掉上一個 profile 的服務,gate 跑完一次就重跑不了**:四個環境共用
+     同一個 compose 專案名、服務差異只靠 profile,而 M2-25 把環境留在 staging(八個容器)——
+     再跑一次時 M1-14「只有三個容器」必然失敗(「預期 3 個,實際 8 個」)。
+     ⚠️ **`--remove-orphans` 解決不了**(compose 刻意不把 profile 停用的服務當 orphan,已實測);
+     要自己算 `ps --services` 減 `config --services` 的差集再 `rm -sfv`
+  7. **M2-22 的判準是空轉通過的**:它是 DoD 全表唯一用 `verify` 的過濾式判準,違反 §15.0 自訂的規則,
+     並因此繞過 `dod.sh` 的 `mvn_test` 存在性守衛(ADR 0017)——測試類不存在時 build 成功、該項 `[PASS]`
+  8. **全新的 ES 叢集在 05:00 的對帳之前索引是空的,而搜尋照樣回 200 並宣稱 `elasticsearch`**
+     ——比降級更糟,降級至少會說出來。`SearchIndexBootstrap` 在啟動後補建(只在索引空而 DB 非空時)
+- **給下一 session 的注意事項(M2 里程碑已通過,下一步 Phase 20 = Kafka + 通知)**:
+  - **M2 閘門已通過**(`dod.sh phase2` 27/27),可以進入 M3
+  - `SearchIndexStage` 目前是 pipeline 內同步(ADR 0020 §3 定調);Phase 20 引入 Kafka 後改非同步時,
+    「索引失敗不得使 ingestion 失敗」在兩種模式下都必須成立,而 **AFTER_COMMIT 的消費端一律 `REQUIRES_NEW`**
+    (Phase 18 缺陷 3,對 Kafka listener 同樣成立)
+  - **自由排序未實作**(§13.7 修訂 3 提到「留待 M2 與 ES 一併設計」):每種排序鍵要一套 cursor 編碼,
+    而降級可以發生在翻頁的任何一頁、兩邊 cursor 必須可互換,兩者直接衝突。要做的話得先解這個矛盾
+  - Threat 的搜尋不在 Phase 19 的交付物內;`ThreatUpdated` 事件與 `ThreatConsistencyListener` 是現成接入點
+  - 本機跑 `dod.sh phase2` 的注意事項:**不要同時跑兩個 gate 或另一個 `mvn clean`**
+    ——它們會互相清掉 `target/`、也會把 Docker 的記憶體吃光,症狀是莫名的編譯失敗與
+    Testcontainers「Timed out waiting for log output」(本 phase 因此白跑一輪)
+  - `environment/.env.staging` 的 `POSTGRES_*` 密碼必須與 `.env.mvp` 一致:兩個環境共用同一個
+    compose 專案名與 `postgres-data` volume,密碼不同會使後切換的那一個認證失敗
+  - 新的整合測試請自己分配 client IP(本 phase 用 `10.60.0.11/.12`);L4 的 ES 測試共用
+    `ElasticsearchTestContainer` 單例,`SearchIndexControl` 提供 refresh / 投毒 / 重建
 
 ---

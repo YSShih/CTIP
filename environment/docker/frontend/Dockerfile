@@ -23,6 +23,9 @@ FROM nginx:1.30-alpine AS production
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY environment/config/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
-# nginx:alpine 內含 busybox 的 wget,故用 wget 而非 curl
+# nginx:alpine 內含 busybox 的 wget,故用 wget 而非 curl。
+# 位址必須是 127.0.0.1 而非 localhost:容器內 localhost 只解析到 ::1,
+# 而 nginx 的 `listen 80;` 只綁 IPv4 —— busybox 的 wget 不會回退到 IPv4,
+# 容器因此永遠 unhealthy(2026-08-29 Phase 19 首次實跑 production target 時發現)。
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
+  CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1

@@ -271,7 +271,7 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 | 8 | `com.ctip.application..` 不得 import `org.springframework.data.domain..` |
 | 9 | `com.ctip.domain..` 不得呼叫 `java.time.Instant.now()`、`java.time.LocalDate.now()`、`java.util.UUID.randomUUID()` |
 | 10 | `com.ctip.domain..`／`com.ctip.sdk..` 的類別名不得使用 [02 §2.1](02-ddd-model.md#21-ubiquitous-language-詞彙表中英對照) 詞彙表「常見誤用」欄的命名 |
-| 11 | `com.ctip.application..` 不得依賴 `io.lettuce..`、`redis.clients..`、`org.springframework.data.redis..`、`io.github.bucket4j..` |
+| 11 | `com.ctip.application..` 不得依賴基礎設施 client 的型別：`io.lettuce..`、`redis.clients..`、`org.springframework.data.redis..`、`io.github.bucket4j..`、`co.elastic.clients..`、`org.elasticsearch..`、`org.springframework.data.elasticsearch..`、`io.github.resilience4j..` |
 
 規則 8、9 為本版新增。規則 8 強制 1.2 的 `CursorPage` 決定；規則 9 保證 domain 可測。
 
@@ -284,6 +284,12 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 > 規則 1 只擋 domain，而 **port 定義在 application 層**——真正會發生洩漏的地方是那裡：
 > 一個收 `StatefulRedisConnection` 的 port 簽章，會讓 [06 §6.5](06-tech-stack.md#65-授權注意事項)
 > 要求的「Redis → Valkey 只需改 infrastructure 實作」變成不可能。
+>
+> **規則 11 擴充（2026-08-29，Phase 19；[ADR 0028](../architecture/decisions/0028-phase19-elasticsearch-search.md)）**：
+> `phases/phase-19.md` 的「不得讓 `ElasticsearchSearchAdapter` 的型別洩漏到 `application` 層」
+> 與上述是同一條規則的另一個實例，因此**擴充規則 11 的套件清單而非新增規則 12**——
+> 本節與 [00 §0.3](00-master.md#03-強制契約coding-llm-不得自行變更) 的「11 條」契約維持不變。
+> 一併擋 Resilience4j：§13.7 的降級屬於 `FallbackSearchAdapter`，斷路器的型別不該出現在 port 上。
 
 ---
 

@@ -331,6 +331,19 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
     `RedisClient.connect(RedisCodec)`、`RedisFuture.*`)在 BOM 納管的 7.5.2 皆存在,已以位元碼核對
     並用真實 Redis 容器跑通。
 
+11. **`spring-boot-elasticsearch` 在 classpath 上就會加 actuator 的 ES 健康檢查**
+    (2026-08-29 Phase 19 實測補入;與第 10 條的 Redis 前例同型態,但影響範圍更大)。
+    Elasticsearch 只屬 `full` profile([05 §5.5](05-environment.md)),**mvp 與 dev 都沒有它**
+    ——不在 `application-mvp.yml` / `application-dev.yml` 關掉
+    (`management.health.elasticsearch.enabled: false`),`/actuator/health` 永遠 DOWN、
+    容器 healthcheck 永遠失敗、`depends_on` 卡死,`dod.sh mvp` 的回歸會整批紅。
+    Redis 屬 `standard,full` 故當時只需關 mvp;ES 兩個環境都要關。
+    另外:`org.testcontainers:testcontainers-elasticsearch` **存在**於 Testcontainers 2.0.5 BOM
+    (與第 2 條的 Redis 例外不同),`ElasticsearchContainer` 在 `org.testcontainers.elasticsearch`;
+    Docker Hub 的 `elasticsearch:9.5.1` 需以 `asCompatibleSubstituteFor` 對應
+    testcontainers 預設的 `docker.elastic.co/elasticsearch/elasticsearch` 座標。
+    BOM 的 client 版本為 **9.4.2**(server image 9.5.1,相差一個 minor,在相容範圍內)。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

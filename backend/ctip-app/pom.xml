@@ -117,6 +117,22 @@
       <artifactId>bucket4j-redis</artifactId>
       <version>${bucket4j.version}</version>
     </dependency>
+    <!--
+      Elasticsearch 讀取索引(docs/spec/13-platform-ops.md §13.7、06 §6.2.2 的 [P19] 兩列)。
+      低階 client(co.elastic.clients)的 autoconfig 在 spring-boot-elasticsearch,由 starter 帶入;
+      缺它 spring.elasticsearch.* 完全惰性(06 §6.3.6 第 1 條)。版本隨 BOM(9.4.2),
+      server image 為 9.5.1——ES client 相容前後一個 minor,06 §6.2.2 已註記複查日須重驗。
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-elasticsearch</artifactId>
+    </dependency>
+    <!-- ES 降級的 circuit breaker(§13.7 明文要求 Resilience4j;版本見 parent properties) -->
+    <dependency>
+      <groupId>io.github.resilience4j</groupId>
+      <artifactId>resilience4j-circuitbreaker</artifactId>
+      <version>${resilience4j.version}</version>
+    </dependency>
     <!-- Bloom artifact 的預設壓縮(docs/spec/11-sync-bloom.md §11.4;06 §6.2.2,版本見 parent properties)。
          JDK 只內建 GZIP/Deflate,ZSTD 需要這個相依;壓縮只影響傳輸與儲存,不影響 checksum。 -->
     <dependency>
@@ -175,6 +191,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- L4(heavy)的 ES 測試容器(06 §6.2.2 的 [P19] 第二列) -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-elasticsearch</artifactId>
       <scope>test</scope>
     </dependency>
     <!-- org.testcontainers 2.x 沒有 redis module;BOM 納管的是這個第三方座標(06 §6.2.2、§6.3.6 第 2 條) -->

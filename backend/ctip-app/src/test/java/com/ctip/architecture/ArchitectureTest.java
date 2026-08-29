@@ -26,7 +26,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 9 條 ArchUnit 規則(docs/spec/01-architecture.md §1.9),跨模組掃描。 */
+/** 11 條 ArchUnit 規則(docs/spec/01-architecture.md §1.9),跨模組掃描。 */
 @Tag("unit")
 class ArchitectureTest {
 
@@ -168,23 +168,32 @@ class ArchitectureTest {
     }
 
     /**
-     * 規則 11:{@code CachePort} / {@code RateLimiterPort} 不得把 Redis 洩漏進 application 層
-     * (phase-17「不得做的事」:「不得讓 {@code CachePort} 洩漏 Lettuce/Redis 型別到 application 層」)。
+     * 規則 11:基礎設施 client 的型別不得洩漏進 application 層
+     * (phase-17:「不得讓 {@code CachePort} 洩漏 Lettuce/Redis 型別到 application 層」;
+     * phase-19:「不得讓 {@code ElasticsearchSearchAdapter} 的型別洩漏到 {@code application} 層」)。
      *
-     * <p>規則 1 已擋住 domain 對 Lettuce 的依賴,但 <strong>port 定義在 application 層</strong>
-     * ——真正會發生洩漏的地方是那裡:一個回傳 {@code RedisFuture} 或收 {@code StatefulRedisConnection}
-     * 的 port 簽章,會讓 06 §6.5 要求的「Redis → Valkey 只需改 infrastructure」變成不可能。
-     * Bucket4j 一併擋:限流的實作細節同樣不該出現在 port 上。
+     * <p>規則 1 已擋住 domain 對這些套件的依賴,但 <strong>port 定義在 application 層</strong>
+     * ——真正會發生洩漏的地方是那裡:一個回傳 {@code RedisFuture} 或收 {@code SearchRequest}
+     * 的 port 簽章,會讓 06 §6.5 要求的「Redis → Valkey、Elasticsearch → OpenSearch 只需改
+     * infrastructure」變成不可能。Bucket4j 與 Resilience4j 一併擋:限流與降級的實作細節
+     * 同樣不該出現在 port 上(§13.7 的 circuit breaker 屬於 {@code FallbackSearchAdapter})。
      */
     @Test
-    void rule11ApplicationMustNotDependOnCacheOrRateLimiterInternals() {
+    void rule11ApplicationMustNotDependOnInfrastructureClientInternals() {
         noClasses()
                 .that()
                 .resideInAPackage("com.ctip.application..")
                 .should()
                 .dependOnClassesThat()
                 .resideInAnyPackage(
-                        "io.lettuce..", "redis.clients..", "org.springframework.data.redis..", "io.github.bucket4j..")
+                        "io.lettuce..",
+                        "redis.clients..",
+                        "org.springframework.data.redis..",
+                        "io.github.bucket4j..",
+                        "co.elastic.clients..",
+                        "org.elasticsearch..",
+                        "org.springframework.data.elasticsearch..",
+                        "io.github.resilience4j..")
                 .check(classes);
     }
 

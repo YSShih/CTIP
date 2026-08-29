@@ -26,6 +26,12 @@ spring:
       host: ${REDIS_HOST:redis}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
+  # Elasticsearch 讀取索引(13 §13.7);只有 full profile(staging/prod)啟動 es,
+  # 因此 SEARCH_BACKEND 預設 postgres,mvp/dev 完全不接觸它。
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URL:http://elasticsearch:9200}
+    username: ${ELASTICSEARCH_USERNAME:}
+    password: ${ELASTICSEARCH_PASSWORD:}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -84,6 +90,12 @@ ctip:
     source-sync-cron: "${SOURCE_SYNC_CRON:0 */5 * * * *}"
     ioc-expiry-cron: "${IOC_EXPIRY_CRON:0 0 3 * * *}"
     ingestion-retry-cron: "${INGESTION_RETRY_CRON:0 */15 * * * *}"
+  search:
+    # postgres | elasticsearch(13 §13.7)。ES 不可用時的降級是執行期的 circuit breaker 行為,
+    # 這個屬性只決定「有沒有 ES 這條路」——與 rate-limit 的硬切換語意不同。
+    backend: ${SEARCH_BACKEND:postgres}
+    # DB 與 ES 的對帳,每日 05:00(08 §8.7 的 ES_RECONCILE_CRON)
+    reconcile-cron: "${ES_RECONCILE_CRON:0 0 5 * * *}"
   normalization:
     strip-www: ${NORMALIZATION_STRIP_WWW:false}
   api:

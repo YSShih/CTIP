@@ -2,6 +2,7 @@ package com.ctip.application.ingestion;
 
 import com.ctip.domain.fingerprint.Fingerprint;
 import com.ctip.domain.indicator.Indicator;
+import com.ctip.domain.indicator.IndicatorId;
 import com.ctip.domain.indicator.IocValue;
 import com.ctip.domain.stix.StixProjection;
 import com.ctip.sdk.IocHashType;
@@ -29,6 +30,7 @@ public final class IngestionContext {
     private Fingerprint fingerprint;
     private IocValue iocValue;
     private Indicator indicator;
+    private IndicatorId searchIndexTarget;
     private final List<StixProjection> stixProjections = new ArrayList<>();
     private boolean merged;
     private RejectionReason rejectionReason;
@@ -123,6 +125,15 @@ public final class IngestionContext {
 
     public void indicator(Indicator indicator) {
         this.indicator = indicator;
+    }
+
+    /** 本筆記錄需要重新索引的 indicator(stage 11 標記,交易提交後才寫出;null = 不需索引)。 */
+    public IndicatorId searchIndexTarget() {
+        return searchIndexTarget;
+    }
+
+    public void searchIndexTarget(IndicatorId id) {
+        this.searchIndexTarget = id;
     }
 
     /** 本筆記錄產生的 STIX 投影:indicator 一筆 + 每個來源記錄一筆 observed-data + 來源的 identity。 */

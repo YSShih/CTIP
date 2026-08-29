@@ -12,6 +12,7 @@ import com.ctip.application.ingestion.NormalizeStage;
 import com.ctip.application.ingestion.ParseStage;
 import com.ctip.application.ingestion.PersistStage;
 import com.ctip.application.ingestion.ScoreStage;
+import com.ctip.application.ingestion.SearchIndexStage;
 import com.ctip.application.ingestion.StixProjectionStage;
 import com.ctip.application.ingestion.ValidateStage;
 import com.ctip.application.port.ClockPort;
@@ -93,6 +94,8 @@ public class IngestionPipelineConfig {
                 new PersistStage(repositories.indicators()),
                 // stage 10(phase-15):標記受影響的 Bloom scope;成員真相仍在資料庫(ADR 0024)
                 new BloomUpdateStage(repositories.bloomChanges()),
+                // stage 11(phase-19):標記待重新索引的 indicator;寫出同樣在交易提交後(ADR 0028)
+                new SearchIndexStage(),
                 new EventPublishStage(events)));
     }
 }

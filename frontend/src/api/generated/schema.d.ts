@@ -243,7 +243,7 @@ export interface paths {
         put?: never;
         /**
          * Search IOCs
-         * @description Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. 認證:匿名。
+         * @description Substring search over the canonical (normalized) value with the same filters and cursor pagination as the list endpoint (type, severity, status, tlp, tags, sourceId, confidence/score ranges, lastSeen range). M1 backs this with PostgreSQL (pg_trgm / GIN indexes); M2 swaps in Elasticsearch behind the same contract. Set `fuzzy: true` for typosquatting detection (Levenshtein matching) — it is an Elasticsearch-only capability and is ignored when the request is served by PostgreSQL. Every response carries `X-Search-Backend: elasticsearch|postgres` so callers can tell which engine answered; a degraded search still returns 200. 認證:匿名。
          */
         post: operations["search"];
         delete?: never;
@@ -1105,6 +1105,7 @@ export interface components {
             /** Format: int32 */
             confidenceMin?: number;
             cursor?: string;
+            fuzzy?: boolean;
             includeExpired?: boolean;
             /** Format: date-time */
             lastSeenFrom?: string;
@@ -2361,6 +2362,8 @@ export interface operations {
             /** @description One page of matches */
             200: {
                 headers: {
+                    /** @description Which engine served this query: elasticsearch or postgres (postgres means the Elasticsearch path was unavailable and the request was degraded — fuzzy matching does not apply) */
+                    "X-Search-Backend"?: string;
                     [name: string]: unknown;
                 };
                 content: {

@@ -54,6 +54,29 @@ class ConfigSymmetryTest {
         return names;
     }
 
+    /**
+     * compose 對「有 autoconfig 綁在上面」的變數不得給空字串預設值。
+     *
+     * <p>{@code ELASTICSEARCH_URL} 曾是 {@code ${ELASTICSEARCH_URL:-}}——Boot 的 ES autoconfig 對空
+     * {@code uris} 直接丟 {@code hosts must not be null nor empty},<strong>應用完全無法啟動</strong>,
+     * 即使 {@code SEARCH_BACKEND=postgres}、一個 ES bean 都沒建立(autoconfig 是 Boot 自己的,
+     * 不受本專案的條件裝配影響)。這一條在 mvp 的 backend 上是 crash-loop,由 DoD M2-01 抓到。
+     *
+     * <p>守衛放在這裡而不是 {@code StartupValidator}:autoconfig 在 context refresh 期間就失敗了,
+     * 任何 bean 形式的檢查都來不及執行——那會是一條永遠不會觸發的規則(執行規則 16)。
+     */
+    @Test
+    void variablesBoundToAutoConfigurationHaveNonEmptyComposeDefaults() throws IOException {
+        String compose = Files.readString(repoRoot().resolve("environment/docker-compose.yml"));
+        for (String name : List.of("ELASTICSEARCH_URL")) {
+            Matcher matcher = Pattern.compile("\\$\\{" + name + "(:-([^}]*))?}").matcher(compose);
+            assertThat(matcher.find()).as("compose 必須宣告 %s", name).isTrue();
+            assertThat(matcher.group(2))
+                    .as("%s 的 compose 預設值不得為空——Boot 的 autoconfig 會因此使應用無法啟動", name)
+                    .isNotBlank();
+        }
+    }
+
     @Test
     void everyApplicationYmlVariableReachesTheContainer() throws IOException {
         String compose = Files.readString(repoRoot().resolve("environment/docker-compose.yml"));

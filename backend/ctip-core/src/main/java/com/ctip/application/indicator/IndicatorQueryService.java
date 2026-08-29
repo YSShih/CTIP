@@ -2,6 +2,8 @@ package com.ctip.application.indicator;
 
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SearchPort;
+import com.ctip.application.port.SearchQuery;
+import com.ctip.application.port.SearchResult;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorId;
 import com.ctip.domain.indicator.normalization.IocFormatException;
@@ -45,9 +47,12 @@ public class IndicatorQueryService {
         return indicators.findVisibleById(id, visibility);
     }
 
-    public CursorPage<Indicator> search(
-            String term, IndicatorFilter filter, Visibility visibility, Cursor after, int limit) {
-        return search.searchByValue(term, filter, visibility, after, limit);
+    /**
+     * 搜尋(§13.7)。回傳型別帶「哪個後端服務了這次查詢」,供 {@code X-Search-Backend} 使用——
+     * 降級判斷在 {@code FallbackSearchAdapter},controller 只負責把答案寫進標頭。
+     */
+    public SearchResult search(SearchQuery query) {
+        return search.search(query);
     }
 
     /**
