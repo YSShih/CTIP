@@ -1504,7 +1504,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-29)
 - **執行單**:`docs/spec/phases/phase-20.md`
-- **Commit**:見 git log,message `Phase 20: kafka, notifications and webhooks`
+- **Commit**:`614fe2d`(`Phase 20: kafka, notifications and webhooks`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-all -Dtest='KafkaEventTest,EventIdempotencyTest,KafkaUnavailableTest,WebhookDeliveryTest,WebhookFilterTest'`
     (逐字)✅ **23/23**
