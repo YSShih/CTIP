@@ -1472,7 +1472,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 ## Phase 19 收尾強化 — 閘門與 up.sh 的可信度(2026-08-29,Phase 19 之後)
 
 - **狀態**:done(使用者指示:把這次踩到的坑做成機制,規格一併更新)
-- **Commit**:(見 git log,message `Tooling: make the DoD gate and up.sh fail loudly instead of misleadingly`)
+- **Commit**:`04d88dc`(`Tooling: make the DoD gate and up.sh fail loudly instead of misleadingly`)
 - **背景**:Phase 19 的實跑本身暴露了三個工具缺陷,它們造成的浪費比 phase 的實作還多。
   不修的話每個後續 phase 都會再付一次。
 - **內容**:
