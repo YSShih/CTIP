@@ -1217,7 +1217,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-29)
 - **執行單**:`docs/spec/phases/phase-17.md`
-- **Commit**:`__COMMIT__`(`Phase 17: redis cache and distributed rate limiting`)
+- **Commit**:`579c971`(`Phase 17: redis cache and distributed rate limiting`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest='DistributedRateLimitTest,QuotaEnforcementTest'`(逐字)✅ **15/15**
   - `clean verify -Ptest-integration` 無過濾 ✅ **757 tests**
