@@ -55,10 +55,38 @@ GET    /api/v1/stats/sources                       stats:read    各來源筆數
 ### Threat `[M2]`
 
 ```text
-GET    /api/v1/threats                             匿名
+GET    /api/v1/threats                             匿名   cursor 分頁 + 篩選
 GET    /api/v1/threats/{id}                        匿名
-GET    /api/v1/threats/{id}/indicators             匿名
+GET    /api/v1/threats/{id}/indicators             匿名   關聯的 IOC(各自再過一次 IOC 可見度)
 ```
+
+### Threat — 寫入 `[Phase 18 · M2]`
+
+```text
+POST   /api/v1/threats                             threat:manage   建立
+PUT    /api/v1/threats/{id}/indicators/{iocId}     threat:manage   建立/更新關聯(role)
+DELETE /api/v1/threats/{id}/indicators/{iocId}     threat:manage   解除關聯
+POST   /api/v1/threats/{id}/external-references    threat:manage   新增外部參照
+PUT    /api/v1/threats/{id}/status                 threat:manage   ACTIVE/DORMANT/RETIRED
+```
+
+> **實作回饋修訂（2026-08-29，Phase 18；[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)）**
+>
+> **本節的五個寫入端點為本版新增。** 原本 Threat 只有三個 `GET`，而 ingestion pipeline 不產生
+> Threat（`RawThreatRecord` 沒有任何威脅欄位）、Phase 19–23 也沒有任何建立管道——照原樣實作，
+> `threats`／`threat_indicators`／`threat_external_references` 三張表與 `Threat.linkIndicator`／
+> `unlinkIndicator`／`addExternalReference`／`retire` 在正式環境**永遠不可達**，正是
+> [§0.4 規則 16](00-master.md#04-coding-llm-執行規則) 禁止的 placeholder。處置與 v2.0 為
+> `FALSE_POSITIVE` 補上 IOC 寫入端點完全同源（見本節「IOC — 寫入」的說明）。
+>
+> | 規則 | 內容 |
+> |---|---|
+> | 歸屬 | 請求**不得**指定 `ownerTenantId`；由呼叫者身分決定 |
+> | TLP 與發布 | 與 §9.7 手動提交同一條規則:預設 `AMBER`(私有);`CLEAR`/`GREEN` 需 `ioc:publish`，且擁有者轉為 public tenant;`RED` 不進入平台 → 400 |
+> | 可寫入範圍 | 自家租戶的 Threat，或 public tenant 的 Threat 但持有 `ioc:publish`；其餘一律 404（不洩漏存在性） |
+> | H6 | 建立關聯時以關聯 IOC 的 TLP 收緊 Threat 的 TLP，**永不放寬**（解除關聯也不放寬）。把私有 IOC 關聯到公開威脅會把該威脅收緊到公開範圍之外——這是 H6 的必然結果，不是缺陷 |
+> | 衝突 | H1（同租戶同 `(type, name)`）、H4（同 Threat 內同 `(sourceName, externalId)`，`external_id` 為 null 亦算重複）、對已 `RETIRED` 的 Threat 再變更、設定成它已經是的狀態 → 一律 `409 CONFLICT` |
+> | 狀態 | `RETIRED` 是**終態**（要復活就建立新的 Threat）;端點採 `PUT /status` 而非 `POST /retire`，否則 `ThreatStatus.DORMANT` 永遠不可達(同樣是規則 16) |
 
 ### STIX
 

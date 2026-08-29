@@ -8,7 +8,7 @@
 | Milestone | Phase | 狀態 |
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
-| M2 — Platform | 13–19 | 進行中:Phase 17 完成,下一步 Phase 18 |
+| M2 — Platform | 13–19 | 進行中:Phase 18 完成,下一步 Phase 19 |
 | M3 — Production | 20–23 | 未開始 |
 
 ---
@@ -1292,5 +1292,85 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     M2 的五種 STIX SDO 對照表要在 Phase 18 依 §7.8.2 的體例補寫進 §7.8
   - threats 的 migration 是 **`V31`**(§4.7 已廢除區段預留,版本號一律遞增),
     且要以 `ALTER TABLE` 補上 V7 保留的 `fk_so_threat`
+
+---
+
+## Phase 18 — Threat 實體與關聯 + M2 的 STIX 物件
+
+- **狀態**:done(2026-08-29)
+- **執行單**:`docs/spec/phases/phase-18.md`
+- **Commit**:(見 git log,message `Phase 18: threat entity, relationships and M2 STIX objects`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest='ThreatIntegrationTest,StixSchemaValidationTest'`(逐字)✅ **23/23**
+  - `cd frontend && npm run test -- ThreatFeedPage ThreatDetailPage`(逐字)✅ **10/10**
+  - `clean verify -Ptest-integration` 無過濾 ✅ **815 tests**
+    (sdk 13 + core 360 + adapters 33 + app 409;Spotless / Checkstyle / JaCoCo 全過)
+  - 前端 `npm run test` ✅ 131、`npx tsc --noEmit` ✅、`npm run lint` ✅、`format:check` ✅
+  - `dod.sh phase2 --only M2-21`(Threat 三張表可用)✅;`--only M2-04/06/07/20/27` ✅ 5/5
+  - `dod.sh mvp` 回歸 ✅ **38/38**
+- **交付物**:
+  - migration `V31`:表 19–21 + V7 保留的 `fk_so_threat` + **表 8 漏掉的 `ix_so_threat`**
+    + `threat:manage` 權限種子(冪等;放在同一個 migration 的理由見 ADR 0027 §7)
+  - domain `threat/`:`Threat` 聚合(H1–H5)、`ThreatIndicatorLink`(不可變 record,只存 id)、
+    `ExternalReference`(H3/H4 的比較鍵與 DB 的 `COALESCE` 唯一索引同語意)、
+    `ThreatType`/`ThreatStatus`/`IndicatorRole`/`ThreatChange`、`ThreatEvents.ThreatUpdated`
+  - domain `stix/`:`StixThreatProjector`、`StixObservedDataProjector`、`StixIdentityProjector`、
+    `StixRelationshipProjector`、`StixRelationship`、`StixOrigin`、`StixIds`(決定性 UUID)、
+    `StixTimestamps`(五種投影共用格式)
+  - application:`ThreatRepository` port、`ThreatService`(寫入 + **H6 的唯一執行點**)、
+    `ThreatQueryService`(兩段可見度)、`ThreatFilter`、`ThreatStixProjectionService`;
+    `StixQueryService` 擴充為服務全部 M2 物件;`IndicatorRepository.findVisibleByIds`;
+    `StixObjectPort.findOrigin`;`StixRelationshipPort`
+  - infrastructure:`ThreatEntity`/`ThreatIndicatorEntity`/`ThreatExternalReferenceEntity` 與
+    mapper／adapter、`ThreatFilterSpecs`(aliases 與 tags 一律走 `ctip_tags_contain_all`)、
+    **`ThreatSpecifications`**(threats 的可見度述詞)、`StixRelationshipAdapter`、
+    `ThreatConsistencyListener`(domain event 的第一個消費端)
+  - REST:`ThreatController`(三個 GET)+ `ThreatWriteController`(五個寫入端點)+
+    `ThreatResponseAssembler` + `dto/threat/` 七個 record + `ThreatApi`/`ThreatWriteApi`
+  - 前端:`features/threat/`(api + 兩個 hook + 四個元件)、`pages/ThreatFeedPage`/`ThreatDetailPage`、
+    路由 `/threats`、`/threats/:id`、主導覽「威脅情報」、MSW handlers
+  - 測試:`ThreatIntegrationTest`(判準,10 個情境)、`ThreatTest`、`ThreatServiceTest`、
+    `ThreatQueryServiceTest`、`ThreatStixProjectionServiceTest`、`StixSchemaValidationTest` +6、
+    support `ThreatCurationClient` / `PublishedIndicators` / `StixProjectionFixtures`、
+    core testing `InMemoryThreatRepository` / `InMemoryStixObjects` / `InMemoryStixRelationships` /
+    `ThreatTestBuilder`
+- **偏離事項 / ADR**:8 項見 `docs/architecture/decisions/0027-phase18-threat-and-m2-stix.md`;
+  規格回寫 `00 §0.24`(09 §9.1、10 §10.3、04 表 8/§4.7、02 §2.3/§2.4、03 §3.2.7、07 §7.7/§7.8.6/§7.8.7)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **整個 phase 的資料都不可達**:§9.1 的 Threat 只有三個 `GET`,ingestion 不產生 Threat
+     (`RawThreatRecord` 沒有威脅欄位)、Phase 19–23 也沒有任何建立管道。照執行單字面實作,
+     三張表、聚合的四個行為、三種 STIX 投影、`threat:read` 全部永遠不可達。
+     **經使用者裁示補最小寫入端點**(與 v2.0 為 IOC 補寫入端點同源)
+  2. **`POST /{id}/retire` 會讓 `ThreatStatus.DORMANT` 永不可達**——改 `PUT /{id}/status`;
+     順帶滿足 `OpenApiCompletenessTest` 對 POST 必須有 request schema 的要求
+  3. **AFTER_COMMIT 的事件消費端寫資料庫,預設傳播行為下不落庫也不報錯**:
+     回呼仍在已提交交易的 synchronization 範圍內(EntityManager 還綁著、交易已結束)。
+     第一次實作就是這樣——`malware` 與 `relationship` 一列都沒有,連例外都沒有。
+     `REQUIRES_NEW` 是必需的,規則已寫進 `02 §2.4`(對 M3 的 Kafka listener 同樣成立)
+  4. **CLEAR 的租戶私有威脅是誰都看不到的東西**:§7.7 只讓 public tenant 的 CLEAR/GREEN 對外可見。
+     因此建立 Threat 沿用 §9.7 的規則(預設 AMBER;CLEAR/GREEN 需 `ioc:publish` 且轉為 public tenant)
+     ——與 ADR 0019 第 2 節要消滅的缺陷同源
+  5. **H6 是單向的**:把私有 IOC 關聯到公開威脅會把該威脅收緊到公開範圍之外,解除關聯也不放寬。
+     這是 ADR 0020 定調的必然結果,已寫進端點文件
+  6. `malware` 的 `aliases` 有 `minItems: 1`(空集合必須整個省略)、`attack-pattern` 沒有
+     `is_family`/`first_seen`/`last_seen`、`observed-data` 必須有 `objects` 或 `object_refs`
+     ——三者都是 schema 驗證才會抓到的
+  7. **STIX identifier 只接受 v1–v5 的 UUID**:`00000000-…-0000a1` 這種測試常數驗不過。
+     正式環境的 id 是 v4 自然合法,但 fixture 若用假形狀,等於用現實不存在的輸入把檢查騙過去
+  8. `stix_objects.threat_id` 沒有索引而 `fk_so_threat` 帶 `ON DELETE CASCADE`(執行單已預警)
+- **給下一 session 的注意事項(Phase 19 = Elasticsearch 搜尋 + reconciliation + 降級)**:
+  - ⚠️ **ES index mapping 必須重建可見度述詞**(ADR 0020 第 8 節):`13 §13.7` 的欄位清單不含
+    `ownerTenantId`、`deletedAt`、來源的 `redistributionPolicy`,漏掉任何一個,ES 路徑就整套繞過過濾
+  - `SearchPort` 目前回 `CursorPage<Indicator>`,而 `X-Search-Backend` 沒有傳遞通道;
+    三個 `SearchPort` bean 的歧義也要處理(`PostgresSearchAdapter` 是 `@Component`)
+  - Threat 的搜尋**不在 Phase 19 的交付物內**;`ThreatUpdated` 事件已就緒
+    (`ThreatConsistencyListener` 是現成的消費端範例),要索引 Threat 時從那裡接
+  - 新的整合測試請自己分配 client IP(本 phase 用 `10.50.0.11/.12`);限流狀態跨測試類共用
+  - **AFTER_COMMIT 寫資料庫一律 `REQUIRES_NEW`**(見上方缺陷 3);Phase 19 的
+    `SearchIndexStage` 若改由事件驅動會踩同一個坑
+  - 前端只交付了兩個唯讀頁面(執行單的交付物就是這兩個);**策展寫入目前只有 API,沒有 UI**,
+    若要補 UI 需另行指派
+  - `db/seed/sample_data.sql` **沒有 threat 樣本**(§14.7 的清單未列);mvp/dev 環境的
+    `/threats` 預設是空的,要看畫面得先用寫入端點建幾筆(或另行指派補 seed)
 
 ---

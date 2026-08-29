@@ -103,6 +103,56 @@ export const sampleStixObject = {
   valid_from: '2026-08-01T00:00:00.000Z',
 };
 
+export const sampleThreat = {
+  id: '5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13',
+  type: 'MALWARE_FAMILY',
+  name: 'AgentTesla',
+  aliases: ['Agent Tesla'],
+  description: 'Commodity infostealer distributed via phishing attachments.',
+  severity: 'HIGH',
+  confidence: 70,
+  tlp: 'CLEAR',
+  status: 'ACTIVE',
+  firstSeen: '2026-01-15T00:00:00Z',
+  lastSeen: '2026-08-20T00:00:00Z',
+  tags: ['infostealer'],
+  // 關聯總數 2,但下方 sampleThreatIndicators 只有 1 筆:另一筆不在匿名的可見範圍內
+  indicatorCount: 2,
+  externalReferences: [{ sourceName: 'mitre-attack', externalId: 'S0331' }],
+} satisfies ApiSchemas['ThreatDto'];
+
+export const secondThreat = {
+  ...sampleThreat,
+  id: '6c9f0e3f-2d4b-4a8c-8f1e-3b5d7c9e1f24',
+  type: 'CAMPAIGN',
+  name: 'Operation Nightjar',
+  aliases: [],
+  tlp: 'GREEN',
+  severity: 'MEDIUM',
+  indicatorCount: 0,
+  externalReferences: [],
+} satisfies ApiSchemas['ThreatDto'];
+
+export const sampleThreatPage = {
+  items: [sampleThreat, secondThreat],
+  hasMore: false,
+} satisfies PageOf<ApiSchemas['ThreatDto']>;
+
+export const sampleThreatIndicators = [
+  { role: 'C2', addedAt: '2026-08-20T10:00:00Z', ioc: sampleIoc },
+] satisfies ApiSchemas['ThreatIndicatorDto'][];
+
+export const sampleThreatStixObject = {
+  type: 'malware',
+  spec_version: '2.1',
+  id: `malware--${sampleThreat.id}`,
+  created: '2026-08-01T00:00:00.000Z',
+  modified: '2026-08-20T00:00:00.000Z',
+  name: sampleThreat.name,
+  is_family: true,
+  aliases: ['Agent Tesla'],
+};
+
 export const notFoundError = {
   code: 'NOT_FOUND',
   message: 'indicator not found',
@@ -246,8 +296,22 @@ export const handlers = [
   }),
   http.get('*/api/v1/stats/summary', () => HttpResponse.json(sampleStatsSummary)),
   http.get('*/api/v1/stats/sources', () => HttpResponse.json(sampleSourceStats)),
+  http.get('*/api/v1/threats', () => HttpResponse.json(sampleThreatPage)),
+  http.get('*/api/v1/threats/:id', ({ params }) => {
+    if (params.id === sampleThreat.id) return HttpResponse.json(sampleThreat);
+    if (params.id === secondThreat.id) return HttpResponse.json(secondThreat);
+    return HttpResponse.json(notFoundError, { status: 404 });
+  }),
+  http.get('*/api/v1/threats/:id/indicators', ({ params }) => {
+    if (params.id === sampleThreat.id) return HttpResponse.json(sampleThreatIndicators);
+    if (params.id === secondThreat.id) return HttpResponse.json([]);
+    return HttpResponse.json(notFoundError, { status: 404 });
+  }),
   http.get('*/api/v1/stix/:stixId', ({ params }) => {
     if (params.stixId === sampleStixObject.id) return HttpResponse.json(sampleStixObject);
+    if (params.stixId === sampleThreatStixObject.id) {
+      return HttpResponse.json(sampleThreatStixObject);
+    }
     return HttpResponse.json(notFoundError, { status: 404 });
   }),
   http.post('*/api/v1/auth/register', () => HttpResponse.json(sampleSession, { status: 201 })),

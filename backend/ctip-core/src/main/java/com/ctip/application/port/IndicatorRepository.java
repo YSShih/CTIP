@@ -29,6 +29,9 @@ public interface IndicatorRepository {
     /** 批次精確驗證用:同識別值於可見範圍內的記錄(自家優先,其次 public)。 */
     Optional<Indicator> findVisibleByIdentity(IocType type, String normalizedValue, Visibility visibility);
 
+    /** 批次取可見的 Indicator(Threat 的關聯清單);不可見者不在結果中,不報錯、不洩漏存在性。 */
+    List<Indicator> findVisibleByIds(List<IndicatorId> ids, Visibility visibility);
+
     CursorPage<Indicator> findVisible(Visibility visibility, IndicatorFilter filter, Cursor after, int limit);
 
     /** offset 分頁(§9.3:僅 UI 需要頁碼時;offset 上限由 API 層強制)。 */

@@ -11,12 +11,14 @@ import NotFoundPage from '../pages/NotFoundPage';
 import RegisterPage from '../pages/RegisterPage';
 import SubscriptionPage from '../pages/SubscriptionPage';
 import SyncPage from '../pages/SyncPage';
+import ThreatDetailPage from '../pages/ThreatDetailPage';
+import ThreatFeedPage from '../pages/ThreatFeedPage';
 import { RequireAuth } from './RequireAuth';
 import { RequirePermission } from './RequirePermission';
 import { RootErrorBoundary } from './RootErrorBoundary';
 
 /**
- * 路由表(§12.5)。匿名可存取:儀表板、IOC 檢索/詳情、Bloom 同步說明、登入、註冊;
+ * 路由表(§12.5)。匿名可存取:儀表板、IOC 檢索/詳情、威脅情報/詳情、Bloom 同步說明、登入、註冊;
  * 需登入的頁面掛 RequireAuth,需權限者再套 RequirePermission。
  * 前端守衛只是 UX——後端一律再驗一次(§12.5)。
  * routes 獨立匯出供測試以 createMemoryRouter 掛載。
@@ -32,6 +34,8 @@ export const routes: RouteObject[] = [
       // /iocs/new 與 /iocs/import 宣告在下方的守衛區塊內;react-router 依「靜態段優先於動態段」
       // 評分,不看宣告順序,因此它們不會被這條 :id 吃掉(router.test.tsx 有對應案例)
       { path: 'iocs/:id', element: <IocDetailPage /> },
+      { path: 'threats', element: <ThreatFeedPage /> },
+      { path: 'threats/:id', element: <ThreatDetailPage /> },
       { path: 'sync', element: <SyncPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'register', element: <RegisterPage /> },

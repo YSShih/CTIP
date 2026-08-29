@@ -14,6 +14,7 @@ import com.ctip.application.port.RateLimitResult;
 import com.ctip.application.stix.StixExportLimitExceededException;
 import com.ctip.application.sync.SnapshotRequiredException;
 import com.ctip.application.sync.SyncTooFrequentException;
+import com.ctip.application.threat.ThreatConflictException;
 import com.ctip.infrastructure.ratelimit.RateLimitHeaders;
 import com.ctip.interfaces.rest.dto.common.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -143,6 +144,12 @@ public class ApiExceptionHandler {
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     ResponseEntity<ErrorResponse> emailTaken(EmailAlreadyRegisteredException e, HttpServletRequest request) {
         return respond(ErrorCode.CONFLICT, "Email already registered", List.of(), request);
+    }
+
+    /** Threat 的 H1／H4 衝突與「已退役／已是該狀態」(§2.3):409,不假成功。 */
+    @ExceptionHandler(ThreatConflictException.class)
+    ResponseEntity<ErrorResponse> threatConflict(ThreatConflictException e, HttpServletRequest request) {
+        return respond(ErrorCode.CONFLICT, e.getMessage(), List.of(), request);
     }
 
     @ExceptionHandler(ApiKeyNotFoundException.class)

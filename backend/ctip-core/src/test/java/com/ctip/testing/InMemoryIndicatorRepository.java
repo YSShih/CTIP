@@ -49,6 +49,14 @@ public final class InMemoryIndicatorRepository implements IndicatorRepository {
     }
 
     @Override
+    public List<Indicator> findVisibleByIds(List<IndicatorId> ids, Visibility visibility) {
+        return ids.stream()
+                .map(id -> findVisibleById(id, visibility))
+                .flatMap(Optional::stream)
+                .toList();
+    }
+
+    @Override
     public CursorPage<Indicator> findVisible(Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
         List<Indicator> all = store.values().stream()
                 .filter(i -> i.isVisibleTo(visibility.maxPublicTlp(), visibility.viewerTenantId()))

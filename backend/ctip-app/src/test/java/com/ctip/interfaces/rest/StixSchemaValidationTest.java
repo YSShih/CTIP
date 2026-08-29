@@ -13,10 +13,18 @@ import com.ctip.domain.indicator.NewIndicatorCommand;
 import com.ctip.domain.indicator.SourceRecordStatus;
 import com.ctip.domain.source.Reputation;
 import com.ctip.domain.source.SourceId;
+import com.ctip.domain.stix.StixIdentityProjector;
 import com.ctip.domain.stix.StixIndicatorProjector;
+import com.ctip.domain.stix.StixObservedDataProjector;
 import com.ctip.domain.stix.StixProjection;
+import com.ctip.domain.stix.StixRelationshipProjector;
+import com.ctip.domain.stix.StixThreatProjector;
 import com.ctip.domain.stix.StixTlpMarkings;
 import com.ctip.domain.tenant.TenantId;
+import com.ctip.domain.threat.ExternalReference;
+import com.ctip.domain.threat.IndicatorRole;
+import com.ctip.domain.threat.Threat;
+import com.ctip.domain.threat.ThreatType;
 import com.ctip.sdk.Confidence;
 import com.ctip.sdk.IocHashType;
 import com.ctip.sdk.IocType;
@@ -135,6 +143,86 @@ class StixSchemaValidationTest {
      * <p>URL 型 IOC 的 normalized 值可達 2048 char;若第 255 個 char 恰好是 astral 字元的
      * 高代理,直接 substring 會產出半個字元——無效的 UTF-16,序列化出去就是壞掉的 JSON 字串。
      */
+    // ---- M2 的四種 SDO 與 relationship(§7.8.1、§7.8.7;Phase 18) ----
+
+    @Test
+    void malwareProjectionValidatesAgainstMalwareSchema() {
+        Threat threat = StixProjectionFixtures.malwareFamily();
+        threat.addExternalReference(new ExternalReference("mitre-attack", "S0331", null, "Agent Tesla"));
+        String json =
+                objectMapper.writeValueAsString(StixThreatProjector.project(threat.snapshot(), T0, T0.plusSeconds(3600))
+                        .content());
+
+        assertThat(json).contains("\"is_family\":true").contains("\"aliases\"");
+        assertThat(validate("/sdos/malware.json", json)).isEmpty();
+    }
+
+    @Test
+    void attackPatternProjectionValidatesAndOmitsMalwareOnlyProperties() {
+        Threat threat = StixProjectionFixtures.threat(ThreatType.ATTACK_PATTERN, "Phishing", Tlp.CLEAR, Set.of());
+        String json = objectMapper.writeValueAsString(
+                StixThreatProjector.project(threat.snapshot(), T0, T0).content());
+
+        // attack-pattern 的 schema 沒有 is_family / first_seen / last_seen,也不得給空的 aliases 陣列
+        assertThat(json)
+                .doesNotContain("is_family")
+                .doesNotContain("first_seen")
+                .doesNotContain("aliases");
+        assertThat(validate("/sdos/attack-pattern.json", json)).isEmpty();
+    }
+
+    @Test
+    void retiredThreatIsProjectedAsRevoked() {
+        Threat threat = StixProjectionFixtures.malwareFamily();
+        threat.retire();
+        String json = objectMapper.writeValueAsString(
+                StixThreatProjector.project(threat.snapshot(), T0, T0).content());
+
+        assertThat(json).contains("\"revoked\":true");
+        assertThat(validate("/sdos/malware.json", json)).isEmpty();
+    }
+
+    @Test
+    void observedDataProjectionValidatesForEveryIocType() {
+        Indicator domain = domainIndicator();
+        Indicator fileHash = fileHashIndicator();
+        for (Indicator indicator : java.util.List.of(domain, fileHash)) {
+            var record = indicator.snapshot().sources().getFirst();
+            String json = objectMapper.writeValueAsString(
+                    StixObservedDataProjector.project(indicator.snapshot(), record, T0, T0)
+                            .content());
+            // schema 的 oneOf 要求 objects 或 object_refs 至少有一個;平台不持久化 SCO,故內嵌 objects
+            assertThat(json).contains("\"objects\"");
+            assertThat(validate("/sdos/observed-data.json", json))
+                    .as("observed-data for %s", indicator.value().type())
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void identityProjectionValidatesAgainstIdentitySchema() {
+        String json = objectMapper.writeValueAsString(
+                StixIdentityProjector.project(StixProjectionFixtures.sourceSnapshot(), T0, T0)
+                        .content());
+
+        assertThat(json).contains("\"identity_class\":\"organization\"");
+        assertThat(validate("/sdos/identity.json", json)).isEmpty();
+    }
+
+    @Test
+    void relationshipContentValidatesAgainstRelationshipSchema() {
+        Threat threat = StixProjectionFixtures.malwareFamily();
+        Indicator indicator = domainIndicator();
+        threat.linkIndicator(indicator.id(), IndicatorRole.C2, T0);
+        String json = objectMapper.writeValueAsString(StixRelationshipProjector.content(
+                threat.snapshot(), threat.indicators().getFirst(), T0, T0));
+
+        assertThat(json)
+                .contains("\"relationship_type\":\"indicates\"")
+                .contains("\"source_ref\":\"indicator--" + indicator.id().value() + "\"");
+        assertThat(validate("/sros/relationship.json", json)).isEmpty();
+    }
+
     @Test
     void nameTruncationNeverSplitsASurrogatePair() {
         // "URL: " 前綴 5 char + 249 個 'a' = 254 char,第 255 char 起是 4-byte emoji 的高代理

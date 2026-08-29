@@ -39,6 +39,11 @@ class StixProjectionWriterTest {
             }
 
             @Override
+            public Optional<com.ctip.domain.stix.StixOrigin> findOrigin(String stixId) {
+                return Optional.empty();
+            }
+
+            @Override
             public Optional<String> findContent(String stixId) {
                 return Optional.empty();
             }
@@ -64,6 +69,7 @@ class StixProjectionWriterTest {
                 "indicator",
                 TenantId.PUBLIC,
                 new IndicatorId(id),
+                null,
                 Tlp.CLEAR,
                 Instant.parse("2026-08-01T00:00:00Z"),
                 Instant.parse("2026-08-02T00:00:00Z"),

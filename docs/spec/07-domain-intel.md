@@ -220,6 +220,29 @@ AND tlp <= :maxVisibleTlp
 2. **過濾條件改為 `IN (current, public)`。** v1.1 §25.1 寫「自動附加 `tenant_id` 條件」（單數），如此登入者**看不到公開情資**。§24.2 聲稱消除的特例分支其實還在。
 3. **public tenant 同時持有 `CLEAR` 與 `GREEN`。** v1.1 §24.2 規定公開情資「`tlp = CLEAR`」，與可見度表夾起來會使 `GREEN` **沒有任何棲息地**，整個等級是死的。TLP 2.0 對 `GREEN` 的定義是「限於社群範圍，排除公開可存取通道」——正好對應「需登入才看得到的公開租戶資料」。
 
+### <a id="threats-的可見度"></a>`threats` 的可見度（2026-08-29，Phase 18；[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)）
+
+`phases/phase-18.md` 明列「三個 `/threats` 端點的可見度述詞未定義」。定調為**與上表同一套通則**：
+
+```sql
+owner_tenant_id IN (:currentTenantId, '00000000-0000-0000-0000-000000000000')
+AND tlp <= :maxVisibleTlp        -- 僅 public 分支;自家租戶的資料不受 TLP 限制
+```
+
+與 Indicator 的兩點差異都是資料模型的事實，不是放寬：
+
+| 維度 | Indicator | Threat |
+|---|---|---|
+| 軟刪除 | `deleted_at IS NULL` | 表 19 沒有 `deleted_at`；退役以 `status = RETIRED` 表達，由清單端點預設排除 |
+| 再散布（§7.9 規則 3） | 需至少一個非 `INTERNAL_ONLY` 的來源記錄 | **不適用**：`threats` 沒有來源記錄，它是平台自己策展的分類，不是來源提供的原始資料 |
+
+**`GET /threats/{id}/indicators` 必須對每個關聯的 IOC 再走一次 Indicator 的可見度**
+（含再散布規則 3）——關聯不是可見度的旁路。`ThreatDto.indicatorCount` 是關聯總數，
+與 viewer 實際看得到的筆數可以不同，這是刻意的:數量本身不洩漏任何 IOC 的內容。
+
+由於 H6（Threat 的 TLP 不得比任一關聯 IOC 更寬鬆），把私有 IOC 關聯到公開威脅會把該威脅
+一併收緊到公開範圍之外。這是 H6 的必然結果，寫入端點的文件必須明說。
+
 ### `RED` 的處理
 
 `RED` **不進入平台**。ingestion 階段遇到來源標記 `RED` 的資料一律拒絕（`reason = MALFORMED_VALUE`，`detail = "TLP:RED not accepted"`）。
@@ -408,7 +431,89 @@ extension-definition--60a3c5c5-0d10-413e-aab3-9e08dde9e88d   ← TLP 2.0 擴充�
 
 - 可隨時由 domain 完整重建（必須提供 `POST /api/v1/admin/stix/rebuild`，M3）
 - 投影失敗**不得**使 ingestion 失敗，只記錄並排入重試
-- `content` JSONB 內容必須與 7.8.2–7.8.4 的規則一致；CI 需有一條測試以 STIX 2.1 JSON Schema 驗證產出
+- `content` JSONB 內容必須與 7.8.2–7.8.4、7.8.7 的規則一致；CI 需有一條測試以 STIX 2.1 JSON Schema 驗證產出
+
+---
+
+### 7.8.7 M2 的四種 SDO 與 `relationship`（強制對照表）
+
+> **本節為 Phase 18 補寫（2026-08-29；[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md) 第 7 節指定、[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md) 定稿）。**
+> 體例同 §7.8.2。共同屬性（`type`／`spec_version`／`id`／`created`／`modified`／
+> `object_marking_refs`）規則一致,以下只列各型別特有者。時間一律 ISO-8601 毫秒精度 `Z` 結尾。
+
+#### `malware` ← `Threat`（`type = MALWARE_FAMILY`）
+
+STIX id：`malware--{threats.id}`
+
+| STIX 屬性 | 必填 | 來源 | 規則 |
+|---|---|---|---|
+| `name` | ✅ | `threats.name` | |
+| `is_family` | ✅ | — | 固定 `true`（來源是 `MALWARE_FAMILY` 這個分類本身） |
+| `description` | — | `threats.description` | null 則省略 |
+| `first_seen` / `last_seen` | — | `threats.first_seen` / `last_seen` | |
+| `aliases` | — | `threats.aliases` | 排序後輸出；**空集合必須整個省略**（schema `minItems: 1`） |
+| `confidence` | — | `threats.confidence` | 0–100 直接對應 |
+| `labels` | — | 產生 | `["severity:{severity}", "status:{status}"]` ＋ `threats.tags` |
+| `revoked` | — | `threats.status` | `RETIRED` 時為 `true`，否則省略 |
+| `external_references` | — | `threat_external_references` | 逐筆映射 `source_name`／`external_id`／`url`／`description`（null 者省略） |
+
+#### `attack-pattern` ← `Threat`（`type = ATTACK_PATTERN`）
+
+STIX id：`attack-pattern--{threats.id}`。屬性同 `malware`，但**不得**輸出
+`is_family`／`first_seen`／`last_seen`——`attack-pattern` 的 schema 沒有這三個屬性。
+
+> `CAMPAIGN`／`THREAT_ACTOR`／`PHISHING_KIT` 在 M2 **不投影**（§7.8.1）：它們仍存在於
+> `threats` 表，只是不產生 STIX 物件，因此也沒有對應的 `relationship`。
+
+#### `observed-data` ← `IndicatorSource`（單一來源的一次觀測）
+
+STIX id：`observed-data--{UUID(name="observed-data:{indicators.id}:{source_id}")}`——
+沒有對應的 domain UUID，故以決定性的名稱型 UUID 產生（重投影是 UPSERT，不是每次新增一列）。
+
+| STIX 屬性 | 必填 | 來源 | 規則 |
+|---|---|---|---|
+| `first_observed` | ✅ | `indicator_sources.source_first_seen` | |
+| `last_observed` | ✅ | `indicator_sources.source_last_seen` | |
+| `number_observed` | ✅ | `indicator_sources.report_count` | 下限 1（schema `minimum: 1`） |
+| `objects` | ✅ | `indicators.type` + `normalized_value` | 內嵌 SCO；型別對照同 §7.8.3（`ipv4-addr`／`ipv6-addr`／`domain-name`／`url`／`email-addr`／`file`）。`FILE_HASH` 用 `hashes`，鍵經 hashing-algorithm-ov 對應 |
+| `confidence` | — | `indicator_sources.source_confidence` | 來源沒說（null）則省略 |
+| `object_marking_refs` | ✅ | `indicator_sources.source_tlp` | 取**該筆來源記錄**的 TLP，不是聚合後的 TLP |
+
+> `objects` 而非 `object_refs`：平台不獨立持久化 SCO，schema 又要求兩者至少有一個——
+> 給 `object_refs` 會指向不存在的物件。
+
+#### `identity` ← `Source`（情資提供方）
+
+STIX id：`identity--{sources.id}`（[ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md) 指定）
+
+| STIX 屬性 | 必填 | 來源 | 規則 |
+|---|---|---|---|
+| `name` | ✅ | `sources.display_name` | |
+| `identity_class` | — | — | 固定 `"organization"` |
+| `labels` | — | `sources.source_type` | `["source-type:{sourceType}"]` |
+| `external_references` | — | `sources.homepage_url` | 有 homepage 才輸出 |
+| `object_marking_refs` | ✅ | — | 固定 `TLP:CLEAR`;情資提供方的身分不是情資,owner 為 public tenant |
+
+#### `relationship` ← `ThreatIndicatorLink`
+
+落庫於 `stix_relationships`（[04](04-data-dictionary.md) 表 9），**該表沒有 `content` 欄**：
+對外 JSON 於讀取時由同一組投影規則重建（角色來自 `threat_indicators.role`，不存第二份）。
+
+| STIX 屬性 | 必填 | 來源 | 規則 |
+|---|---|---|---|
+| `relationship_type` | ✅ | — | 固定 `"indicates"` |
+| `source_ref` | ✅ | `threat_indicators.indicator_id` | `indicator--{uuid}` |
+| `target_ref` | ✅ | `threat_indicators.threat_id` | `malware--{uuid}` 或 `attack-pattern--{uuid}` |
+| `id` | ✅ | 三元組 | `relationship--{UUID(name="relationship:indicates:{sourceRef}:{targetRef}")}` |
+| `description` | — | `threat_indicators.role` | `IndicatorRole` 在 STIX 沒有對應屬性，放這裡保留語意 |
+| `start_time` | — | `threat_indicators.added_at` | |
+| `object_marking_refs` | ✅ | `threats.tlp` | |
+
+**方向不得反過來**：STIX 2.1 的關聯詞彙是 `indicator --indicates--> malware|attack-pattern`；
+反寫成 threat indicates indicator 不是標準關聯，匯入端看不懂。
+
+解除關聯時對應的 `relationship` **必須刪除**（以 `target_ref` 為單位整批同步）——
+只做 UPSERT 會讓平台對外宣稱一個早已解除的關聯仍然成立。
 
 ---
 

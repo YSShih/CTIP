@@ -53,7 +53,7 @@ class StixProjectionStageTest {
 
         new StixProjectionStage(sourcesWithNames(), stixObjects(Optional.empty()), () -> NOW).execute(context);
 
-        StixProjection projection = context.stixProjection();
+        StixProjection projection = indicatorProjection(context);
         assertThat(projection).isNotNull();
         assertThat(projection.stixId()).isEqualTo("indicator--" + indicator.id().value());
         assertThat(projection.tlp()).isEqualTo(Tlp.CLEAR);
@@ -84,8 +84,8 @@ class StixProjectionStageTest {
         new StixProjectionStage(sourcesWithNames(), stixObjects(Optional.of(existingCreated)), () -> NOW)
                 .execute(context);
 
-        assertThat(context.stixProjection().created()).isEqualTo(existingCreated);
-        assertThat(context.stixProjection().modified()).isEqualTo(NOW);
+        assertThat(indicatorProjection(context).created()).isEqualTo(existingCreated);
+        assertThat(indicatorProjection(context).modified()).isEqualTo(NOW);
     }
 
     @Test
@@ -103,7 +103,15 @@ class StixProjectionStageTest {
         new StixProjectionStage(sourcesWithNames(), failing, () -> NOW).execute(context);
 
         assertThat(context.rejected()).isFalse();
-        assertThat(context.stixProjection()).isNull();
+        assertThat(context.stixProjections()).isEmpty();
+    }
+
+    /** M2 起一筆記錄會產生多個投影(indicator + observed-data + identity);這裡只取 indicator。 */
+    private static StixProjection indicatorProjection(IngestionContext context) {
+        return context.stixProjections().stream()
+                .filter(projection -> projection.stixType().equals("indicator"))
+                .findFirst()
+                .orElse(null);
     }
 
     private static IngestionContext contextWith(Indicator indicator) {
@@ -193,6 +201,11 @@ class StixProjectionStageTest {
         @Override
         public Map<String, String> findContents(Collection<String> stixIds) {
             return Map.of();
+        }
+
+        @Override
+        public Optional<com.ctip.domain.stix.StixOrigin> findOrigin(String stixId) {
+            return Optional.empty();
         }
     }
 }

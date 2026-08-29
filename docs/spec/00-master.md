@@ -628,4 +628,25 @@ Redis(快取 + 分散式限流)的實作回饋,逐項見
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.23）。*
+## 0.24 實作回饋修訂（2026-08-29，Phase 18）
+
+Threat 實體與關聯 + M2 的 STIX 物件,逐項見
+[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | **平台沒有任何建立 Threat 的管道**:§9.1 只有三個 `GET`、ingestion 不產生 Threat、Phase 19–23 也沒有——三張表、聚合的四個行為、三種 STIX 投影、`threat:read` 全部永遠不可達(規則 16 的 placeholder,整個 phase 規模) | 補五個寫入端點與 `threat:manage` 權限(第 23 個,`ADMIN_UP`);歸屬與 TLP 完全沿用 §9.7 手動提交的規則(預設 AMBER;CLEAR/GREEN 需 `ioc:publish` 且轉為 public tenant)。與 v2.0 為 IOC 補寫入端點同源 | [09 §9.1](09-api.md#91-端點清單)、[10 §10.3](10-identity-plans.md) |
+| 2 | 只做 `retire()` 會讓 `ThreatStatus.DORMANT` **永遠不可達** | 端點為 `PUT /{id}/status`,domain 補 `changeStatus`;`retire()` 委派到終態。`RETIRED` 為終態,設定成它已經是的狀態回 409 | [02 §2.3](02-ddd-model.md#threat)、[09 §9.1](09-api.md#91-端點清單) |
+| 3 | **`/threats` 三端點的可見度述詞未定義**(執行單明列) | 定調為 §7.7 的通則;與 Indicator 的差異只有「沒有軟刪除」與「沒有再散布維度」。`GET /{id}/indicators` 必須對每個關聯 IOC 再走一次 Indicator 的可見度——關聯不是可見度的旁路 | [07 §7.7](07-domain-intel.md#threats-的可見度) |
+| 4 | ADR 0020 要求的 `IndicatorTlpTightened` 事件在 §2.4 沒有位置 | 補進事件清單(欄位 indicatorId／tenantId／previousTlp／currentTlp),由 `Indicator.recompute()` 在 TLP 真的變嚴格時發佈 | [02 §2.4](02-ddd-model.md#24-domain-event-清單) |
+| 5 | **AFTER_COMMIT 的消費端用預設傳播行為寫資料庫,寫入不落庫也不報錯**(實測:malware 與 relationship 一列都沒有,連例外都沒有)——回呼仍在已提交交易的 synchronization 範圍內 | 消費端一律 `REQUIRES_NEW`;規則寫進 §2.4(對 M3 的 Kafka listener 同樣成立) | [02 §2.4](02-ddd-model.md#24-domain-event-清單) |
+| 6 | M2 的五種 STIX 物件沒有欄位對照(ADR 0020 第 7 節指定由本 phase 補) | 新增 §7.8.7:`malware`／`attack-pattern`／`observed-data`／`identity`／`relationship` 五張對照表;§7.8.6 的引用同步為「7.8.2–7.8.4、7.8.7」 | [07 §7.8.7](07-domain-intel.md#787-m2-的四種-sdo-與-relationship強制對照表) |
+| 7 | `stix_objects` **沒有 `threat_id` 索引**,而 `fk_so_threat` 帶 `ON DELETE CASCADE`(執行單明列) | `V31` 一併建立 `ix_so_threat`;表 8 的索引清單同步 | [04 表 8](04-data-dictionary.md) |
+| 8 | 權限種子若另開 `V34`,Phase 20 的 `V32` 在既有資料庫上就成 out-of-order(ADR 0014 修過的坑) | `threat:manage` 的冪等種子寫在 `V31` 內;§4.7 註明理由 | [04 §4.7](04-data-dictionary.md#47-flyway-migration-對應) |
+
+> **值得記住的行為**:H6 是單向的——把私有 IOC 關聯到公開威脅會把該威脅收緊到公開範圍之外,
+> 解除關聯也不會放寬回去。這是 H6 的必然結果,寫入端點的文件必須明說。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.24）。*

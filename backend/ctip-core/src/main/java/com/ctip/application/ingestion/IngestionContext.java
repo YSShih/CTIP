@@ -7,6 +7,8 @@ import com.ctip.domain.stix.StixProjection;
 import com.ctip.sdk.IocHashType;
 import com.ctip.sdk.IocType;
 import com.ctip.sdk.RawThreatRecord;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -27,7 +29,7 @@ public final class IngestionContext {
     private Fingerprint fingerprint;
     private IocValue iocValue;
     private Indicator indicator;
-    private StixProjection stixProjection;
+    private final List<StixProjection> stixProjections = new ArrayList<>();
     private boolean merged;
     private RejectionReason rejectionReason;
     private String rejectionDetail;
@@ -123,12 +125,18 @@ public final class IngestionContext {
         this.indicator = indicator;
     }
 
-    public StixProjection stixProjection() {
-        return stixProjection;
+    /** 本筆記錄產生的 STIX 投影:indicator 一筆 + 每個來源記錄一筆 observed-data + 來源的 identity。 */
+    public List<StixProjection> stixProjections() {
+        return List.copyOf(stixProjections);
     }
 
-    public void stixProjection(StixProjection stixProjection) {
-        this.stixProjection = stixProjection;
+    public void addStixProjection(StixProjection projection) {
+        stixProjections.add(projection);
+    }
+
+    /** 投影建構失敗時只保留已成功的部分會產生半套物件,因此一律整筆丟棄(§7.8.6)。 */
+    public void clearStixProjections() {
+        stixProjections.clear();
     }
 
     public boolean merged() {

@@ -107,50 +107,55 @@ class StixExportServiceTest {
 
     /** 兩頁分頁(每頁 2 筆)驗證 collectExportable 的迴圈;findVisible 之外的方法不會被呼叫。 */
     private static IndicatorRepository repositoryOf(List<Indicator> visible) {
-        return new IndicatorRepository() {
-            @Override
-            public Optional<Indicator> findById(IndicatorId id) {
-                return Optional.empty();
-            }
+        return new FixedVisibleIndicators(visible);
+    }
 
-            @Override
-            public Optional<Indicator> findByIdentity(IocType type, String normalizedValue, TenantId ownerTenantId) {
-                return Optional.empty();
-            }
+    private record FixedVisibleIndicators(List<Indicator> visible) implements IndicatorRepository {
+        @Override
+        public Optional<Indicator> findById(IndicatorId id) {
+            return Optional.empty();
+        }
 
-            @Override
-            public Optional<Indicator> findVisibleById(IndicatorId id, Visibility visibility) {
-                return Optional.empty();
-            }
+        @Override
+        public Optional<Indicator> findByIdentity(IocType type, String normalizedValue, TenantId ownerTenantId) {
+            return Optional.empty();
+        }
 
-            @Override
-            public CursorPage<Indicator> findVisible(
-                    Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
-                return CursorPage.lastPage(visible);
-            }
+        @Override
+        public Optional<Indicator> findVisibleById(IndicatorId id, Visibility visibility) {
+            return Optional.empty();
+        }
 
-            @Override
-            public Optional<Indicator> findVisibleByIdentity(
-                    IocType type, String normalizedValue, Visibility visibility) {
-                return Optional.empty();
-            }
+        @Override
+        public CursorPage<Indicator> findVisible(
+                Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
+            return CursorPage.lastPage(visible);
+        }
 
-            @Override
-            public List<Indicator> findVisibleOffset(
-                    Visibility visibility, IndicatorFilter filter, int offset, int limit) {
-                return List.of();
-            }
+        @Override
+        public Optional<Indicator> findVisibleByIdentity(IocType type, String normalizedValue, Visibility visibility) {
+            return Optional.empty();
+        }
 
-            @Override
-            public List<Indicator> findExpirable(Instant now, int limit) {
-                return List.of();
-            }
+        @Override
+        public List<Indicator> findVisibleByIds(List<IndicatorId> ids, Visibility visibility) {
+            return List.of();
+        }
 
-            @Override
-            public Indicator save(Indicator indicator) {
-                return indicator;
-            }
-        };
+        @Override
+        public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public List<Indicator> findExpirable(Instant now, int limit) {
+            return List.of();
+        }
+
+        @Override
+        public Indicator save(Indicator indicator) {
+            return indicator;
+        }
     }
 
     /** content = 最小 JSON(id 欄位),鍵為 stixId。 */
@@ -166,6 +171,11 @@ class StixExportServiceTest {
 
         @Override
         public Optional<Instant> findCreated(String stixId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<com.ctip.domain.stix.StixOrigin> findOrigin(String stixId) {
             return Optional.empty();
         }
 

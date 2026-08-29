@@ -232,7 +232,12 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 > 對應 Threat 的重新收緊——這是 Phase 18 的交付物。
 > H6 因此從「聚合不變量」降格為「應用層一致性規則」,並在本表註記。
 
-行為：`Threat.linkIndicator(IndicatorId, IndicatorRole)`、`Threat.unlinkIndicator(IndicatorId)`、`Threat.addExternalReference(ExternalReference)`、`Threat.retire()`
+行為：`Threat.linkIndicator(IndicatorId, IndicatorRole)`、`Threat.unlinkIndicator(IndicatorId)`、`Threat.addExternalReference(ExternalReference)`、`Threat.changeStatus(ThreatStatus)`（`retire()` 即轉為終態 `RETIRED`）、`Threat.tightenTlpTo(Tlp)`
+
+> **`changeStatus` 與 `tightenTlpTo` 為本版新增（2026-08-29，Phase 18;[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)）**：
+> 原本只有 `retire()`,`ThreatStatus.DORMANT` 因此永遠不可達(規則 16 禁止的永不可達列舉值);
+> `tightenTlpTo` 是 H6 降格為應用層規則後的執行點(收緊是單向的,永不放寬)。
+> `RETIRED` 為終態:退役後不接受任何變更,要復活就建立新的 Threat。
 
 ---
 
@@ -308,6 +313,7 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 | `IndicatorExpired` | Indicator | M1 | Bloom(M2)、Search(M2) |
 | `IndicatorRevoked` | Indicator | M1 | Bloom(M2)、Search(M2)、Notification(M3) |
 | `IndicatorFalsePositiveReported` | Indicator | M2 | Search(M2)、Audit(M3) |
+| `IndicatorTlpTightened` | Indicator | M2 | Threat 的 H6 一致性(M2)¹ |
 | `IngestionStarted` | — (application) | M1 | Audit(M3)、Metrics(M3) |
 | `IngestionCompleted` | — (application) | M1 | Audit(M3)、Metrics(M3) |
 | `IngestionFailed` | — (application) | M1 | Audit(M3)、Notification(M3) |
@@ -319,12 +325,25 @@ Indicator.eligibleForBloom()                      // status=ACTIVE 且 tlp=CLEAR
 | `TokenReuseDetected` | User | M2 | Audit(M3)、Notification(M3) |
 | `ApiKeyCreated` / `ApiKeyRevoked` | ApiKey | M2 | Audit(M3) |
 | `SubscriptionChanged` | Subscription | M2 | Audit(M3)、Notification(M3) |
-| `ThreatUpdated` | Threat | M2 | Search(M2)、Notification(M3) |
+| `ThreatUpdated` | Threat | M2 | Search(M2)、STIX 投影(M2)²、Notification(M3) |
 | `BloomSnapshotReady` | BloomVersion | M2 | Notification(M3) |
 | `WebhookDisabled` | Webhook | M3 | Notification(M3)、Audit(M3) |
 
+> ¹ **`IndicatorTlpTightened` 為本版新增（2026-08-29，Phase 18；[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)）**：
+> [ADR 0020](../architecture/decisions/0020-phase17-19-spec-resolutions.md) 第 5 節把 H6 定調為
+> 應用層一致性規則，並要求「Indicator 的 TLP 在多來源合併時收緊 → 觸發對應 Threat 的重新收緊」。
+> 沒有這個事件，H6 只在建立關聯的那一刻成立；本表原本沒有任何事件承載它。
+> 欄位:`indicatorId`、`tenantId`、`previousTlp`、`currentTlp`。
+>
+> ² `ThreatUpdated` 以 `ThreatChange`(`CREATED`／`INDICATOR_LINKED`／`INDICATOR_UNLINKED`／
+> `EXTERNAL_REFERENCE_ADDED`／`TLP_TIGHTENED`／`STATUS_CHANGED`)區分變更種類——本表對 Threat
+> 只列一個事件,與其為每種變更新增規格沒有的事件型別,不如讓消費端以同一個事件重新載入聚合。
+
 規則：
 - **不得**把 JPA entity 當作事件 payload
+- **AFTER_COMMIT 的消費端若要寫入資料庫,必須 `REQUIRES_NEW`**——那個回呼仍在已提交交易的
+  synchronization 範圍內,預設的 `REQUIRED` 會參與一個已結束的交易,寫入不落庫也不報錯
+  (2026-08-29 實測;ADR 0027)
 - 事件欄位獨立於持久化模型；schema 版本化，存於 `docs/api/events/`
 - 消費端必須冪等（以 `eventId` 去重）
 - 事件在**交易提交後**發佈（`@TransactionalEventListener(phase = AFTER_COMMIT)`）

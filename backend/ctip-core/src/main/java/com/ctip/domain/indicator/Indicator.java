@@ -6,6 +6,7 @@ import com.ctip.domain.event.IndicatorEvents.IndicatorExpired;
 import com.ctip.domain.event.IndicatorEvents.IndicatorFalsePositiveReported;
 import com.ctip.domain.event.IndicatorEvents.IndicatorMerged;
 import com.ctip.domain.event.IndicatorEvents.IndicatorRevoked;
+import com.ctip.domain.event.IndicatorEvents.IndicatorTlpTightened;
 import com.ctip.domain.event.PendingEvents;
 import com.ctip.domain.fingerprint.Fingerprint;
 import com.ctip.domain.fingerprint.FingerprintStrategy;
@@ -152,14 +153,10 @@ public final class Indicator {
     }
 
     /**
-     * I11 規則 2:標記誤判後由判定順序決定最終狀態,非呼叫端指定。
-     *
-     * <p>§9.7:該來源的記錄<strong>不存在則建立</strong>——誤判回報的來源是 MANUAL,
-     * 而被回報的 IOC 通常來自別的來源,要求記錄必先存在會讓端點對絕大多數 IOC 直接失敗
-     * (ADR 0019 附註)。新建的記錄一開始就是 FALSE_POSITIVE。
-     *
-     * @param report 該來源的記錄快照;已存在時只取 sourceId,其餘欄位忽略
-     * @param reputation 回報來源的信譽,參與 I11 的狀態判定
+     * I11 規則 2:標記誤判後由判定順序決定最終狀態,非呼叫端指定。§9.7:該來源的記錄
+     * <strong>不存在則建立</strong>——誤判回報的來源是 MANUAL,而被回報的 IOC 通常來自別的來源,
+     * 要求記錄必先存在會讓端點對絕大多數 IOC 直接失敗(ADR 0019 附註);新建的記錄一開始就是
+     * FALSE_POSITIVE。{@code report} 已存在時只取 sourceId,{@code reputation} 參與 I11 的判定。
      */
     public void reportFalsePositive(IndicatorSourceSnapshot report, Reputation reputation) {
         SourceId by = report.sourceId();
@@ -209,6 +206,7 @@ public final class Indicator {
     }
 
     private void recompute() {
+        Tlp previousTlp = this.tlp;
         this.firstSeen = IndicatorMergePolicy.aggregateFirstSeen(sources);
         this.lastSeen = IndicatorMergePolicy.aggregateLastSeen(sources);
         this.validUntil = IndicatorMergePolicy.aggregateValidUntil(sources, value.type());
@@ -217,6 +215,10 @@ public final class Indicator {
         this.tlp = IndicatorMergePolicy.strictestTlp(sources);
         this.tags.addAll(IndicatorMergePolicy.unionTags(sources));
         this.status = IndicatorMergePolicy.determineStatus(sources, reputations);
+        // 合併取最嚴格(§7.7):收緊時必須連帶收緊關聯的 Threat(H6),否則 H6 只在建立關聯當下成立
+        if (previousTlp != tlp && previousTlp.isNoStricterThan(tlp)) {
+            pendingEvents.record(new IndicatorTlpTightened(id, ownerTenantId, previousTlp, tlp));
+        }
     }
 
     /** I12:score 0–100;由注入的 {@link ThreatScorer} 計算(§7.6),來源與信譽由聚合自身提供。 */

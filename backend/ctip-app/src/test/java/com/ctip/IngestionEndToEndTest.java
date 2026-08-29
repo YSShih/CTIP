@@ -43,12 +43,9 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     private MockMvc mvc;
 
     /**
-     * 測試開始前既有的 indicator id。
-     *
-     * <p>原本用 {@code CREATE TABLE e2e_indicator_snapshot AS …} 的暫存表，但應用角色改為
-     * 非特權的 {@code ctip_app} 之後就沒有 schema 的 CREATE 權限了（ADR 0021）。
-     * 那是**刻意的**——測試必須跟正式環境用同一組權限，否則 M3-09 之類的授權斷言量不到東西。
-     * 快照因此改存在 Java 端；SQL 以 {@code NOT IN (:ids)} 展開。
+     * 測試開始前既有的 indicator id。原本用暫存表,但應用角色改為非特權的 {@code ctip_app}
+     * 之後就沒有 schema 的 CREATE 權限了(ADR 0021)——那是<strong>刻意的</strong>:測試必須跟
+     * 正式環境用同一組權限。快照因此存在 Java 端,SQL 以 {@code NOT IN (:ids)} 展開。
      */
     private List<UUID> preExistingIds = List.of();
 
@@ -224,10 +221,21 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
                         "SELECT count(*) FROM hash_records h WHERE " + notPreExisting("h.indicator_id"), Integer.class))
                 .isEqualTo(indicatorsAfterFirstRun);
 
-        // STIX 投影以 stix_id UPSERT:重同步後仍一 indicator 一列,modified 前進、created 保持
+        assertStixProjectionsAreUpserted(indicatorsAfterFirstRun);
+    }
+
+    /** 投影以 stix_id UPSERT:一 indicator 一列、每個來源記錄一筆 observed-data(§7.8.7),created 不倒退。 */
+    private void assertStixProjectionsAreUpserted(int indicatorsAfterFirstRun) {
+        String scoped = " AND " + notPreExisting("o.indicator_id");
         assertThat(jdbc.queryForObject(
-                        "SELECT count(*) FROM stix_objects o WHERE " + notPreExisting("o.indicator_id"), Integer.class))
+                        "SELECT count(*) FROM stix_objects o WHERE o.stix_type = 'indicator'" + scoped, Integer.class))
                 .isEqualTo(indicatorsAfterFirstRun);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM stix_objects o WHERE o.stix_type = 'observed-data'" + scoped,
+                        Integer.class))
+                .isEqualTo(jdbc.queryForObject(
+                        "SELECT count(*) FROM indicator_sources s WHERE " + notPreExisting("s.indicator_id"),
+                        Integer.class));
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM stix_objects WHERE stix_created > stix_modified", Integer.class))
                 .isZero();
@@ -273,7 +281,8 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     }
 
     private int newIndicatorCount() {
-        Integer count = jdbc.queryForObject(notPreExistingCountSql(), Integer.class);
+        Integer count =
+                jdbc.queryForObject("SELECT count(*) FROM indicators WHERE " + notPreExisting("id"), Integer.class);
         return count == null ? -1 : count;
     }
 
@@ -287,9 +296,5 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
                         .map(id -> "'" + id + "'::uuid")
                         .collect(java.util.stream.Collectors.joining(","))
                 + ")";
-    }
-
-    private String notPreExistingCountSql() {
-        return "SELECT count(*) FROM indicators WHERE " + notPreExisting("id");
     }
 }

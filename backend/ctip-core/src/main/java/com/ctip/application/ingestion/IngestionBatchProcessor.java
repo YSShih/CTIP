@@ -3,8 +3,9 @@ package com.ctip.application.ingestion;
 import com.ctip.application.port.RejectionLogPort;
 import com.ctip.domain.stix.StixProjection;
 import com.ctip.sdk.RawThreatRecord;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,7 @@ public class IngestionBatchProcessor {
         return new RecordOutcome(
                 context.indicator(),
                 context.merged(),
-                context.stixProjection(),
+                context.stixProjections(),
                 context.rejectionReason(),
                 context.rejectionDetail());
     }
@@ -70,7 +71,7 @@ public class IngestionBatchProcessor {
     @Transactional
     public BatchOutcome process(SourceContext source, IngestionRun run, List<RawThreatRecord> batch) {
         BatchState state = run.newBatchState();
-        List<StixProjection> projections = new ArrayList<>();
+        Map<String, StixProjection> projections = new LinkedHashMap<>();
         int accepted = 0;
         int rejected = 0;
         int merged = 0;
@@ -97,11 +98,11 @@ public class IngestionBatchProcessor {
                 if (context.merged()) {
                     merged++;
                 }
-                if (context.stixProjection() != null) {
-                    projections.add(context.stixProjection());
-                }
+                // 以 stix_id 去重:同一批次內 identity 每筆記錄都會產生一次,
+                // 落庫是 UPSERT,但同批重複寫等於白做 N-1 次
+                context.stixProjections().forEach(projection -> projections.put(projection.stixId(), projection));
             }
         }
-        return new BatchOutcome(accepted, rejected, merged, List.copyOf(projections));
+        return new BatchOutcome(accepted, rejected, merged, List.copyOf(projections.values()));
     }
 }

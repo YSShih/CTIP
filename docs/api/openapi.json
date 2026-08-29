@@ -221,6 +221,53 @@
         },
         "type" : "object"
       },
+      "ExternalReferenceDto" : {
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "externalId" : {
+            "type" : "string"
+          },
+          "sourceName" : {
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ExternalReferenceRequest" : {
+        "properties" : {
+          "description" : {
+            "example" : "Phishing",
+            "maxLength" : 1024,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "externalId" : {
+            "example" : "T1566",
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "sourceName" : {
+            "example" : "mitre-attack",
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "url" : {
+            "example" : "https://attack.mitre.org/techniques/T1566/",
+            "maxLength" : 2048,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "sourceName" ],
+        "type" : "object"
+      },
       "FalsePositiveRequest" : {
         "properties" : {
           "evidenceUrl" : {
@@ -1029,6 +1076,175 @@
         },
         "type" : "object"
       },
+      "ThreatCreateRequest" : {
+        "properties" : {
+          "aliases" : {
+            "items" : {
+              "example" : "Agent Tesla",
+              "maxLength" : 255,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "confidence" : {
+            "example" : 70,
+            "format" : "int32",
+            "maximum" : 100,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "description" : {
+            "example" : "Commodity infostealer distributed via phishing attachments.",
+            "maxLength" : 4096,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "firstSeen" : {
+            "example" : "2026-01-15T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "lastSeen" : {
+            "example" : "2026-08-20T00:00:00Z",
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "example" : "AgentTesla",
+            "maxLength" : 255,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "severity" : {
+            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
+            "example" : "HIGH",
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "example" : "infostealer",
+              "maxLength" : 64,
+              "minLength" : 0,
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "tlp" : {
+            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
+            "example" : "AMBER",
+            "type" : "string"
+          },
+          "type" : {
+            "enum" : [ "CAMPAIGN", "MALWARE_FAMILY", "THREAT_ACTOR", "ATTACK_PATTERN", "PHISHING_KIT" ],
+            "example" : "MALWARE_FAMILY",
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "type" ],
+        "type" : "object"
+      },
+      "ThreatDto" : {
+        "properties" : {
+          "aliases" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "confidence" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "description" : {
+            "type" : "string"
+          },
+          "externalReferences" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ExternalReferenceDto"
+            },
+            "type" : "array"
+          },
+          "firstSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "indicatorCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "lastSeen" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "severity" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "tags" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array",
+            "uniqueItems" : true
+          },
+          "tlp" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ThreatIndicatorDto" : {
+        "properties" : {
+          "addedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "ioc" : {
+            "$ref" : "#/components/schemas/IocDto"
+          },
+          "role" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ThreatLinkRequest" : {
+        "properties" : {
+          "role" : {
+            "enum" : [ "C2", "DELIVERY", "PAYLOAD", "INFRASTRUCTURE", "VICTIM", "UNKNOWN" ],
+            "example" : "C2",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ThreatStatusRequest" : {
+        "properties" : {
+          "status" : {
+            "enum" : [ "ACTIVE", "DORMANT", "RETIRED" ],
+            "example" : "RETIRED",
+            "type" : "string"
+          }
+        },
+        "required" : [ "status" ],
+        "type" : "object"
+      },
       "UsageItem" : {
         "properties" : {
           "limit" : {
@@ -1155,7 +1371,7 @@
       },
       "post" : {
         "description" : "Issues a key for the caller's tenant. The full key is returned exactly once and only its SHA-256 hash is stored; scopes may not exceed the creator's own permissions. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:create。",
-        "operationId" : "create",
+        "operationId" : "create_1",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -1639,7 +1855,7 @@
     "/api/v1/iocs" : {
       "get" : {
         "description" : "Lists visible indicators ordered by (lastSeen DESC, id DESC). Filters: type, severity, status, tlp, tags (repeat the parameter; all must match), sourceId, confidenceMin/Max, scoreMin/Max, lastSeenFrom/To (ISO-8601); EXPIRED entries are excluded unless includeExpired=true. limit above the plan maximum is clamped, not rejected. offset mode is for page-number UIs only and is capped at 10000. 認證:匿名(僅 public TLP:CLEAR)。",
-        "operationId" : "list",
+        "operationId" : "list_1",
         "parameters" : [ {
           "in" : "query",
           "name" : "cursor",
@@ -2340,7 +2556,7 @@
     "/api/v1/iocs/{id}" : {
       "get" : {
         "description" : "Returns a single indicator by id. Cross-tenant or invisible resources are always 404 (existence is never disclosed). 認證:匿名。",
-        "operationId" : "byId_1",
+        "operationId" : "byId_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -2597,7 +2813,7 @@
     "/api/v1/sources" : {
       "get" : {
         "description" : "All configured threat sources with their TLP defaults, redistribution policy snapshot basis and health status. 認證:匿名。",
-        "operationId" : "list_1",
+        "operationId" : "list_2",
         "responses" : {
           "200" : {
             "content" : {
@@ -2654,7 +2870,7 @@
     "/api/v1/sources/{id}" : {
       "get" : {
         "description" : "A single source by id. 認證:匿名。",
-        "operationId" : "byId",
+        "operationId" : "byId_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -3482,6 +3698,781 @@
         "tags" : [ "Sync" ]
       }
     },
+    "/api/v1/threats" : {
+      "get" : {
+        "description" : "Lists visible threats ordered by (lastSeen DESC, id DESC). Filters: type, status, severity, tlp, name (case-insensitive substring), tags and aliases (repeat the parameter; all must match). RETIRED threats are excluded unless includeRetired=true or status is given explicitly. limit above the plan maximum is clamped, not rejected. 認證:匿名(僅 public TLP:CLEAR)。",
+        "operationId" : "list",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "CAMPAIGN", "MALWARE_FAMILY", "THREAT_ACTOR", "ATTACK_PATTERN", "PHISHING_KIT" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "status",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "ACTIVE", "DORMANT", "RETIRED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "severity",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tlp",
+          "required" : false,
+          "schema" : {
+            "enum" : [ "CLEAR", "GREEN", "AMBER", "AMBER_STRICT", "RED" ],
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "includeRetired",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "tags",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        }, {
+          "in" : "query",
+          "name" : "aliases",
+          "required" : false,
+          "schema" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "hasMore" : true,
+                  "items" : [ {
+                    "aliases" : [ "Agent Tesla" ],
+                    "confidence" : 70,
+                    "description" : "Commodity infostealer.",
+                    "externalReferences" : [ {
+                      "description" : null,
+                      "externalId" : "S0331",
+                      "sourceName" : "mitre-attack",
+                      "url" : null
+                    } ],
+                    "firstSeen" : "2026-01-15T00:00:00Z",
+                    "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                    "indicatorCount" : 2,
+                    "lastSeen" : "2026-08-20T00:00:00Z",
+                    "name" : "AgentTesla",
+                    "severity" : "HIGH",
+                    "status" : "ACTIVE",
+                    "tags" : [ "infostealer" ],
+                    "tlp" : "CLEAR",
+                    "type" : "MALWARE_FAMILY"
+                  } ],
+                  "nextCursor" : "eyJscyI6IjIwMjYtMDgtMjBUMDA6MDA6MDBaIiwiaWQiOiIuLi4ifQ=="
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageResponse"
+                }
+              }
+            },
+            "description" : "One page of threats"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "INVALID_CURSOR / INVALID_REQUEST"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "List threats (cursor pagination)",
+        "tags" : [ "Threat" ]
+      },
+      "post" : {
+        "description" : "The owning tenant is always the caller's; it cannot be chosen. TLP defaults to AMBER (private); CLEAR/GREEN additionally require ioc:publish and transfer ownership to the public tenant (same rule as POST /iocs); RED is rejected. The TLP is tightened automatically when stricter IOCs are linked (invariant H6) and is never widened — linking a private IOC to a public threat therefore takes that threat out of public visibility. (ownerTenantId, type, name) must be unique within the tenant (H1). 認證:需要 Bearer JWT 或 X-API-Key,權限 threat:manage。",
+        "operationId" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ThreatCreateRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 1,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "AMBER",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "Threat created"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "A threat with the same (type, name) already exists in this tenant (CONFLICT)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Create a threat",
+        "tags" : [ "Threat Write" ]
+      }
+    },
+    "/api/v1/threats/{id}" : {
+      "get" : {
+        "description" : "Returns a single threat by id. Cross-tenant or invisible resources are always 404 (existence is never disclosed). indicatorCount is the total number of links, not the number visible to the caller. 認證:匿名。",
+        "operationId" : "byId",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ {
+                    "description" : null,
+                    "externalId" : "S0331",
+                    "sourceName" : "mitre-attack",
+                    "url" : null
+                  } ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 2,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "CLEAR",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "The threat"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND (missing or not visible)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Get one threat",
+        "tags" : [ "Threat" ]
+      }
+    },
+    "/api/v1/threats/{id}/external-references" : {
+      "post" : {
+        "description" : "externalId or url must be present (invariant H3); (sourceName, externalId) is unique within the threat (H4, enforced with COALESCE so a null externalId still collides). 認證:需要 Bearer JWT 或 X-API-Key,權限 threat:manage。",
+        "operationId" : "addExternalReference",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ExternalReferenceRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 1,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "AMBER",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "Reference added; returns the updated threat"
+          },
+          "400" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Neither externalId nor url given (INVALID_REQUEST)"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Duplicate (sourceName, externalId) within the threat (CONFLICT)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Add an external reference to a threat",
+        "tags" : [ "Threat Write" ]
+      }
+    },
+    "/api/v1/threats/{id}/indicators" : {
+      "get" : {
+        "description" : "Returns the linked indicators ordered by addedAt. Each indicator is filtered by the same TLP and redistribution rules as GET /iocs — a link never exposes an IOC the caller could not read directly, so this list can be shorter than indicatorCount. 認證:匿名。",
+        "operationId" : "indicators",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : [ {
+                  "addedAt" : "2026-08-20T10:00:00Z",
+                  "ioc" : {
+                    "attribution" : [ ],
+                    "confidence" : 60,
+                    "firstSeen" : "2026-08-01T00:00:00Z",
+                    "hashType" : null,
+                    "id" : "1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e",
+                    "lastSeen" : "2026-08-20T10:00:00Z",
+                    "score" : 42,
+                    "severity" : "HIGH",
+                    "sourceCount" : 1,
+                    "status" : "ACTIVE",
+                    "tags" : [ "phishing" ],
+                    "tlp" : "CLEAR",
+                    "type" : "DOMAIN",
+                    "validUntil" : null,
+                    "value" : "mal-8.ctip-sample.net"
+                  },
+                  "role" : "C2"
+                } ],
+                "schema" : {
+                  "items" : {
+                    "$ref" : "#/components/schemas/ThreatIndicatorDto"
+                  },
+                  "type" : "array"
+                }
+              }
+            },
+            "description" : "The visible linked indicators"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "NOT_FOUND (missing or not visible)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ ],
+        "summary" : "List the IOCs linked to a threat",
+        "tags" : [ "Threat" ]
+      }
+    },
+    "/api/v1/threats/{id}/indicators/{indicatorId}" : {
+      "delete" : {
+        "description" : "Removes the link and its STIX relationship projection. The threat's TLP is not widened — tightening is one-way. Returns 404 when the link does not exist. 認證:需要 Bearer JWT 或 X-API-Key,權限 threat:manage。",
+        "operationId" : "unlinkIndicator",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "indicatorId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 1,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "AMBER",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "The updated threat"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Threat or link missing / not visible (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Unlink an IOC from a threat",
+        "tags" : [ "Threat Write" ]
+      },
+      "put" : {
+        "description" : "Idempotent: linking an already linked IOC only updates its role. The link stores the indicator id only (invariant H5). Linking a stricter IOC tightens the threat's TLP (H6). Both the threat and the IOC must belong to — or be visible to — the caller's tenant; otherwise 404. 認證:需要 Bearer JWT 或 X-API-Key,權限 threat:manage。",
+        "operationId" : "linkIndicator",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "indicatorId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ThreatLinkRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 1,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "AMBER",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "The updated threat"
+          },
+          "404" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Threat or IOC missing / not visible (NOT_FOUND)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Link an IOC to a threat (or change its role)",
+        "tags" : [ "Threat Write" ]
+      }
+    },
+    "/api/v1/threats/{id}/status" : {
+      "put" : {
+        "description" : "ACTIVE / DORMANT / RETIRED. RETIRED is terminal: a retired threat accepts no further changes (create a new threat instead). Setting the status it already has returns 409 rather than silently succeeding. 認證:需要 Bearer JWT 或 X-API-Key,權限 threat:manage。",
+        "operationId" : "changeStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ThreatStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "example" : {
+                  "aliases" : [ "Agent Tesla" ],
+                  "confidence" : 70,
+                  "description" : "Commodity infostealer.",
+                  "externalReferences" : [ ],
+                  "firstSeen" : "2026-01-15T00:00:00Z",
+                  "id" : "5b8f9d2e-1c3a-4f7b-9e0d-2a4c6b8d0f13",
+                  "indicatorCount" : 1,
+                  "lastSeen" : "2026-08-20T00:00:00Z",
+                  "name" : "AgentTesla",
+                  "severity" : "HIGH",
+                  "status" : "ACTIVE",
+                  "tags" : [ "infostealer" ],
+                  "tlp" : "AMBER",
+                  "type" : "MALWARE_FAMILY"
+                },
+                "schema" : {
+                  "$ref" : "#/components/schemas/ThreatDto"
+                }
+              }
+            },
+            "description" : "The updated threat"
+          },
+          "409" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Already retired, or already in that status (CONFLICT)"
+          },
+          "429" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Rate limit exceeded (RATE_LIMIT_EXCEEDED)"
+          },
+          "500" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description" : "Unexpected error (INTERNAL_ERROR)"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        }, {
+          "apiKeyAuth" : [ ]
+        } ],
+        "summary" : "Change a threat's status",
+        "tags" : [ "Threat Write" ]
+      }
+    },
     "/api/v1/version" : {
       "get" : {
         "description" : "Returns the API contract version (v1) and the build version of the running application (dev when running from sources). 認證:匿名。",
@@ -3533,6 +4524,9 @@
     "url" : "http://localhost"
   } ],
   "tags" : [ {
+    "description" : "Curation of threats: create, link/unlink IOCs, add external references, change status.",
+    "name" : "Threat Write"
+  }, {
     "description" : "Public dashboard statistics. Authentication: anonymous.",
     "name" : "Stats"
   }, {
@@ -3553,6 +4547,9 @@
   }, {
     "description" : "Read access to indicators of compromise. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
     "name" : "IOC"
+  }, {
+    "description" : "Read access to threats (campaigns, malware families, actors) and their linked indicators. Authentication: anonymous (public TLP:CLEAR only; cross-tenant data is always 404).",
+    "name" : "Threat"
   }, {
     "description" : "Machine-to-machine credentials scoped to the caller's tenant.",
     "name" : "API Keys"

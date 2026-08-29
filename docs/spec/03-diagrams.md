@@ -365,10 +365,12 @@ classDiagram
         +Confidence confidence
         +Tlp tlp
         +ThreatStatus status
-        +linkIndicator(IndicatorId, IndicatorRole) void
-        +unlinkIndicator(IndicatorId) void
+        +linkIndicator(IndicatorId, IndicatorRole, Instant) void
+        +unlinkIndicator(IndicatorId) boolean
         +addExternalReference(ExternalReference) void
+        +changeStatus(ThreatStatus) void
         +retire() void
+        +tightenTlpTo(Tlp) boolean
     }
     class ThreatIndicatorLink {
         <<Entity>>
@@ -388,6 +390,11 @@ classDiagram
 ```
 
 **H5**：`ThreatIndicatorLink` 只存 `IndicatorId`，**不持有 `Indicator` 物件**——跨聚合只能以 ID 參照。
+
+> **2026-08-29(Phase 18;[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md))**:
+> `changeStatus` 讓 `ThreatStatus.DORMANT` 可達(只有 `retire()` 的話它是永不可達的列舉值);
+> `tightenTlpTo` 是 H6 降格為應用層規則後的執行點(單向收緊)。
+> `linkIndicator` 的時間由 application 以 `ClockPort` 傳入(規則 23:domain 不得讀時鐘)。
 
 ---
 

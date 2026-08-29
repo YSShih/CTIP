@@ -1,5 +1,6 @@
 package com.ctip.application.port;
 
+import com.ctip.domain.stix.StixOrigin;
 import com.ctip.domain.stix.StixProjection;
 import java.time.Instant;
 import java.util.Collection;
@@ -20,6 +21,13 @@ public interface StixObjectPort {
 
     /** 落庫的 content JSON 原文。 */
     Optional<String> findContent(String stixId);
+
+    /**
+     * 這筆投影的來源 domain 物件(表 8 的 indicator_id / threat_id)。
+     * {@code observed-data} 的 id 是決定性雜湊、{@code identity} 來自 Source——
+     * 兩者都無法從 stix_id 反推出該檢查誰的可見度,只能問這一列(ADR 0027)。
+     */
+    Optional<StixOrigin> findOrigin(String stixId);
 
     /** 批量讀取(bundle 匯出用):stixId → content JSON,查無者不在結果中。 */
     Map<String, String> findContents(Collection<String> stixIds);

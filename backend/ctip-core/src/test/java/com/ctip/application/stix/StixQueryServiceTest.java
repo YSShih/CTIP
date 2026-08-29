@@ -3,39 +3,46 @@ package com.ctip.application.stix;
 import static com.ctip.testing.IndicatorTestBuilder.DEMO_TENANT;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.ctip.application.indicator.IndicatorFilter;
 import com.ctip.application.indicator.RedistributionFilter;
-import com.ctip.application.port.IndicatorRepository;
-import com.ctip.application.port.StixObjectPort;
 import com.ctip.domain.indicator.Indicator;
-import com.ctip.domain.indicator.IndicatorId;
-import com.ctip.domain.shared.Cursor;
-import com.ctip.domain.shared.CursorPage;
 import com.ctip.domain.shared.Visibility;
-import com.ctip.domain.stix.StixProjection;
+import com.ctip.domain.stix.StixIndicatorProjector;
+import com.ctip.domain.stix.StixRelationshipProjector;
+import com.ctip.domain.stix.StixThreatProjector;
 import com.ctip.domain.tenant.TenantId;
-import com.ctip.sdk.IocType;
+import com.ctip.domain.threat.IndicatorRole;
+import com.ctip.domain.threat.Threat;
 import com.ctip.sdk.RedistributionPolicy;
 import com.ctip.sdk.Tlp;
+import com.ctip.testing.InMemoryIndicatorRepository;
+import com.ctip.testing.InMemoryStixObjects;
+import com.ctip.testing.InMemoryStixRelationships;
+import com.ctip.testing.InMemoryThreatRepository;
 import com.ctip.testing.IndicatorTestBuilder;
+import com.ctip.testing.ThreatTestBuilder;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * GET /api/v1/stix/{stixId} 的查詢規則:marking 由常數供應、
- * indicator 經可見度 + 再散布過濾(§7.9 規則 3)、格式不合的 stixId 一律查無。
+ * GET /api/v1/stix/{stixId} 的查詢規則:marking 由常數供應;其餘物件的可見度依
+ * <strong>來源 domain 物件</strong>判定(indicator / threat / 無來源),格式不合的 stixId 一律查無。
  */
 @Tag("unit")
 class StixQueryServiceTest {
 
+    private static final Instant NOW = Instant.parse("2026-08-20T00:00:00Z");
+
+    private final InMemoryIndicatorRepository indicators = new InMemoryIndicatorRepository();
+    private final InMemoryThreatRepository threats = new InMemoryThreatRepository();
+    private final InMemoryStixObjects stixObjects = new InMemoryStixObjects();
+    private final InMemoryStixRelationships stixRelationships = new InMemoryStixRelationships();
+    private final StixQueryService service =
+            new StixQueryService(indicators, threats, stixObjects, stixRelationships, new RedistributionFilter());
+
     @Test
     void markingIsServedFromConstants() {
-        StixQueryService service = service(null);
         assertThat(service.findMarking("marking-definition--94868c89-83c2-464b-929b-a1a8aa3c8487"))
                 .hasValueSatisfying(m -> assertThat(m.get("name")).isEqualTo("TLP:CLEAR"));
         assertThat(service.findMarking("indicator--1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e"))
@@ -44,107 +51,94 @@ class StixQueryServiceTest {
 
     @Test
     void visibleRedistributableIndicatorReturnsStoredContent() {
-        Indicator indicator = IndicatorTestBuilder.activeIndicator(
-                TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
-        StixQueryService service = service(indicator);
+        Indicator indicator = storedIndicator(RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
 
-        assertThat(service.findIndicatorContent("indicator--" + indicator.id().value(), Visibility.anonymous()))
-                .contains("{\"stored\":true}");
+        assertThat(service.findContent(StixIndicatorProjector.stixId(indicator.snapshot()), Visibility.anonymous()))
+                .contains("{\"id\":\"indicator--" + indicator.id().value() + "\"}");
     }
 
     @Test
     void allInternalOnlyIndicatorIsHiddenFromNonOwner() {
-        Indicator indicator =
-                IndicatorTestBuilder.activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, RedistributionPolicy.INTERNAL_ONLY);
-        StixQueryService service = service(indicator);
+        Indicator indicator = storedIndicator(RedistributionPolicy.INTERNAL_ONLY);
+        String stixId = StixIndicatorProjector.stixId(indicator.snapshot());
 
         // 匿名雖綁 public tenant,仍屬公開輸出,不得豁免(§7.9 作用域修正的安全解讀;ADR 0006)
-        assertThat(service.findIndicatorContent("indicator--" + indicator.id().value(), Visibility.anonymous()))
-                .isEmpty();
+        assertThat(service.findContent(stixId, Visibility.anonymous())).isEmpty();
         // 非擁有租戶 → I14 隱藏
-        assertThat(service.findIndicatorContent(
-                        "indicator--" + indicator.id().value(), Visibility.authenticated(DEMO_TENANT)))
+        assertThat(service.findContent(stixId, Visibility.authenticated(DEMO_TENANT)))
                 .isEmpty();
     }
 
     @Test
+    void threatProjectionFollowsThreatVisibility() {
+        Threat threat = ThreatTestBuilder.malwareFamily(DEMO_TENANT, Tlp.AMBER);
+        threats.save(threat);
+        stixObjects.upsert(StixThreatProjector.project(threat.snapshot(), NOW, NOW));
+        String stixId = StixThreatProjector.stixId(threat.snapshot());
+
+        assertThat(service.findContent(stixId, Visibility.authenticated(DEMO_TENANT)))
+                .isPresent();
+        // 別的租戶 / 匿名看不到私有威脅
+        assertThat(service.findContent(stixId, Visibility.anonymous())).isEmpty();
+    }
+
+    @Test
+    void identityProjectionHasNoOriginAggregateAndIsPublic() {
+        Indicator indicator = storedIndicator(RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
+        // identity 的兩個來源欄都是 null(ck_so_origin 允許);TLP 固定 CLEAR
+        stixObjects.upsert(new com.ctip.domain.stix.StixProjection(
+                "identity--00000000-0000-0000-0000-0000000000a1",
+                "identity",
+                TenantId.PUBLIC,
+                null,
+                null,
+                Tlp.CLEAR,
+                NOW,
+                NOW,
+                Map.of("type", "identity")));
+        assertThat(indicator).isNotNull();
+
+        assertThat(service.findContent("identity--00000000-0000-0000-0000-0000000000a1", Visibility.anonymous()))
+                .isPresent();
+    }
+
+    @Test
+    void relationshipIsRebuiltFromTupleAndRequiresBothEndsVisible() {
+        Indicator indicator = storedIndicator(RedistributionPolicy.PUBLIC_REDISTRIBUTABLE);
+        Threat threat = ThreatTestBuilder.malwareFamily(TenantId.PUBLIC, Tlp.CLEAR);
+        threat.linkIndicator(indicator.id(), IndicatorRole.C2, NOW);
+        threats.save(threat);
+        stixRelationships.syncForTarget(
+                StixThreatProjector.stixId(threat.snapshot()),
+                java.util.List.of(StixRelationshipProjector.project(
+                        threat.snapshot(), threat.indicators().getFirst(), NOW, NOW)));
+        String stixId = stixRelationships.all().getFirst().stixId();
+
+        assertThat(service.findRelationship(stixId, Visibility.anonymous())).hasValueSatisfying(content -> {
+            assertThat(content.get("relationship_type")).isEqualTo("indicates");
+            assertThat(content.get("source_ref"))
+                    .isEqualTo("indicator--" + indicator.id().value());
+            assertThat(content.get("description")).isEqualTo("Indicator role within the threat: C2");
+        });
+        // stix_objects 那條路徑不處理 relationship(表 9 是另一張表)
+        assertThat(service.findContent(stixId, Visibility.anonymous())).isEmpty();
+    }
+
+    @Test
     void malformedStixIdsAreNotFound() {
-        StixQueryService service = service(null);
-        assertThat(service.findIndicatorContent("indicator--not-a-uuid", Visibility.anonymous()))
+        assertThat(service.findContent("indicator--not-a-uuid", Visibility.anonymous()))
                 .isEmpty();
-        assertThat(service.findIndicatorContent("threat--1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e", Visibility.anonymous()))
+        assertThat(service.findContent("threat--1f0d2c4e-93a5-4f6b-8c1d-2e3a4b5c6d7e", Visibility.anonymous()))
                 .isEmpty();
-        assertThat(service.findIndicatorContent(null, Visibility.anonymous())).isEmpty();
+        assertThat(service.findContent(null, Visibility.anonymous())).isEmpty();
+        assertThat(service.findRelationship("relationship--not-a-uuid", Visibility.anonymous()))
+                .isEmpty();
     }
 
-    /** findVisibleById 回傳固定 indicator(可見度過濾本身由 repository 整合測試覆蓋)。 */
-    private static StixQueryService service(Indicator indicator) {
-        return new StixQueryService(
-                new FixedIndicatorRepository(indicator), new StoredContentPort(), new RedistributionFilter());
-    }
-
-    private record FixedIndicatorRepository(Indicator indicator) implements IndicatorRepository {
-        @Override
-        public Optional<Indicator> findById(IndicatorId id) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<Indicator> findByIdentity(IocType type, String normalizedValue, TenantId ownerTenantId) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<Indicator> findVisibleById(IndicatorId id, Visibility visibility) {
-            return Optional.ofNullable(indicator).filter(i -> i.id().equals(id));
-        }
-
-        @Override
-        public CursorPage<Indicator> findVisible(
-                Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
-            return CursorPage.lastPage(List.of());
-        }
-
-        @Override
-        public Optional<Indicator> findVisibleByIdentity(IocType type, String normalizedValue, Visibility visibility) {
-            return Optional.empty();
-        }
-
-        @Override
-        public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
-            return List.of();
-        }
-
-        @Override
-        public List<Indicator> findExpirable(Instant now, int limit) {
-            return List.of();
-        }
-
-        @Override
-        public Indicator save(Indicator saved) {
-            return saved;
-        }
-    }
-
-    private static final class StoredContentPort implements StixObjectPort {
-        @Override
-        public Optional<Instant> findCreated(String stixId) {
-            return Optional.empty();
-        }
-
-        @Override
-        public void upsert(StixProjection projection) {
-            // 查詢不寫入
-        }
-
-        @Override
-        public Optional<String> findContent(String stixId) {
-            return Optional.of("{\"stored\":true}");
-        }
-
-        @Override
-        public Map<String, String> findContents(Collection<String> stixIds) {
-            return Map.of();
-        }
+    private Indicator storedIndicator(RedistributionPolicy policy) {
+        Indicator indicator = IndicatorTestBuilder.activeIndicator(TenantId.PUBLIC, Tlp.CLEAR, policy);
+        indicators.save(indicator);
+        stixObjects.upsert(StixIndicatorProjector.project(indicator.snapshot(), Map.of(), NOW, NOW));
+        return indicator;
     }
 }

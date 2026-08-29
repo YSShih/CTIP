@@ -392,6 +392,9 @@ CONSTRAINT ck_so_origin    CHECK (
 CREATE INDEX ix_so_tenant_tlp  ON stix_objects (owner_tenant_id, tlp);
 CREATE INDEX ix_so_type        ON stix_objects (stix_type);
 CREATE INDEX ix_so_indicator   ON stix_objects (indicator_id);
+-- threat_id 與 indicator_id 一樣是帶 ON DELETE CASCADE 的 FK:沒有索引,刪一個 threat 或查
+-- 一個 threat 的投影都要全表掃描(2026-08-29,Phase 18;ADR 0027)。由 V31 一併建立
+CREATE INDEX ix_so_threat      ON stix_objects (threat_id);
 ```
 
 > **M1 只產生 `indicator`、`marking-definition`、`bundle` 三種**（`threat_id` 相關者為 M2）。理由與映射規則見 [07-domain-intel.md](07-domain-intel.md)。
@@ -1175,11 +1178,16 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 | `V28__create_plans.sql` | `plans`、`subscriptions`、`import_jobs` + `ingestion_rejections.import_job_id` | 17, 18, 18b |
 | `V29__seed_plans_and_permissions.sql` | 四個方案 + `subscription:read` 權限（皆冪等） | — |
 | `V24__seed_rbac.sql` | 五個角色、19 個權限、角色權限對應（冪等） | — |
-| `V31__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` | 19–21 |
+| `V31__create_threats.sql` | `threats`、`threat_indicators`、`threat_external_references` + `ALTER TABLE stix_objects ADD CONSTRAINT fk_so_threat …` + `ix_so_threat` + `threat:manage` 權限種子¹ | 19–21 |
 | `V30__create_bloom.sql` | `bloom_versions`、`bloom_artifacts` | 22, 23 |
 | `V27__seed_rbac_read_permissions.sql` | 補 `source:read`、`stats:read` 兩個權限與其角色對應（冪等，ADR 0013） | — |
 | `V32__create_notifications.sql` | `webhooks`、`webhook_deliveries`、`notifications` | 24–26 |
 | `V33__create_audit_logs.sql` | `audit_logs` + `REVOKE UPDATE, DELETE` | 27 |
+
+> ¹ **RBAC 種子為何寫在建表的 migration 內（2026-08-29，Phase 18；[ADR 0027](../architecture/decisions/0027-phase18-threat-and-m2-stix.md)）**：
+> 本表已把 `V32`／`V33` 指派給 Phase 20／21。Phase 18 若另開 `V34` 放權限種子，Phase 20 之後
+> 補上的 `V32` 在既有資料庫上就是 out-of-order → `FlywayValidateException`——正是 ADR 0014
+> 廢除區段預留所要修的那個坑。`threat:manage` 因此與建表同在 `V31`（冪等，`ON CONFLICT DO NOTHING`）。
 
 規則見 [05-environment.md](05-environment.md#59-flyway)。**絕不修改已套用的 migration**，一律新增。
 

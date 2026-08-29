@@ -22,4 +22,14 @@ public interface IndicatorEvents {
 
     record IndicatorFalsePositiveReported(IndicatorId indicatorId, TenantId tenantId, SourceId reportedBy)
             implements DomainEvent {}
+
+    /**
+     * 多來源合併把 TLP 收緊時發佈(§7.7「合併取最嚴格」)。
+     *
+     * <p>消費端是 Threat 的 H6 一致性規則:{@code Threat.tlp} 不得比任一關聯 Indicator 更寬鬆,
+     * 而 Indicator 的 TLP 會在合併時事後收緊——沒有這個事件,已建立的關聯就會停在較寬鬆的
+     * Threat TLP 上,H6 只在建立關聯的那一刻成立(ADR 0020 定調,Phase 18 交付)。
+     */
+    record IndicatorTlpTightened(IndicatorId indicatorId, TenantId tenantId, Tlp previousTlp, Tlp currentTlp)
+            implements DomainEvent {}
 }

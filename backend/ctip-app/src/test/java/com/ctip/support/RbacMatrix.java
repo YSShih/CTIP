@@ -19,7 +19,8 @@ import java.util.regex.Pattern;
  * <p>這是矩陣的第二份獨立來源(第一份是 {@code V24__seed_rbac.sql} + {@code V27__seed_rbac_read_permissions.sql}),
  * 兩者互為驗證——種子改動而規格未改,測試立即失敗。§10.3 標題原誤寫「18 項」,實際清單為 19 個字串
  * (ADR 0012 決策 1);Phase 13 收尾稽核補入 {@code source:read} / {@code stats:read} 後為 21 個
- * (ADR 0013);Phase 14 補入 {@code subscription:read} 後為 22 個(ADR 0023)。
+ * (ADR 0013);Phase 14 補入 {@code subscription:read} 後為 22 個(ADR 0023);
+ * Phase 18 補入 {@code threat:manage} 後為 23 個(ADR 0027)。
  */
 public final class RbacMatrix {
 
@@ -53,6 +54,7 @@ public final class RbacMatrix {
         cells.put("ioc:submit", PREMIUM_UP);
         cells.put("ioc:import", PREMIUM_UP);
         cells.put("webhook:manage", PREMIUM_UP);
+        cells.put("threat:manage", ADMIN_UP);
         cells.put("user:manage", ADMIN_UP);
         cells.put("tenant:manage", ADMIN_UP);
         cells.put("audit:read", ADMIN_UP);

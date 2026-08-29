@@ -1,7 +1,10 @@
 package com.ctip.infrastructure.persistence;
 
 import com.ctip.application.port.StixObjectPort;
+import com.ctip.domain.indicator.IndicatorId;
+import com.ctip.domain.stix.StixOrigin;
 import com.ctip.domain.stix.StixProjection;
+import com.ctip.domain.threat.ThreatId;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
@@ -48,11 +51,23 @@ class StixObjectAdapter implements StixObjectPort {
         entity.indicatorId = projection.indicatorId() == null
                 ? null
                 : projection.indicatorId().value();
+        entity.threatId =
+                projection.threatId() == null ? null : projection.threatId().value();
         entity.tlp = projection.tlp().name();
         entity.stixCreated = projection.created();
         entity.stixModified = projection.modified();
         entity.content = objectMapper.writeValueAsString(projection.content());
         repository.save(entity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<StixOrigin> findOrigin(String stixId) {
+        return repository
+                .findByStixId(stixId)
+                .map(e -> new StixOrigin(
+                        e.indicatorId == null ? null : new IndicatorId(e.indicatorId),
+                        e.threatId == null ? null : new ThreatId(e.threatId)));
     }
 
     @Override

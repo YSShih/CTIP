@@ -7,8 +7,6 @@ import com.ctip.domain.indicator.SourceRecordStatus;
 import com.ctip.domain.source.SourceId;
 import com.ctip.sdk.RedistributionPolicy;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,8 +20,6 @@ import java.util.Map;
  */
 public final class StixIndicatorProjector {
 
-    private static final DateTimeFormatter STIX_TIMESTAMP =
-            DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC);
     private static final int NAME_MAX_LENGTH = 255;
 
     private StixIndicatorProjector() {}
@@ -40,6 +36,7 @@ public final class StixIndicatorProjector {
                 "indicator",
                 snapshot.ownerTenantId(),
                 snapshot.id(),
+                null,
                 snapshot.tlp(),
                 created,
                 modified,
@@ -52,14 +49,14 @@ public final class StixIndicatorProjector {
         stix.put("type", "indicator");
         stix.put("spec_version", "2.1");
         stix.put("id", stixId(s));
-        stix.put("created", STIX_TIMESTAMP.format(created));
-        stix.put("modified", STIX_TIMESTAMP.format(modified));
+        stix.put("created", StixTimestamps.format(created));
+        stix.put("modified", StixTimestamps.format(modified));
         stix.put("pattern", StixPatternBuilder.pattern(s.value()));
         stix.put("pattern_type", "stix");
         stix.put("pattern_version", "2.1");
-        stix.put("valid_from", STIX_TIMESTAMP.format(s.firstSeen()));
+        stix.put("valid_from", StixTimestamps.format(s.firstSeen()));
         if (s.validUntil() != null) {
-            stix.put("valid_until", STIX_TIMESTAMP.format(s.validUntil()));
+            stix.put("valid_until", StixTimestamps.format(s.validUntil()));
         }
         stix.put("name", truncate(s.value().type().name() + ": " + s.value().normalized()));
         stix.put(

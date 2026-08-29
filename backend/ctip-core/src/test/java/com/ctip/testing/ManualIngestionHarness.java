@@ -120,6 +120,11 @@ public final class ManualIngestionHarness {
         }
 
         @Override
+        public java.util.Optional<com.ctip.domain.stix.StixOrigin> findOrigin(String stixId) {
+            return java.util.Optional.empty();
+        }
+
+        @Override
         public java.util.Map<String, String> findContents(java.util.Collection<String> stixIds) {
             return java.util.Map.of();
         }

@@ -2,6 +2,7 @@ package com.ctip.application.ingestion;
 
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.stix.StixProjection;
+import java.util.List;
 
 /**
  * 單筆記錄流經 pipeline 的結果(手動提交端點需要它:§9.7 要回完整 Indicator DTO,
@@ -11,9 +12,13 @@ import com.ctip.domain.stix.StixProjection;
 public record RecordOutcome(
         Indicator indicator,
         boolean merged,
-        StixProjection projection,
+        List<StixProjection> projections,
         RejectionReason rejectionReason,
         String rejectionDetail) {
+
+    public RecordOutcome {
+        projections = projections == null ? List.of() : List.copyOf(projections);
+    }
 
     public boolean rejected() {
         return rejectionReason != null;

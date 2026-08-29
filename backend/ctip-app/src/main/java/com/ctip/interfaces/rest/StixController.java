@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * STIX 端點(docs/spec/09-api.md §9.1):GET /{stixId} 需 ioc:read(匿名亦具此權限);
+ * 自 Phase 18 起同一個端點也供應 M2 的五種物件(observed-data / identity / malware /
+ * attack-pattern / relationship);可見度依<strong>來源 domain 物件</strong>判定,見 StixQueryService;
  * GET /bundle 需 stix:export——匿名角色無此權限(§10.3 矩陣),因此回 403。
  * 業務規則不在 controller(規則 10):可見度與再散布過濾在 application/domain 層;
  * 錯誤結構由 ApiExceptionHandler 統一(§9.4)。
@@ -60,7 +62,11 @@ class StixController implements StixApi {
         if (marking.isPresent()) {
             return ResponseEntity.ok(marking.get());
         }
-        return query.findIndicatorContent(stixId, tenantContext.visibility())
+        var relationship = query.findRelationship(stixId, tenantContext.visibility());
+        if (relationship.isPresent()) {
+            return ResponseEntity.ok(relationship.get());
+        }
+        return query.findContent(stixId, tenantContext.visibility())
                 .<ResponseEntity<Object>>map(json -> ResponseEntity.ok()
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(json))

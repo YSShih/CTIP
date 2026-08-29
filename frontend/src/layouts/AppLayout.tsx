@@ -32,6 +32,7 @@ import { cn } from '../utils/cn';
 const NAV_ITEMS = [
   { to: '/', label: '儀表板', end: true },
   { to: '/iocs', label: 'IOC 檢索', end: false },
+  { to: '/threats', label: '威脅情報', end: false },
   { to: '/sync', label: 'Bloom 同步', end: false },
 ];
 

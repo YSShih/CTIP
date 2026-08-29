@@ -45,6 +45,16 @@ class RequiredIndexTest extends AbstractPostgresIntegrationTest {
             "ux_stix_rel_triple",
             "ix_sr_source",
             "ix_sr_target",
+            // threats / threat_indicators / threat_external_references(表 19–21;Phase 18)
+            "ux_threats_identity",
+            "ix_threats_tenant_status",
+            "ix_threats_aliases",
+            "ix_threats_last_seen",
+            "ix_ti_indicator",
+            "ix_ter_external",
+            "ux_ter_identity_coalesced",
+            // fk_so_threat 帶 ON DELETE CASCADE,沒有索引就是每刪一個 threat 全表掃 stix_objects
+            "ix_so_threat",
             // bloom_versions / bloom_artifacts(表 22、23)
             "ux_bv_version",
             "ix_bv_lookup",

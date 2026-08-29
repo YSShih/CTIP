@@ -85,6 +85,18 @@ class IndicatorRepositoryAdapter implements IndicatorRepository {
 
     @Override
     @Transactional(readOnly = true)
+    public List<Indicator> findVisibleByIds(List<IndicatorId> ids, Visibility visibility) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        List<java.util.UUID> values = ids.stream().map(IndicatorId::value).toList();
+        Specification<IndicatorEntity> spec = Specification.allOf(
+                (root, query, cb) -> root.get("id").in(values), TlpSpecifications.visibleTo(visibility));
+        return jpa.findBy(spec, q -> q.all()).stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CursorPage<Indicator> findVisible(Visibility visibility, IndicatorFilter filter, Cursor after, int limit) {
         Specification<IndicatorEntity> spec =
                 TlpSpecifications.visibleTo(visibility).and(IndicatorFilterSpecs.matches(filter, visibility));

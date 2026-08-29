@@ -35,9 +35,7 @@ public class IngestionBatchExecutor {
     /** 單筆(手動提交):交易內攝取,提交後寫出 STIX 投影,規則與批次相同。 */
     public RecordOutcome executeOne(SourceContext source, IngestionRun run, RawThreatRecord record) {
         RecordOutcome outcome = processor.processOne(source, run, record);
-        if (outcome.projection() != null) {
-            projections.writeAll(List.of(outcome.projection()));
-        }
+        projections.writeAll(outcome.projections());
         return outcome;
     }
 }
