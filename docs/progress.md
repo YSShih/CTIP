@@ -1602,7 +1602,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 ## 總複查 — Phase 1–20(邏輯 / 規格一致性 / 資安 / 弱點)
 
 - **狀態**:done(2026-08-29,使用者指派的跨 phase 複查)
-- **Commit**:(見 git log,message `Review: Phase 1-20 security and consistency fixes`)
+- **Commit**:`2beec20`(message `Review: Phase 1-20 security and consistency fixes`)
 - **範圍**:backend 主碼 31.5k 行 / 833 個 Java 檔、frontend 138 檔、規格 16 檔、27 個 migration
 - **判準結果**:全綠 —
   - `./backend/mvnw -f backend/pom.xml -Ptest-all verify` ✅(含 Spotless / Checkstyle / JaCoCo / ArchUnit)
