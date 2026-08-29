@@ -18,7 +18,7 @@
 
 > 🔴 **規範·自動驗證**
 
-由 [01-architecture.md](01-architecture.md#19-archunit-規則強制共-9-條) 的 ArchUnit 規則 1–5、8 驗證。
+由 [01-architecture.md](01-architecture.md#19-archunit-規則強制共-11-條) 的 ArchUnit 規則 1–5、8 驗證。
 
 ```mermaid
 flowchart TB

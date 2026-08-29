@@ -24,6 +24,7 @@ public record CtipProperties(
         @NotNull @Valid Jwt jwt,
         @NotNull @Valid Security security,
         @NotNull @Valid RateLimit rateLimit,
+        @NotNull @Valid Proxy proxy,
         @NotNull @Valid Plan plan,
         @NotNull @Valid Ingestion ingestion,
         @NotNull @Valid Scheduler scheduler,
@@ -68,6 +69,15 @@ public record CtipProperties(
             REDIS
         }
     }
+
+    /**
+     * 信任的反向代理來源(§10.7)。空 = 不信任任何來源,{@code X-Forwarded-*} 一律忽略,
+     * client IP 即直連對端——直接對外時正確,在代理後面忘了設定則所有 client 被算成同一個 IP
+     * (限流過嚴而非被繞過,fail-closed)。設定方式與限制見 {@code docs/deployment/rate-limiting.md}。
+     *
+     * @param trusted CIDR 或單一位址,逗號分隔(對應環境變數 {@code TRUSTED_PROXIES})
+     */
+    public record Proxy(@NotNull java.util.List<String> trusted) {}
 
     /**
      * 方案配額的部署期覆寫(§10.6;ADR 0019)。

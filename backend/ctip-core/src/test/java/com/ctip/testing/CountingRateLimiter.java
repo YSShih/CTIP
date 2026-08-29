@@ -44,6 +44,14 @@ public final class CountingRateLimiter implements RateLimiterPort {
                 !limit.isExceededBy(used + 1), limit, Math.max(0, limit.orElse(0) - used), resetAt(key));
     }
 
+    @Override
+    public void refund(RateLimitKey key, int tokens, QuotaLimit limit) {
+        if (limit.isUnlimited() || limit.isDisabled()) {
+            return;
+        }
+        consumed.computeIfPresent(key.asString(), (unused, used) -> Math.max(0, used - tokens));
+    }
+
     private java.time.Instant resetAt(RateLimitKey key) {
         return clock.now().plus(key.window().duration());
     }

@@ -255,7 +255,7 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 
 ---
 
-## 1.9 ArchUnit 規則（強制，共 9 條）
+## 1.9 ArchUnit 規則（強制，共 11 條）
 
 位於 `ctip-app/src/test/java/com/ctip/architecture/ArchitectureTest.java`（**跨模組掃描**，需在 `ctip-app` 執行）。
 
@@ -270,8 +270,20 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 | 7 | `..interfaces.rest.dto..` 的所有類別必須是 `record` |
 | 8 | `com.ctip.application..` 不得 import `org.springframework.data.domain..` |
 | 9 | `com.ctip.domain..` 不得呼叫 `java.time.Instant.now()`、`java.time.LocalDate.now()`、`java.util.UUID.randomUUID()` |
+| 10 | `com.ctip.domain..`／`com.ctip.sdk..` 的類別名不得使用 [02 §2.1](02-ddd-model.md#21-ubiquitous-language-詞彙表中英對照) 詞彙表「常見誤用」欄的命名 |
+| 11 | `com.ctip.application..` 不得依賴 `io.lettuce..`、`redis.clients..`、`org.springframework.data.redis..`、`io.github.bucket4j..` |
 
 規則 8、9 為本版新增。規則 8 強制 1.2 的 `CursorPage` 決定；規則 9 保證 domain 可測。
+
+> **規則 10（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
+> `15 §15.5` 明文要求人工項 P-02 的「可自動化部分必須實作」，該規則當時已寫進
+> `ArchitectureTest` 卻**沒有回寫本節**（表格與「共 9 條」的計數都沒動）。此處補上。
+>
+> **規則 11（2026-08-29，Phase 17；[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)）**：
+> `phases/phase-17.md` 禁止 `CachePort` 把 Lettuce／Redis 型別洩漏到 application 層。
+> 規則 1 只擋 domain，而 **port 定義在 application 層**——真正會發生洩漏的地方是那裡：
+> 一個收 `StatefulRedisConnection` 的 port 簽章，會讓 [06 §6.5](06-tech-stack.md#65-授權注意事項)
+> 要求的「Redis → Valkey 只需改 infrastructure 實作」變成不可能。
 
 ---
 

@@ -32,8 +32,13 @@ public abstract class AbstractPostgresIntegrationTest {
 
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:18-alpine");
 
-    private static final String APP_USER = "ctip_app";
-    private static final String APP_PASSWORD = "ctip_app_test";
+    /** 子類別若要另外啟一個 app 實例(DistributedRateLimitTest),必須用同一組非特權連線。 */
+    protected static final String APP_USER = "ctip_app";
+
+    protected static final String APP_PASSWORD = "ctip_app_test";
+
+    /** 與 {@link #ctipEnvironment} 一致;第二個實例得用同一把金鑰才能驗同一組 token。 */
+    protected static final String TEST_JWT_SECRET = "integration-test-only-secret-0123456789abcdef";
 
     /** Bloom artifact 的測試根目錄;整個 JVM 共用,才不會讓每個測試類各起一個 Spring context。 */
     protected static final Path BLOOM_DIR = createBloomDirectory();
@@ -83,7 +88,7 @@ public abstract class AbstractPostgresIntegrationTest {
         registry.add("POSTGRES_APP_USER", () -> APP_USER);
         registry.add("POSTGRES_APP_PASSWORD", () -> APP_PASSWORD);
         registry.add("ENVIRONMENT", () -> "mvp");
-        registry.add("JWT_SECRET", () -> "integration-test-only-secret-0123456789abcdef");
+        registry.add("JWT_SECRET", () -> TEST_JWT_SECRET);
         registry.add("CORS_ALLOWED_ORIGINS", () -> "http://localhost:5173");
         // 排程在測試中一律關閉,避免 @Scheduled 任務與測試資料互相干擾(docs/spec/08 §8.7 總開關)
         registry.add("SCHEDULER_ENABLED", () -> "false");

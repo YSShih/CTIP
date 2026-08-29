@@ -41,6 +41,7 @@ public class StartupValidator implements InitializingBean {
         }
         if (properties.environment() != CtipProperties.Environment.MVP) {
             warnIfMemoryRateLimit();
+            warnIfNoTrustedProxies();
             requireDdlAutoValidate();
         }
     }
@@ -70,6 +71,21 @@ public class StartupValidator implements InitializingBean {
     private void warnIfMemoryRateLimit() {
         if (properties.rateLimit().backend() == CtipProperties.RateLimit.Backend.MEMORY) {
             log.warn("ENVIRONMENT={} 但 RATE_LIMIT_BACKEND=memory;memory 後端僅適用於 mvp", properties.environment());
+        }
+    }
+
+    /**
+     * §10.7:「若無法確定真實 client IP,{@code docs/deployment/} 必須明確記載此限制」。
+     * mvp 以外的環境一律在反向代理(nginx)後面,{@code TRUSTED_PROXIES} 空著代表
+     * 所有請求都被算成代理的位址——限流會過嚴而不是被繞過(fail-closed),
+     * 但那不是預期的運作方式,不得靜默略過。
+     */
+    private void warnIfNoTrustedProxies() {
+        if (properties.proxy().trusted().isEmpty()) {
+            log.warn(
+                    "ENVIRONMENT={} 但 TRUSTED_PROXIES 為空;X-Forwarded-* 一律不採信,"
+                            + "反向代理後方的所有 client 會被視為同一個 IP(見 docs/deployment/rate-limiting.md)",
+                    properties.environment());
         }
     }
 

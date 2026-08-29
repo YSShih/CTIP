@@ -8,7 +8,7 @@
 | Milestone | Phase | 狀態 |
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
-| M2 — Platform | 13–19 | 進行中:Phase 16 完成,下一步 Phase 17 |
+| M2 — Platform | 13–19 | 進行中:Phase 17 完成,下一步 Phase 18 |
 | M3 — Production | 20–23 | 未開始 |
 
 ---
@@ -1212,3 +1212,85 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - `npx playwright test` 需要 `npx playwright install chromium`(本機已裝);CI 上要記得加這一步
   - 前端 `api:check` 會比對 `docs/api/openapi.json` 產生的型別與 committed 版本——
     改動任何 DTO 後要跑 `OpenApiCompletenessTest` 再 `npm run api:generate` 並一起 commit
+
+## Phase 17 — Redis(快取 + 分散式限流)
+
+- **狀態**:done(2026-08-29)
+- **執行單**:`docs/spec/phases/phase-17.md`
+- **Commit**:`__COMMIT__`(`Phase 17: redis cache and distributed rate limiting`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest='DistributedRateLimitTest,QuotaEnforcementTest'`(逐字)✅ **15/15**
+  - `clean verify -Ptest-integration` 無過濾 ✅ **757 tests**
+    (sdk 13 + core 323 + adapters 33 + app 388;Spotless / Checkstyle / JaCoCo 全過)
+  - `dod.sh phase2 --only M2-08/09/15/16/27` ✅;`dod.sh full --only M3-24` ✅(規格回寫後複跑)
+  - `dod.sh mvp` 回歸 ✅ **38/38**
+  - **反向驗證**:把 `DistributedRateLimitTest` 的後端切回 `memory`,三個案例全紅
+    (共用配額、跨實例遞減、跨實例的方案變更皆失敗)——判準不是假綠
+  - **判準在 8080 被佔用時仍正確**:第一次 `dod.sh mvp` 的 M1-38 抓到第二個實例綁固定 8080
+    (見下方缺陷 7),修正後在 mvp 容器執行中(8080 被佔)複跑,兩個實例皆取得 ephemeral port
+- **交付物**:
+  - core:`CachePort`(值為 String,序列化留在 infrastructure)、`RateLimiterPort.refund`、
+    `RateLimitKey` 的五個維度工廠 + `inClass`/`inWindow`、`domain/plan/EndpointClass`
+    (read 100% / write 20% / heavy 5%,至少 1)
+  - app `infrastructure/redis/`:`RedisCacheAdapter`(GET/SET EX/DEL 三個指令)、
+    `RedisRateLimiter`(Bucket4j `LettuceBasedProxyManager`,借用 Boot 建好的 Lettuce client)
+  - app `infrastructure/cache/InMemoryCache`(memory 後端;帶 TTL 與清掃)
+  - app `infrastructure/ratelimit/`:`IdentityRateLimitFilter`(維度 1–3、5 + 維度 4 的歸還)、
+    `RateLimitResponder`(標頭與 429 的唯一出口,兩個檢查點共用)、`RateLimitScope`(豁免規則)、
+    `EndpointClassifier`、`CacheBackedSyncThrottle`(取代 `InMemorySyncThrottle`,已刪除)
+  - app `infrastructure/web/`:`TrustedProxies`、`TrustedProxyForwardedHeaderFilter`
+  - config:`RedisConfig`(backend=redis 才裝配)、`RateLimitConfig`(memory + 共用 bean + 兩個 filter)、
+    `ForwardedHeadersConfig`、`SecurityConfig` 掛 `addFilterAfter`、`StartupValidator` 補
+    TRUSTED_PROXIES 警告、`CtipProperties.Proxy`
+  - persistence:`PlanRepositoryAdapter` / `RolePermissionRepositoryAdapter` 的行程內 map
+    改走 `CachePort`(+ `PlanCacheCodec`,解不開時當 miss)
+  - 設定:`server.forward-headers-strategy=framework`、`ctip.proxy.trusted`、
+    `TRUSTED_PROXIES`(compose + 五份樣板 + §5.4)、`application-mvp.yml` 關 redis health indicator
+  - 文件:`docs/deployment/rate-limiting.md`(§10.7 明文要求的「真實 client IP 限制」記載 +
+    兩個檢查點 + 後端故障行為 + **Valkey 替換步驟** + 排錯表)
+  - 測試:`DistributedRateLimitTest`(判準,兩個 Spring context)、`IdentityRateLimitTest`(維度 1/2/3/5)、
+    `EndpointClassTest`、`EndpointClassifierTest`、`InMemoryCacheTest`、`CacheBackedSyncThrottleTest`、
+    `TrustedProxiesTest`、`RateLimitKeyTest` 補三個維度與維度 5 的鍵、**ArchUnit 規則 11**
+- **偏離事項 / ADR**:14 項見 `docs/architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md`;
+  規格回寫 `00 §0.23`(10 §10.7、05 §5.4/§5.7、06 §6.3.6、01 §1.9、14 §14.5、15 §15.1、phase-23)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **§10.7 的維度 5 鍵沒有主體**:`ratelimit:{scope}:{endpointClass}:{window}` 照字面是
+     **全平台共用一個桶**——一行 `curl` 迴圈就能讓所有人的讀取端點回 429。
+     改為含 subject;ADR 0020「分類上限恆低於總上限」本來也只有 per-subject 才成立
+  2. **維度 4 會把已認證者綁死在匿名配額**:限流必須在認證前(ADR 0012 決策 16),
+     但那時不知道會不會認證成功 → ENTERPRISE 的 client 實際上只有 60/min,**方案分級形同虛設**。
+     解法是認證成功後 `refund`;副作用是維度 4 對已認證流量變成「同時進行中的請求數」上限
+  3. **bucket4j 把桶設定存進 Redis 後不再更新**:方案降級時舊桶沿用較寬的容量到過期 = fail-open。
+     `withImplicitConfigurationReplacement` 只在版本遞增時替換,對降級無效 → 鍵帶容量
+  4. **`forward-headers-strategy=framework` 的 Boot 內建 filter 無條件採信 `X-Forwarded-*`**:
+     應用只要有一條路徑能被直連,每個請求換一個假 IP 即可完全繞過維度 4
+  5. **`spring-boot-data-redis` 一在 classpath 上就會加 actuator 的 redis 健康檢查**——
+     而 mvp 的 compose 不啟動 redis,不關掉的話容器永遠 unhealthy、`depends_on` 卡死
+  6. `TestRestTemplate` 在 Boot 4 被拆到版本表未列的 `spring-boot-restclient-test`
+     (同 MockMvc 的前例)→ 測試改用 JDK `HttpClient`
+  7. **判準自己曾經量錯對象**:`SpringApplicationBuilder.properties(...)` 是優先序**最低**的
+     `defaultProperties`,`server.port=0` 被 `application.yml` 的 `${SERVER_PORT:8080}` 蓋掉,
+     第二個實例綁在固定 8080。單獨跑正常(8080 是空的),但 `dod.sh mvp` 的 M1-38 是在
+     **mvp 容器已佔用 8080** 時跑的——請求打到容器裡的另一個 app,三個案例全紅且訊息
+     完全看不出原因。改用 `run("--server.port=0", ...)`(命令列參數優先序高於 yml),
+     並加兩道啟動守衛(埠不為 0 且與實例 1 不同、第二個實例的後端真的是 redis)
+  8. **`01 §1.9` 的 ArchUnit 規則數自 ADR 0016 起就與實作不符**(規則 10 加了實作沒回寫表與計數);
+     本 phase 補回並加上規則 11,`14 §14.5`、`15 §15.1`、`00 §0.3` 的引用一併同步
+- **給下一 session 的注意事項(Phase 18 = Threat 實體與關聯 + M2 的 STIX 物件)**:
+  - **限流的行為變了,寫測試時要注意**:匿名的 write 類別上限只有 **12/min**(60 的 20%)、
+    heavy 只有 **3/min**;`AuthHardeningTest` 就是因此改成每個測試方法一個 client IP。
+    新測試若會連送十幾個 POST,請先分配自己的 IP(本 phase 用 `10.40.0.x`)
+  - 已認證的測試不再受匿名 IP 配額限制(認證成功即歸還),但**維度 3(租戶)**會累積:
+    同一個租戶跨測試方法送超過該方案 `requests_per_minute` 的請求就會 429
+  - `TestPlans.withPlan(...)` 會改**全域** plans 表;Phase 17 起 `save` 會連帶失效快取,
+    因此改動即時生效(不必等 60 秒 TTL)
+  - Phase 18 的 `ThreatIntegrationTest` 若要跑限流以外的東西,不需要 Redis:
+    整合測試預設 `RATE_LIMIT_BACKEND=memory`,只有 `DistributedRateLimitTest` 自己起 Redis 容器
+  - ADR 0020 已為 Phase 18 定調四件事:`ux_ter_identity` 要改成
+    `COALESCE(external_id, '')` 的唯一索引(PostgreSQL 的 UNIQUE 不去重 NULL)、
+    H6 降格為應用層一致性規則、`ThreatAlias` 以 `TEXT[]` 為準、
+    M2 的五種 STIX SDO 對照表要在 Phase 18 依 §7.8.2 的體例補寫進 §7.8
+  - threats 的 migration 是 **`V31`**(§4.7 已廢除區段預留,版本號一律遞增),
+    且要以 `ALTER TABLE` 補上 V7 保留的 `fk_so_threat`
+
+---

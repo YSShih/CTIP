@@ -35,8 +35,10 @@ OWASP Dependency-Check 或 Dependabot alerts、Gitleaks、Trivy、CycloneDX + `n
 
 - `docs/api/events/README.md` + 事件 JSON Schema（[13 §13.1](../13-platform-ops.md) 要求，目錄目前是空的，且無任何 DoD 檢查）
 - `docs/api/` 的 webhook timestamp 偏差規則（[13 §13.2](../13-platform-ops.md) 明文要求寫入 `docs/api/`）
-- `docs/deployment/` 的兩份未被 DoD 檢查、但規格明文要求的記載：
-  **真實 client IP 的限制**（[10 §10.7](../10-identity-plans.md)）與 **ShedLock 前置**（[08 §8.7](../08-ingestion-sdk.md)）
+- `docs/deployment/` 的記載:**ShedLock 前置**（[08 §8.7](../08-ingestion-sdk.md)）
+  > **真實 client IP 的限制已於 Phase 17 交付**（`docs/deployment/rate-limiting.md`，含 ShedLock 前置的
+  > 提醒）：`phases/phase-17.md` 的「不得做的事」本來就明文要求它，[ADR 0022](../../architecture/decisions/0022-orphan-deliverables.md)
+  > 當時判為「無 phase 承接」是漏看了那一條。本 phase 只需複查該檔是否仍與實作一致。
 - **`dod.sh` 增設「11 支 workflow 檔案皆存在」的檢查**——目前 M3-19 只看最後一次 run 的結論，
   「只有兩支且都綠」也會通過，這正是 6 支 M1/M2 workflow 逾期到現在沒被發現的原因
 

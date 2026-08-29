@@ -29,6 +29,9 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  # 反向代理下的真實 client IP(10 §10.7 強制)。信任來源由 ctip.proxy.trusted 限定——
+  # 只設 framework 而不限定來源等於任何人都能自稱來自任意 IP,匿名限流的 IP 維度即失效。
+  forward-headers-strategy: framework
 
 management:
   endpoints:
@@ -65,6 +68,9 @@ ctip:
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     backend: ${RATE_LIMIT_BACKEND:redis}
+  proxy:
+    # 逗號分隔的 CIDR / 單一位址;空 = 不採信任何 X-Forwarded-*(見 docs/deployment/rate-limiting.md)
+    trusted: ${TRUSTED_PROXIES:}
   plan:
     # 方案配額一律讀 plans 表(10-identity-plans.md §10.6)。部署期覆寫以單一 JSON 變數承載,
     # 例:{"PREMIUM":{"maxApiKeys":20}}。逐項環境變數的命名慣例綁不到屬性(ADR 0019)。

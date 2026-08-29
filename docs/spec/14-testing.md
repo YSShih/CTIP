@@ -2,7 +2,7 @@
 
 > **規範等級：強制。** 分層策略、覆蓋率門檻、ArchUnit 規則、安全測試清單為規範性內容。
 >
-> 相關檔案：[15-dod-gates.md](15-dod-gates.md)（可執行 DoD）、[01-architecture.md](01-architecture.md#19-archunit-規則強制共-9-條)
+> 相關檔案：[15-dod-gates.md](15-dod-gates.md)（可執行 DoD）、[01-architecture.md](01-architecture.md#19-archunit-規則強制共-11-條)
 
 ---
 
@@ -93,9 +93,9 @@ L1 測試**不得**使用 `@SpringBootTest`、`@MockBean` 或任何 Spring 註�
 
 ---
 
-## 14.5 ArchUnit（9 條）
+## 14.5 ArchUnit（11 條）
 
-完整清單見 [01-architecture.md](01-architecture.md#19-archunit-規則強制共-9-條)。位於 `ctip-app/src/test/java/com/ctip/architecture/ArchitectureTest.java`（需在 `ctip-app` 執行才能跨模組掃描）。
+完整清單見 [01-architecture.md](01-architecture.md#19-archunit-規則強制共-11-條)。位於 `ctip-app/src/test/java/com/ctip/architecture/ArchitectureTest.java`（需在 `ctip-app` 執行才能跨模組掃描）。
 
 標記 `@Tag("unit")`——ArchUnit 不需要 Spring context，應在 L1 執行以求快速回饋。
 

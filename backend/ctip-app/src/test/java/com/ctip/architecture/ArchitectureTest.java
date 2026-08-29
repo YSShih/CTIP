@@ -168,6 +168,27 @@ class ArchitectureTest {
     }
 
     /**
+     * 規則 11:{@code CachePort} / {@code RateLimiterPort} 不得把 Redis 洩漏進 application 層
+     * (phase-17「不得做的事」:「不得讓 {@code CachePort} 洩漏 Lettuce/Redis 型別到 application 層」)。
+     *
+     * <p>規則 1 已擋住 domain 對 Lettuce 的依賴,但 <strong>port 定義在 application 層</strong>
+     * ——真正會發生洩漏的地方是那裡:一個回傳 {@code RedisFuture} 或收 {@code StatefulRedisConnection}
+     * 的 port 簽章,會讓 06 §6.5 要求的「Redis → Valkey 只需改 infrastructure」變成不可能。
+     * Bucket4j 一併擋:限流的實作細節同樣不該出現在 port 上。
+     */
+    @Test
+    void rule11ApplicationMustNotDependOnCacheOrRateLimiterInternals() {
+        noClasses()
+                .that()
+                .resideInAPackage("com.ctip.application..")
+                .should()
+                .dependOnClassesThat()
+                .resideInAnyPackage(
+                        "io.lettuce..", "redis.clients..", "org.springframework.data.redis..", "io.github.bucket4j..")
+                .check(classes);
+    }
+
+    /**
      * 規則 10:Ubiquitous Language 詞彙表(02 §2.1)「常見誤用」欄的命名不得出現在類別名。
      *
      * <p>{@code 15 §15.5} 對人工項 P-02 明文要求「**可自動化部分必須實作**(列為 ArchUnit

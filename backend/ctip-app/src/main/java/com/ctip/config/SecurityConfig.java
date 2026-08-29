@@ -9,6 +9,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.PasswordHasherPort;
 import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.application.port.SecureTokenGeneratorPort;
+import com.ctip.infrastructure.ratelimit.IdentityRateLimitFilter;
 import com.ctip.infrastructure.security.BCryptPasswordHasher;
 import com.ctip.infrastructure.security.CtipAuthenticationFilter;
 import com.ctip.infrastructure.security.CtipPermissionEvaluator;
@@ -126,8 +127,16 @@ public class SecurityConfig {
         return registration;
     }
 
+    /**
+     * 限流的第二個檢查點掛在認證 filter <strong>之後</strong>:維度 1–3(apiKey / user / tenant)
+     * 與維度 5 都需要已解析的身分(§10.7)。維度 4(匿名 IP)在整條 chain 之前,見
+     * {@link RateLimitConfig#rateLimitFilter}——<strong>兩者必須是兩個檢查點</strong>。
+     */
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, CtipAuthenticationFilter authenticationFilter)
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            CtipAuthenticationFilter authenticationFilter,
+            IdentityRateLimitFilter identityRateLimitFilter)
             throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
@@ -138,6 +147,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(identityRateLimitFilter, CtipAuthenticationFilter.class)
                 .build();
     }
 }

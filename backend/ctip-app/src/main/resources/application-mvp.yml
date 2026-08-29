@@ -8,3 +8,11 @@ spring:
     restart:
       # ADR 0010:只在 reload.sh 觸碰 trigger file 時重啟,host 端建置不再觸發(避免半寫入 classpath)
       trigger-file: .reloadtrigger
+
+# mvp 的 compose 不啟動 redis(§5.5:redis 屬 standard/full profile),而 spring-boot-data-redis
+# 一在 classpath 上,actuator 就會加一個 redis 健康檢查——沒有 redis 的 mvp 會永遠 DOWN,
+# 容器 healthcheck 因此永遠 unhealthy、depends_on 卡死。mvp 的限流後端本來就是 memory。
+management:
+  health:
+    redis:
+      enabled: false

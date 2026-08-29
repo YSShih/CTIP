@@ -77,6 +77,18 @@ public class InMemoryRateLimiter implements RateLimiterPort {
         return new RateLimitResult(remaining > 0, limit, remaining, windowEnd(now, key));
     }
 
+    @Override
+    public void refund(RateLimitKey key, int tokens, QuotaLimit limit) {
+        if (limit.isUnlimited() || limit.isDisabled()) {
+            return;
+        }
+        // 只歸還「這個容量的桶」;限額在期間內變動過就沒有可歸還的對象,重建出來的新桶本來就是滿的
+        Entry entry = buckets.get(key.asString());
+        if (entry != null && entry.capacity() == limit.orElse(0)) {
+            entry.bucket().addTokens(tokens);
+        }
+    }
+
     /** 限額變動時重建 bucket——舊 bucket 的容量是建立當下的方案值,不會自己跟著調整。 */
     private Entry entryFor(RateLimitKey key, QuotaLimit limit, Instant now) {
         long capacity = limit.orElse(0);

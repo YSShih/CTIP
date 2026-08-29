@@ -111,6 +111,7 @@ class StartupValidatorTest {
                 new Jwt(jwtSecret, 900, 2592000, 90),
                 new CtipProperties.Security(10, 15),
                 new RateLimit(true, backend),
+                new CtipProperties.Proxy(java.util.List.of()),
                 new CtipProperties.Plan(""),
                 new Ingestion(true, 500),
                 new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),

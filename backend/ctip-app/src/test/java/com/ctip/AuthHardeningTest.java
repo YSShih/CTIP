@@ -36,7 +36,16 @@ import tools.jackson.databind.ObjectMapper;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AuthHardeningTest extends AbstractPostgresIntegrationTest {
 
-    private static final String CLIENT_IP = "10.20.0.22";
+    /**
+     * 每個測試方法一個 client IP。Phase 17 起限流多了維度 5(端點類別):匿名的 write 上限是
+     * 總配額的 20%(60/min → <strong>12/min</strong>,ADR 0020),而本類光是鎖定測試就送 12 次
+     * 登入 POST——共用同一個 IP 會讓後面的方法拿到 429 而不是它要斷言的狀態碼。
+     */
+    private static final String LOCKOUT_IP = "10.20.0.22";
+
+    private static final String REGISTER_IP = "10.20.0.23";
+
+    private static final String SESSION_IP = "10.20.0.24";
     private static final String LOCK_EMAIL = "lockout-oracle@example.org";
     private static final String SESSION_EMAIL = "scheme-probe@example.org";
 
@@ -70,7 +79,8 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
         }
 
         JsonNode locked = login(LOCK_EMAIL, "definitely-wrong-password");
-        JsonNode unknown = login("no-such-account@example.org", "definitely-wrong-password");
+        // 第 12 次已用盡 write 類別的配額,未知帳號改由另一個 IP 送(比對的是回應內容,與來源無關)
+        JsonNode unknown = login("no-such-account@example.org", "definitely-wrong-password", REGISTER_IP);
 
         assertThat(locked.get("status")).isEqualTo(unknown.get("status"));
         assertThat(locked.get("code")).isEqualTo(unknown.get("code"));
@@ -83,9 +93,11 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
     @Test
     void passwordBeyondBcryptLimitIsRejectedWithFieldDetail() throws Exception {
         String tooLong = "a".repeat(73);
-        String body = mvc.perform(asClient(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"too-long@example.org\",\"password\":\"" + tooLong + "\"}")))
+        String body = mvc.perform(asClient(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"too-long@example.org\",\"password\":\"" + tooLong + "\"}"),
+                        REGISTER_IP))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
                 .andReturn()
@@ -97,9 +109,12 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
     /** 72 bytes 剛好可用:上限是位元組數,不是字元數。 */
     @Test
     void passwordAtExactlySeventyTwoBytesIsAccepted() throws Exception {
-        mvc.perform(asClient(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"exactly-72@example.org\",\"password\":\"" + "b".repeat(72) + "\"}")))
+        mvc.perform(asClient(
+                        post("/api/v1/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"exactly-72@example.org\",\"password\":\"" + "b".repeat(72)
+                                        + "\"}"),
+                        REGISTER_IP))
                 .andExpect(status().isCreated());
     }
 
@@ -107,14 +122,14 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
     @Test
     void lowercaseBearerSchemeIsAcceptedAsBearer() throws Exception {
         String accessToken = identities.login(SESSION_EMAIL).accessToken();
-        mvc.perform(asClient(get("/api/v1/api-keys").header("Authorization", "bearer " + accessToken)))
+        mvc.perform(asClient(get("/api/v1/api-keys").header("Authorization", "bearer " + accessToken), SESSION_IP))
                 .andExpect(status().isOk());
     }
 
     /** 非 Bearer 的 scheme 是無效憑證,回 401;舊實作會綁匿名並回 200。 */
     @Test
     void nonBearerSchemeIsRejectedInsteadOfDowngradedToAnonymous() throws Exception {
-        mvc.perform(asClient(get("/api/v1/iocs?limit=1").header("Authorization", "Basic dXNlcjpwYXNz")))
+        mvc.perform(asClient(get("/api/v1/iocs?limit=1").header("Authorization", "Basic dXNlcjpwYXNz"), SESSION_IP))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
@@ -122,13 +137,20 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
     /** 對照組:完全沒有 Authorization 標頭仍是正當的匿名身分。 */
     @Test
     void absentAuthorizationHeaderRemainsAnonymous() throws Exception {
-        mvc.perform(asClient(get("/api/v1/iocs?limit=1"))).andExpect(status().isOk());
+        mvc.perform(asClient(get("/api/v1/iocs?limit=1"), SESSION_IP)).andExpect(status().isOk());
     }
 
     private JsonNode login(String email, String password) throws Exception {
-        String body = mvc.perform(asClient(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}")))
+        return login(email, password, LOCKOUT_IP);
+    }
+
+    private JsonNode login(String email, String password, String clientIp) throws Exception {
+        String body = mvc.perform(asClient(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"),
+                        clientIp))
                 .andExpect(status().isUnauthorized())
                 .andReturn()
                 .getResponse()
@@ -136,10 +158,10 @@ class AuthHardeningTest extends AbstractPostgresIntegrationTest {
         return json.readTree(body);
     }
 
-    /** 獨立 client IP,避免與其他測試類共用匿名限流 bucket(本類會送 12 次登入)。 */
-    private static MockHttpServletRequestBuilder asClient(MockHttpServletRequestBuilder builder) {
+    /** 獨立 client IP,避免與其他測試類(以及本類其他方法)共用匿名限流 bucket。 */
+    private static MockHttpServletRequestBuilder asClient(MockHttpServletRequestBuilder builder, String clientIp) {
         return builder.with(request -> {
-            request.setRemoteAddr(CLIENT_IP);
+            request.setRemoteAddr(clientIp);
             return request;
         });
     }

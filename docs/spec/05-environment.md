@@ -275,6 +275,7 @@ JWT_REFRESH_TOKEN_EXPIRATION   # 秒，預設 2592000
 CORS_ALLOWED_ORIGINS
 RATE_LIMIT_ENABLED
 RATE_LIMIT_BACKEND             # memory | redis
+TRUSTED_PROXIES                # 信任的反向代理來源(CIDR／單一位址,逗號分隔);空 = 不採信 X-Forwarded-*(10 §10.7)
 CTIP_PLAN_OVERRIDES            # 方案配額的部署期覆寫（單一 JSON，選填；空 = 完全依 plans 表）
 
 BLOOM_PUBLIC_CAPACITY
@@ -616,7 +617,9 @@ spring:
     port: ${REDIS_PORT:6379}
     password: ${REDIS_PASSWORD:}
 
-server.port: ${SERVER_PORT:8080}
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework   # ← 反向代理下的真實 client IP（10 §10.7）；信任來源見 ctip.proxy.trusted
 
 management:
   endpoints.web.exposure.include: ${ACTUATOR_EXPOSED_ENDPOINTS:health,info}
@@ -636,6 +639,8 @@ ctip:
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     backend: ${RATE_LIMIT_BACKEND:redis}
+  proxy:
+    trusted: ${TRUSTED_PROXIES:}                    # CIDR／位址清單；空 = 不採信 X-Forwarded-*（10 §10.7）
   ingestion:
     enabled: ${INGESTION_ENABLED:true}
     batch-size: ${INGESTION_BATCH_SIZE:500}

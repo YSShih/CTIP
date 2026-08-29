@@ -47,6 +47,8 @@ services:
       ACTUATOR_EXPOSED_ENDPOINTS:     ${ACTUATOR_EXPOSED_ENDPOINTS:-health,info}
       RATE_LIMIT_ENABLED:             ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_BACKEND:             ${RATE_LIMIT_BACKEND:-redis}
+      # 信任的反向代理來源(10 §10.7);空 = 不採信 X-Forwarded-*,client IP 即直連對端
+      TRUSTED_PROXIES:                ${TRUSTED_PROXIES:-}
       CTIP_PLAN_OVERRIDES:            ${CTIP_PLAN_OVERRIDES:-}
       SCHEDULER_ENABLED:              ${SCHEDULER_ENABLED:-true}
       SOURCE_SYNC_CRON:               ${SOURCE_SYNC_CRON:-0 */5 * * * *}

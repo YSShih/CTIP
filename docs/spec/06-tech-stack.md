@@ -317,6 +317,20 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
    之前/之後時會用到——**沒有明確指定順序的 Filter bean 會落在 chain 之後**(Boot 預設
    `LOWEST_PRECEDENCE`),Phase 13 的限流繞過就是這樣來的。
 
+9. **`TestRestTemplate` 已移出 `spring-boot-test`**(2026-08-29 Phase 17 實測補入):Boot 4 把它
+   拆到 `org.springframework.boot:spring-boot-restclient-test`(BOM 納管,但**版本表未列**)。
+   與第 5 條(MockMvc 支援被拆出)同一型態。`DistributedRateLimitTest` 要對兩個真實 web server
+   發請求,改用 JDK 的 `java.net.http.HttpClient`——**不新增相依**(規則 6)。
+   若日後確定要用該模組,須先依 6.1.2 補進版本表。
+
+10. **`com.redis:testcontainers-redis` 與 Testcontainers 2.x 相容**(2026-08-29 Phase 17 實測):
+    其 `AbstractRedisContainer` 繼承的 `org.testcontainers.containers.GenericContainer`
+    在 2.0.5 仍存在(未隨 `PostgreSQLContainer` 一起搬套件),第 2 條的「Redis 例外」因此成立。
+    `com.bucket4j:bucket4j-redis` 的 `lettuce-core` 是 **provided(6.1.8)**、不會被帶進來;
+    其參照的 Lettuce API(`eval(String, ScriptOutputType, K[], V...)`、`del(K...)`、`get(K)`、
+    `RedisClient.connect(RedisCodec)`、`RedisFuture.*`)在 BOM 納管的 7.5.2 皆存在,已以位元碼核對
+    並用真實 Redis 容器跑通。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

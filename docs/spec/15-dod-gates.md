@@ -47,7 +47,7 @@
 |---|---|---|
 | M1-01 | 四個 module 皆編譯，L1–L3 測試通過 | `./mvnw -f backend/pom.xml verify -Ptest-integration` |
 | M1-02 | 覆蓋率門檻達標（domain ≥ 85%） | 同上（JaCoCo `check` 綁在 `verify`） |
-| M1-03 | ArchUnit 9 條規則通過 | `./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest` |
+| M1-03 | ArchUnit 11 條規則通過 ¹ | `./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest` |
 | M1-04 | Spotless 格式一致 | `./mvnw -f backend/pom.xml spotless:check` |
 | M1-05 | Checkstyle 五條可讀性規則通過 | `./mvnw -f backend/pom.xml checkstyle:check` |
 | M1-06 | 前端 type check 通過 | `cd frontend && npx tsc --noEmit` |
@@ -85,6 +85,10 @@
 | M1-38 | README 的啟動步驟可直接複製執行 | `./environment/scripts/dod.sh mvp M1-38`（擷取 README 的 bash 區塊並在乾淨環境執行） |
 
 **38 項，全部可執行。**
+
+> ¹ **規則數 9 → 11（2026-08-29）**：規則 10（詞彙表禁用命名）由 [ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)
+> 依 §15.5 的 P-02 加入卻未回寫計數；規則 11（application 不得依賴 Redis／Bucket4j 型別）為 Phase 17 新增。
+> 判準指令不變——它跑的是整個 `ArchitectureTest`，規則增減自動涵蓋。
 
 > M1-37 取代 v1.1 的「修改 backend Java 檔**自動**生效」。該條在 v1.1 的容器設計下**必定不通過**——dev stage 跑 `spring-boot:run`，DevTools 監看 `target/classes`，而容器內沒有任何程序會編譯 `.java`。改為腳本觸發後，這一條變成可執行且必定準確。詳見 [05-environment.md](05-environment.md#511-hot-reload-契約本版修正)。
 

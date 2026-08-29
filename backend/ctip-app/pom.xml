@@ -98,6 +98,25 @@
       <artifactId>bucket4j-core</artifactId>
       <version>${bucket4j.version}</version>
     </dependency>
+    <!--
+      分散式快取與限流(docs/spec/10-identity-plans.md §10.7、06 §6.2.2 的 [P17] 三列)。
+      Boot 4 模組化:autoconfig 在 spring-boot-data-redis(由 starter 帶入),缺它 spring.data.redis.*
+      完全惰性(06 §6.3.6 第 1 條的活體樣本)。client 為 Lettuce,版本由 BOM 納管。
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    <!--
+      Bucket4j 的 Redis 後端。它宣告的 lettuce-core 是 provided(6.1.8),不會被帶進來;
+      實際執行用 BOM 納管的 7.5.2——06 §6.2.2 已逐一比對其參照的 class/method 在 7.5.2 皆存在,
+      升級 Lettuce 時須重驗。
+    -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j-redis</artifactId>
+      <version>${bucket4j.version}</version>
+    </dependency>
     <!-- Bloom artifact 的預設壓縮(docs/spec/11-sync-bloom.md §11.4;06 §6.2.2,版本見 parent properties)。
          JDK 只內建 GZIP/Deflate,ZSTD 需要這個相依;壓縮只影響傳輸與儲存,不影響 checksum。 -->
     <dependency>
@@ -156,6 +175,12 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- org.testcontainers 2.x 沒有 redis module;BOM 納管的是這個第三方座標(06 §6.2.2、§6.3.6 第 2 條) -->
+    <dependency>
+      <groupId>com.redis</groupId>
+      <artifactId>testcontainers-redis</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

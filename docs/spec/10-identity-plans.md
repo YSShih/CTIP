@@ -300,9 +300,22 @@ public record RateLimitResult(boolean allowed, long limit, long remaining, Insta
 | 實作 | 啟用條件 | 說明 |
 |---|---|---|
 | `InMemoryRateLimiter` | `RATE_LIMIT_BACKEND=memory` | Bucket4j 本地。**僅單一實例正確** |
-| `RedisRateLimiter` | `RATE_LIMIT_BACKEND=redis` | Bucket4j + Redis |
+| `RedisRateLimiter` | `RATE_LIMIT_BACKEND=redis` | Bucket4j + `bucket4j-redis`（Lettuce）。桶存在 Redis，多實例共用同一份配額 |
 
 啟動時若 `ENVIRONMENT != mvp` 但 `RATE_LIMIT_BACKEND=memory`，輸出 WARN。
+
+> **Redis 不可用時 fail-fast（2026-08-29，Phase 17；[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)）**：
+> `RATE_LIMIT_BACKEND=redis` 而 Redis 連不上時**啟動失敗**，不得降級為記憶體實作
+> ——限流是安全機制，「後端掛了就等於沒有限流」正是攻擊者要的狀態。
+> 同一個 Redis 上的 `CachePort`（方案配額、RBAC 對應）則相反：讀寫失敗只記 WARN 並改為
+> 每次重新載入，快取失效不該讓請求失敗。兩者的差異與部署注意事項見
+> `docs/deployment/rate-limiting.md`。
+>
+> **Redis 內的桶鍵多帶一段容量**：bucket4j 把 `BucketConfiguration` 一併存進 Redis，
+> 建立後不會因為呼叫端傳了不同的限額而更新——方案**降級**時舊桶會沿用較寬的容量直到過期（fail-open）。
+> 因此鍵為 `{本節的鍵}:{capacity}`，即「限額改變就是換一個桶」，與記憶體實作
+> 「限額改變即重建 bucket」同語意；舊鍵由 TTL 自行消失。此偏離僅存在於 Redis 內部，
+> 不影響任何對外契約。
 
 > **實作回饋修訂（2026-08-25，Phase 6；ADR 0004）**：
 > 1. `RedisRateLimiter` 於 Phase 17 才存在。在此之前若設 `RATE_LIMIT_BACKEND=redis`
@@ -331,12 +344,24 @@ v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必
 2. 使用者         ratelimit:user:{userId}:{window}
 3. 租戶           ratelimit:tenant:{tenantId}:{window}
 4. 匿名 IP        ratelimit:ip:{normalizedIp}:{window}
-5. 端點類別       ratelimit:{scope}:{endpointClass}:{window}
+5. 端點類別       ratelimit:{scope}:{subject}:{endpointClass}:{window}
 ```
+
+> **維度 5 的鍵含 `{subject}`（2026-08-29，Phase 17 修正；[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)）**：
+> 原本寫的是 `ratelimit:{scope}:{endpointClass}:{window}`——**沒有主體**。照字面實作，
+> `ratelimit:tenant:read:minute` 是全平台共用一個桶，任何一個租戶（或任何一個匿名 IP）
+> 把它打滿，**其他所有人都會被拒絕**；一行 `curl` 迴圈即可讓整個平台的讀取端點回 429。
+> 且下方比例上限的理由是「分類上限恆低於**總上限**」，那句話只有在 per-subject 時才成立。
+> `{subject}` 沿用當下最 specific 的維度（已認證取 apiKey／user，匿名取 IP）。
 
 - `window` ∈ `{minute, day}`
 - 匿名 IP 正規化：IPv4 取完整位址；**IPv6 取 `/64` 前綴**（避免單一使用者以 `/64` 內的位址繞過）
 - `endpointClass` 分三類：`read`（GET/查詢）、`write`（POST/PATCH/DELETE）、`heavy`（bloom 下載、STIX bundle、import）
+
+> **以 POST 表達的查詢屬 `read`（2026-08-29，Phase 17）**：`POST /iocs/search` 與
+> `POST /iocs/lookup` 不改變狀態，本節的 `read` 也明文含「查詢」。照 HTTP 方法字面歸成 `write`
+> 會把前端唯一的搜尋路徑壓到總配額的 20%。`heavy` 取本節明列的三支
+> （`/sync/bloom`、`/stix/bundle`、`/iocs/import`），且優先於方法判定。
 
 > **`endpointClass` 的配額值（2026-08-28 定調；ADR 0020）**：`plans` 表只有
 > `requests_per_minute` / `requests_per_day` **各一組**，04 與本節都沒有定義三類各自的數值。
@@ -373,6 +398,16 @@ v1.1 把整節限流標為 `[Phase 17 · M2]`，但 §24.1 要求匿名存取必
 
 > ⚠️ **反向代理下的 IP 取得**：必須設定 `server.forward-headers-strategy=framework` 並限定信任的代理來源。若無法確定真實 client IP，`docs/deployment/` 必須明確記載此限制——否則匿名限流可被單一 IP 偽造繞過。
 
+> **信任來源的實作（2026-08-29，Phase 17;[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)）**：
+> Boot 的 `framework` 策略註冊的 `ForwardedHeaderFilter` **無條件採信** `X-Forwarded-*`
+> ——應用只要有一條路徑能被直接連到，任何人都可以自稱來自任意 IP，維度 4 等於不存在。
+> 因此以同型別的 `TrustedProxyForwardedHeaderFilter` 取代它（Boot 的 bean 標了
+> `@ConditionalOnMissingFilterBean`，會自動退讓），只有直連對端落在 `TRUSTED_PROXIES`
+> （新增環境變數，CIDR 清單，[05 §5.4.5](05-environment.md#545-應用程式)）之內時才處理轉發標頭。
+> **預設為空 = 誰都不信（fail-closed）**：代理後方忘了設定會讓限流過嚴（所有 client 算成同一個
+> 位址），而不是被繞過。`ENVIRONMENT != mvp` 而該值為空時啟動記 WARN，
+> 限制與設定方式記於 **`docs/deployment/rate-limiting.md`**（本節明文要求的記載）。
+
 ### 回應
 
 超限回 `429`，並帶標頭：
@@ -394,6 +429,24 @@ Retry-After: 42
 ### 實作方式
 
 **使用 Spring Security filter 或 `HandlerInterceptor`，禁止用 Decorator 堆疊。**
+
+> **兩個檢查點與維度 4 的「先扣後退」（2026-08-29，Phase 17;[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)）**
+>
+> | 檢查點 | 位置 | 維度 |
+> |---|---|---|
+> | `RateLimitFilter` | security filter chain **之前** | 4（匿名 IP） |
+> | `IdentityRateLimitFilter` | 認證 filter **之後**（`addFilterAfter`） | 1、2、3、5 |
+>
+> 兩者共用同一個 `RateLimitResponder`（標頭、最緊維度的比較、429 的寫出）與同一份豁免規則，
+> 因此「集中一處」仍然成立——不是兩份各自演化的限流邏輯。
+>
+> **維度 4 對已認證請求必須歸還**：限流排在認證之前（否則無效憑證完全繞過限流），
+> 但那時還不知道請求會不會認證成功；而維度 4 是「**匿名** IP」，已認證者該受的是自己方案的
+> 維度 1–3。若不歸還，ENTERPRISE 的 client 會被匿名方案的 60/min 綁死——**方案分級形同虛設**。
+> 因此 `RateLimiterPort` 新增 `refund(key, tokens, limit)`，認證成功後歸還維度 4 的 token
+> 並重寫 `X-RateLimit-*`。副作用是明確的：對已認證流量，維度 4 從速率上限變成
+> 「同一 IP **同時進行中**的請求數上限」（歸還發生在 controller 之前）；
+> 認證**失敗**者沒有歸還的機會，暴力破解仍然被擋。
 
 > **實作回饋修訂（2026-08-27，Phase 13；ADR 0012 決策 16)**
 > 限流器與認證的**先後順序**是安全需求,不只是實作細節。認證 filter 在憑證無效時會直接寫出 401

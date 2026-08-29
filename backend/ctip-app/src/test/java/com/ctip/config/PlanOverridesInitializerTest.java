@@ -97,6 +97,7 @@ class PlanOverridesInitializerTest {
                 new CtipProperties.Jwt("x".repeat(32), 900, 2592000, 90),
                 new CtipProperties.Security(10, 15),
                 new CtipProperties.RateLimit(true, CtipProperties.RateLimit.Backend.MEMORY),
+                new CtipProperties.Proxy(List.of()),
                 new CtipProperties.Plan(overrides),
                 new CtipProperties.Ingestion(true, 500),
                 new CtipProperties.Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),

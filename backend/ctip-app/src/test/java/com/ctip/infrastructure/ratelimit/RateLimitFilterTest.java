@@ -67,12 +67,21 @@ class RateLimitFilterTest {
         public RateLimitResult peek(RateLimitKey key, QuotaLimit limit) {
             throw new UnsupportedOperationException("filter 不使用 peek");
         }
+
+        @Override
+        public void refund(RateLimitKey key, int tokens, QuotaLimit limit) {
+            throw new UnsupportedOperationException("維度 4 的歸還在 IdentityRateLimitFilter");
+        }
+    }
+
+    private static RateLimitResponder responder() {
+        return new RateLimitResponder(CLOCK, new FilterErrorWriter(CLOCK));
     }
 
     @Test
     void minuteRejectionDoesNotConsumeDayQuota() throws Exception {
         MinuteRejectingLimiter limiter = new MinuteRejectingLimiter();
-        RateLimitFilter filter = new RateLimitFilter(limiter, () -> ANONYMOUS_PLAN, true, CLOCK);
+        RateLimitFilter filter = new RateLimitFilter(limiter, () -> ANONYMOUS_PLAN, true, responder());
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request("/api/v1/iocs"), response, new MockFilterChain());
@@ -85,7 +94,8 @@ class RateLimitFilterTest {
 
     @Test
     void rejectionBodyEscapesClientControlledPath() throws Exception {
-        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, CLOCK);
+        RateLimitFilter filter =
+                new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, responder());
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request("/api/v1/\"},\\evil"), response, new MockFilterChain());
@@ -103,7 +113,8 @@ class RateLimitFilterTest {
 
     @Test
     void actuatorExemptionIsNotBypassableByPathTraversal() {
-        RateLimitFilter filter = new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, CLOCK);
+        RateLimitFilter filter =
+                new RateLimitFilter(new MinuteRejectingLimiter(), () -> ANONYMOUS_PLAN, true, responder());
         assertThat(filter.shouldNotFilter(request("/actuator/health"))).isTrue();
         assertThat(filter.shouldNotFilter(request("/actuator/../api/v1/iocs"))).isFalse();
     }

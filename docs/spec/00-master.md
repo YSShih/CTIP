@@ -55,7 +55,7 @@
 | 單一 compose 檔 + 四 profile | [05-environment.md §5.2](05-environment.md#52-唯一的-compose-檔) |
 | Dockerfile 契約（含 build context） | [05-environment.md §5.3](05-environment.md#53-dockerfile-契約) |
 | 版本表與版本政策 | [06-tech-stack.md](06-tech-stack.md) |
-| 分層依賴方向 + 9 條 ArchUnit 規則 | [01-architecture.md](01-architecture.md#19-archunit-規則強制共-9-條) |
+| 分層依賴方向 + 11 條 ArchUnit 規則 | [01-architecture.md](01-architecture.md#19-archunit-規則強制共-11-條) |
 | 27 張表 schema | [04-data-dictionary.md](04-data-dictionary.md) |
 | 九個聚合的不變量 | [02-ddd-model.md](02-ddd-model.md#23-聚合不變量) |
 | TLP 可見度（與方案解耦） | [07-domain-intel.md](07-domain-intel.md#tlp-可見度) |
@@ -601,4 +601,31 @@ Phase 13 收尾稽核留給 Phase 14 的地雷，使用者指示先處理掉。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28 實作回饋修訂，見 §0.7–§0.22）。*
+## 0.23 實作回饋修訂（2026-08-29，Phase 17）
+
+Redis(快取 + 分散式限流)的實作回饋,逐項見
+[ADR 0026](../architecture/decisions/0026-phase17-redis-cache-and-distributed-rate-limit.md)。
+
+| # | 發現 | 處置 | 影響檔案 |
+|---|---|---|---|
+| 1 | **維度 5 的鍵沒有主體**:§10.7 寫的是 `ratelimit:{scope}:{endpointClass}:{window}`,照字面實作是**全平台共用一個桶**——任一租戶(或任一匿名 IP)打滿它,所有人都會被 429 | 鍵改為 `ratelimit:{scope}:{subject}:{endpointClass}:{window}`;主體沿用當下最 specific 的維度。ADR 0020「分類上限恆低於總上限」本來就只有 per-subject 才成立 | [10 §10.7](10-identity-plans.md#107-限流) |
+| 2 | **維度 4 把已認證的呼叫者綁死在匿名配額**:限流必須排在認證之前(ADR 0012 決策 16),但那時還不知道會不會認證成功,於是 ENTERPRISE 的 client 也只有 60/min——方案分級形同虛設 | `RateLimiterPort` 新增 `refund`;認證成功後歸還維度 4 的 token 並重寫 `X-RateLimit-*`。對已認證流量,維度 4 變成「同一 IP 同時進行中的請求數」上限;認證失敗者沒有歸還機會,暴力破解仍被擋 | [10 §10.7](10-identity-plans.md#107-限流) |
+| 3 | 「單一 filter」與「維度 4 必須在認證前、維度 1–3 必須在認證後」看似互斥 | 兩個檢查點,共用同一個 `RateLimitResponder` 與同一份豁免規則——不是兩份各自演化的邏輯 | [10 §10.7](10-identity-plans.md#107-限流) |
+| 4 | `POST /iocs/search`／`/lookup` 照 HTTP 方法字面屬 write,會把前端唯一的搜尋路徑壓到總配額的 20% | §10.7 的 read 明文含「查詢」;以 POST 表達的查詢歸 read | [10 §10.7](10-identity-plans.md#107-限流) |
+| 5 | bucket4j 把桶的設定一併存進 Redis,建立後不隨呼叫端的限額更新——**方案降級時 fail-open** | Redis 鍵多帶一段容量(限額改變即換桶),與記憶體實作同語意;僅影響 Redis 內部 | [10 §10.7](10-identity-plans.md#107-限流) |
+| 6 | Redis 不可用時該怎麼辦,規格沒說 | 限流 **fail-fast**(連不上即啟動失敗,不得降級記憶體);快取 **fail-soft**(記 WARN 並重新載入) | [10 §10.7](10-identity-plans.md#107-限流)、`docs/deployment/rate-limiting.md` |
+| 7 | `server.forward-headers-strategy=framework` 的 Boot 內建 filter **無條件採信** `X-Forwarded-*`,只要應用有一條路徑能被直連,IP 維度即可被偽造繞過 | 以同型別 bean 取代,只信任 `TRUSTED_PROXIES`(新增環境變數)之內的對端;預設空 = fail-closed;非 mvp 環境為空時 WARN | [10 §10.7](10-identity-plans.md#107-限流)、[05 §5.4](05-environment.md#54-環境變數清單) |
+| 8 | `CachePort` 若沒有真實呼叫端就是規則 16 禁止的裝飾品 | 消費者是兩個**既有的行程內快取**(`PlanRepositoryAdapter`、`RolePermissionRepositoryAdapter`,後者註解明寫「分散式快取為 Phase 17」)。行程內的 map 無法跨實例失效,那正是要修的缺陷。訂閱仍不快取(降級必須立即生效) | — |
+| 9 | ArchUnit 規則 1 只擋 domain,而 **port 定義在 application 層**——真正會洩漏 Lettuce 型別的地方是那裡 | 新增規則 11;順帶補回規則 10(ADR 0016 加了實作卻沒回寫 §1.9 的表與計數) | [01 §1.9](01-architecture.md#19-archunit-規則強制共-11-條)、[15 §15.1](15-dod-gates.md) |
+| 10 | `spring-boot-data-redis` 一在 classpath 上,actuator 就加 redis 健康檢查——而 mvp 的 compose 不啟動 redis,`/actuator/health` 會永遠 DOWN、容器永遠 unhealthy | 只在 `application-mvp.yml` 關閉該健康檢查 | `application-mvp.yml` |
+| 11 | `TestRestTemplate` 在 Boot 4 被拆到版本表未列的 `spring-boot-restclient-test`(同 MockMvc 的前例) | 測試改用 JDK `HttpClient`,不新增相依;地雷清單補第 9、10 條 | [06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+| 12 | `docs/deployment/` 的「真實 client IP 限制」被 [ADR 0022](../architecture/decisions/0022-orphan-deliverables.md) 判為無 phase 承接而排到 Phase 23,但 `phase-17.md` 的「不得做的事」本來就明文要求 | 本 phase 交付 `docs/deployment/rate-limiting.md`;phase-23 的清單同步 | [phase-23](phases/phase-23.md) |
+| 13 | **判準自己量錯對象**:`SpringApplicationBuilder.properties(...)` 是優先序最低的 defaultProperties,`server.port=0` 被 `application.yml` 的 `${SERVER_PORT:8080}` 蓋掉——第二個實例綁固定 8080,而 `dod.sh mvp` 的 M1-38 正好在 mvp 容器佔用 8080 時執行,請求打到的是容器裡的另一個 app | 改用命令列參數(優先序高於 yml)+ 兩道啟動守衛(埠不為 0 且與實例 1 不同、後端真的是 redis) | (測試) |
+
+> **值得記住的行為變更**:維度 5 讓**匿名的 write 上限變成 12/min**(60 的 20%)。
+> `AuthHardeningTest` 因此在第 13 個請求上回 429——那是正確行為,測試改為每個方法一個 client IP,
+> 不是放寬配額。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.23）。*
