@@ -1641,7 +1641,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-30)
 - **執行單**:`docs/spec/phases/phase-21.md`
-- **Commit**:(見 git log,message `Phase 21: audit log, data retention and admin endpoints`)
+- **Commit**:`53ad108`(`Phase 21: audit log, data retention and admin endpoints`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-integration -Dtest='AuditAppendOnlyTest,AuditFailureIsolationTest,RetentionTaskTest,AuditCompletenessTest'`
     (逐字)✅ **13/13**
