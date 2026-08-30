@@ -39,7 +39,7 @@
     <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
     <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
     <!-- 06 §6.2:Resilience4j 2.3.x、Bucket4j 8.x(僅標 major 系列,取系列內現行版) -->
-    <resilience4j.version>2.3.0</resilience4j.version>
+    <resilience4j.version>2.4.0</resilience4j.version>
     <bucket4j.version>8.10.1</bucket4j.version>
     <!-- 3.x 才相容 Spring Boot 4,不得使用 2.x(docs/spec/06-tech-stack.md §6.2、09 §9.6) -->
     <springdoc.version>3.1.0</springdoc.version>
