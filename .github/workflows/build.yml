@@ -29,7 +29,7 @@ jobs:
         run: test -s backend/target/bom.json
 
       - name: 上傳 jar 與 SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-dist
           path: |
@@ -61,7 +61,7 @@ jobs:
         run: npm run sbom && test -s sbom.json
 
       - name: 上傳靜態產物與 SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: |
