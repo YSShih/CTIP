@@ -150,6 +150,8 @@ springdoc 只在 handler 真的收 `@RequestBody` 時才產生 requestBody,兩�
 
 ## 未做而必須回報的事
 
+> **2026-08-30 更新**:第 1、3 項已於 Phase 23 的補件中交付([ADR 0042](0042-m2-gaps-token-cleanup-and-settings.md))。
+
 1. **`TOKEN_CLEANUP_CRON`(08 §8.7 的「過期 token 清理」,標 M2)至今沒有任何實作**。
    它不在 §13.4 的六項保留政策內,也不在 phase-21 的交付物內,因此本 phase 未實作。
    建議指派給 Phase 23(它與 §13.4 的保留任務同性質,但屬 M2 的遺漏)。

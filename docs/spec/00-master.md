@@ -779,6 +779,9 @@ Bloom artifact 清理沿用 Phase 15 的 `BloomRetentionService`(以應用角色
 > **本 phase 未做而回報的三件事**(見 ADR 0031 末段):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)
 > 至今無實作;12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點因此還沒有前端入口。
 > 兩者都屬 M2 的遺漏,建議指派給 Phase 23。
+>
+> **2026-08-30 更新**:兩項皆已於 §0.30 的 Phase 23 補件中交付
+> ([ADR 0042](../architecture/decisions/0042-m2-gaps-token-cleanup-and-settings.md))。
 
 ---
 
