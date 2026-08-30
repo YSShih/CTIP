@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
 | M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
-| M3 — Production | 20–23 | **四個 phase 全部完成**;`dod.sh full`(25 項)待獨立 session 執行 |
+| M3 — Production | 20–23 | **四個 phase 全部完成**(含 Phase 23 補件的兩項 M2 遺漏);`dod.sh full`(25 項)待獨立 session 執行 |
 
 ---
 
@@ -1907,5 +1907,62 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - gate **不得並行**,執行期間**不得在 host 端跑任何 Maven**;判斷結束一律看行程退出碼
   - 新增 workflow 時記得同步 `dod_ci_green()` 的 11 支清單與 13 §13.8 的表
   - 本輪 `verify` 只花 5:18 min(Phase 22 是 25 min)——差別在 Testcontainers 的映像已在本機快取
+
+---
+
+## Phase 23 補件 — 兩項 M2 遺漏(過期 token 清理 · Settings 頁)
+
+- **狀態**:done(2026-08-30,使用者指派)
+- **Commit**:`28f402d`(`Phase 23 補件: 過期 token 清理與 Settings 頁(兩項 M2 遺漏)`)
+- **背景**:兩項標 `[M2]` 的交付物**不在任何 phase 執行單的交付物清單裡**,因此不會在任何一次
+  收尾被抓到,自 Phase 21 起連續三次只被回報(ADR 0031 末段、ADR 0041 §9)
+- **完成判準結果**:全綠 —
+  - `clean verify -Ptest-integration` 無過濾 ✅ **1,128 tests**
+    (sdk 24 + core 464 + adapters 33 + app 607;Spotless / Checkstyle / JaCoCo 全過,5:11 min)
+  - frontend `lint` / `format:check` / `tsc --noEmit` / `test`(**186**)/ `build` / `api:check` ✅
+  - 四種環境 `docker compose config -q` ✅;`ConfigSymmetryTest` ✅(新變數三處對稱)
+  - `dod.sh full` 逐項(可本機執行者)7/8 —— 只有 **M3-19** 因 `gh` 未安裝而 FAIL(同前)
+- **交付物**:
+  - core `application/identity/ExpiredTokenCleanupService`、
+    `RefreshTokenRepository.revokeExpired(now, reason, batchSize)`(新 port 方法)、
+    app `infrastructure/scheduling/IdentitySchedulers`、`RefreshTokenJpaRepository` 的批次 native UPDATE
+  - `ctip.scheduler.token-cleanup-cron` + `TOKEN_CLEANUP_CRON`(compose、五份樣板、05 §5.4)
+  - 前端 `/settings`(`SettingsPage`、`ChangePasswordForm`、`useChangePassword`、
+    `authApi.changePassword`、AppLayout 的「設定」入口、MSW handler)
+  - 測試:`ExpiredTokenCleanupServiceTest`(5)、`TokenCleanupTest`(3,整合)、
+    `SettingsPage.test`(6)、`router.test` +2
+  - ADR `0042`;規格回寫 `00 §0.30`、`05 §5.4`、`08 §8.7`、`12 §12.5`
+- **本次抓到的實質問題(值得記住)**:
+  1. **`EXPIRED_CLEANUP` 與 `ix_rt_gc` 是「schema 先行、實作沒跟上」的證據**:04 表 15 從 Phase 13
+     就有這兩樣東西,它們的唯一用途就是這個任務。設計時留下的鉤子若沒有被任何 phase 承接,
+     不會有任何測試或閘門發現——只有逐表回讀 schema 才看得出來
+  2. **清理任務不刪列**:刪列等於偷偷新增第七項保留政策,而 13 §13.4 只有六項;
+     `ip`／`user_agent` 的移除屬資料主體刪除。這一點寫進了 §8.7 與服務 javadoc
+  3. **這不是安全邊界**:過期 token 本來就通不過認證(U6 的 `isUsable` 已檢查 expiry)。
+     javadoc 明寫此事,否則下一個人會以為刪掉它有安全後果
+  4. ⚠️ **`isIdempotent` 是這一組測試裡最重要的一個**:述詞若漏掉 `revoked_at IS NULL`,
+     每次清理都會重寫全表並洗掉所有撤銷原因,而任務照樣回報「成功」
+  5. **改 `CtipProperties.Scheduler` 會打到兩處測試的建構子**
+     (`PlanOverridesInitializerTest`、`StartupValidatorTest`)——record 沒有具名參數
+  6. **變更密碼成功後必須清 session**:後端撤銷的是含呼叫端自己在內的全部 family,
+     留著會讓使用者在 15 分鐘後莫名被踢出。新密碼要求輸入兩次也是同一個理由——
+     打錯字的代價是被鎖在門外,而伺服器端沒有任何攔它的機會
+  7. **頁面單獨渲染時測不到 toast**:`Toaster` 掛在 `AppLayout`,頁面測試要驗 `toastSlice` 佇列
+- **README 的階段敘述校正(使用者指出)**:
+  - 現況表的 `.github/` 與「必要文件」兩列被一個空行切在表格外,渲染成第二張表 → 併回主表
+  - `backend/`／`frontend/` 兩列仍寫「🟡 M2 進行中(Phase 13 完成)」並對 Phase 14–22
+    逐一標 🟡,而 M2/M3 早已完成 → 改為 `✅ M2(Phase 13–19)完成` / `✅ M3(Phase 20–23)完成`,
+    其下逐 phase 不再標記進行中
+  - 「這是什麼」仍寫「完成 Phase 1–22、M3 進行中」→ 改為 23 個 phase 全部交付,
+    並明說 **M3 的 `dod.sh full` 尚待執行**;「需人工確認 6 項」→ 7 項(P-07)
+  - 系統摘要新增第 18 列(CI/CD 與供應鏈安全 + 12 份文件);
+    `licensing.md`／`privacy.md` 原標「M3 Phase 23 產出」實為 Phase 19／21 → 更正並補連結
+- **給下一 session 的注意事項**:
+  - **下一步仍是 M3 閘門 `./environment/scripts/dod.sh full`**(25 項),由獨立 session 執行
+  - M3-19 仍必然 FAIL:`gh` 未安裝、repo 從未推上 GitHub(`git ls-remote` 是
+    `Host key verification failed`)。這是操作者前置,不是專案交付物
+  - `environment/.env.prod` 已於本機由樣板產生(M3-17 需要),隨機佔位值、未進版控
+  - 新增排程時三件事:`application.yml` 的 cron、compose 與五份樣板的變數、05 §5.4 的清單
+    ——`ConfigSymmetryTest` 三缺一就紅
 
 ---
