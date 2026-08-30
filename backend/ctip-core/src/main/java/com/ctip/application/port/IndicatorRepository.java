@@ -40,5 +40,11 @@ public interface IndicatorRepository {
     /** 過期標記排程用(§7.10):status = ACTIVE 且 validUntil &lt; now,最多 limit 筆。 */
     List<Indicator> findExpirable(Instant now, int limit);
 
+    /**
+     * 依 id 昇冪掃描,供 STIX 重建逐批處理({@code POST /api/v1/admin/stix/rebuild})。
+     * {@code afterId} 為 null 表示自頭開始;軟刪除的 indicator 不在結果中。
+     */
+    List<Indicator> findAllAfter(IndicatorId afterId, int limit);
+
     Indicator save(Indicator indicator);
 }

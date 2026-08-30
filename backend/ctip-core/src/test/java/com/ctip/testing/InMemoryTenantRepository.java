@@ -5,6 +5,7 @@ import com.ctip.domain.tenant.Tenant;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.domain.tenant.TenantSlug;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -21,6 +22,11 @@ public final class InMemoryTenantRepository implements TenantRepository {
     @Override
     public Optional<Tenant> findBySlug(TenantSlug slug) {
         return byId.values().stream().filter(t -> t.slug().equals(slug)).findFirst();
+    }
+
+    @Override
+    public List<Tenant> findAll() {
+        return List.copyOf(byId.values());
     }
 
     @Override

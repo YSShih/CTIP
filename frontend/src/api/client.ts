@@ -238,6 +238,24 @@ export async function apiPostRaw<P extends OpsOf<'post'>>(
   );
 }
 
+/**
+ * 無 body 的 POST(動作端點:`/admin/sources/{id}/sync`、`/admin/stix/rebuild`)。
+ *
+ * 與 {@link apiPost} 分開:那支的 body 型別由 generated schema 推導,而這兩支端點
+ * **沒有** requestBody,推導出來會是 `never`——呼叫端根本傳不出合法的值。
+ */
+export async function apiPostAction<P extends OpsOf<'post'>>(
+  path: P,
+  options: PostOptions = {},
+): Promise<OkJson<Op<P, 'post'>>> {
+  const url = buildUrl(path, options.path, undefined);
+  return request(
+    url,
+    { method: 'POST', signal: options.signal ?? null },
+    options.autoRefresh ?? true,
+  );
+}
+
 interface PatchOptions {
   path?: Record<string, string>;
   signal?: AbortSignal;
@@ -255,6 +273,21 @@ export async function apiPatch<P extends OpsOf<'patch'>>(
   await request<void>(url, { method: 'PATCH', signal: options.signal ?? null });
 }
 
+/** 帶 body 且有回應的 PATCH(`/admin/**` 的設定變更)。 */
+export async function apiPatchJson<P extends OpsOf<'patch'>>(
+  path: P,
+  body: BodyOf<Op<P, 'patch'>>,
+  options: PatchOptions = {},
+): Promise<OkJson<Op<P, 'patch'>>> {
+  const url = buildUrl(path, options.path, undefined);
+  return request(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: options.signal ?? null,
+  });
+}
+
 interface DeleteOptions {
   path?: Record<string, string>;
   signal?: AbortSignal;
@@ -266,4 +299,13 @@ export async function apiDelete<P extends OpsOf<'delete'>>(
 ): Promise<void> {
   const url = buildUrl(path, options.path, undefined);
   await request<void>(url, { method: 'DELETE', signal: options.signal ?? null });
+}
+
+/** 有回應本文的 DELETE(資料主體刪除會回報刪了什麼、保留了什麼)。 */
+export async function apiDeleteJson<P extends OpsOf<'delete'>>(
+  path: P,
+  options: DeleteOptions = {},
+): Promise<OkJson<Op<P, 'delete'>>> {
+  const url = buildUrl(path, options.path, undefined);
+  return request(url, { method: 'DELETE', signal: options.signal ?? null });
 }

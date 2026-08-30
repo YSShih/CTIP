@@ -34,6 +34,7 @@ public record CtipProperties(
         @NotNull @Valid Bloom bloom,
         @NotNull @Valid Search search,
         @NotNull @Valid Notification notification,
+        @NotNull @Valid Audit audit,
         @NotNull @Valid Retention retention) {
 
     /** 執行環境,對應環境變數 ENVIRONMENT(mvp | dev | staging | prod)。 */
@@ -181,12 +182,42 @@ public record CtipProperties(
         }
     }
 
-    /** 資料保留政策(天數;bloomArtifactKeep 為保留份數)。 */
+    /**
+     * 稽核(docs/spec/13-platform-ops.md §13.5)。
+     *
+     * @param sampleReadRate 讀取操作的取樣率(規則 4:寫入 100%、讀取 1%;
+     *     {@code AUDIT_SAMPLE_READ_RATE})。1 = 全記,整合測試用這個值
+     */
+    public record Audit(
+            @DecimalMin("0.0") @DecimalMax("1.0") double sampleReadRate) {}
+
+    /**
+     * 資料保留政策(docs/spec/13-platform-ops.md §13.4;天數,bloomArtifactKeep 為保留份數)。
+     *
+     * <p>{@code username}／{@code password} 是<strong>專用的清理角色</strong>
+     * ({@code ctip_retention};§13.5 規則 2)。它與應用角色是兩條不同的連線:應用角色對
+     * {@code audit_logs} 連 DELETE 權限都沒有(V33 已 REVOKE),而清理角色只有各表的
+     * 時間欄位可讀、只能刪該刪的列。空密碼為合法值(信任認證的部署)。
+     *
+     * <p>六個 cron 對應 08 §8.7 的六個保留任務。
+     */
     public record Retention(
             @Positive int auditDays,
             @Positive int rawPayloadDays,
             @Positive int rejectionDays,
             @Positive int deliveryDays,
             @Positive int indicatorDays,
-            @Positive int bloomArtifactKeep) {}
+            @Positive int bloomArtifactKeep,
+            @NotBlank String username,
+            String password,
+            @NotNull @Valid RetentionCrons crons) {}
+
+    /** 六個保留清理任務的排程(08 §8.7)。 */
+    public record RetentionCrons(
+            @NotBlank String audit,
+            @NotBlank String rawPayload,
+            @NotBlank String rejection,
+            @NotBlank String bloomArtifact,
+            @NotBlank String delivery,
+            @NotBlank String indicator) {}
 }

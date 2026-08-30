@@ -2,6 +2,7 @@ package com.ctip.application.identity;
 
 import com.ctip.domain.user.RefreshTokenRotationOutcome;
 import com.ctip.domain.user.User;
+import com.ctip.domain.user.UserId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -75,10 +76,10 @@ public class AuthService {
                 .withDisplayName(rotated.user().displayName());
     }
 
-    public void logout(String refreshToken) {
-        if (!rotator.revokeSession(refreshToken)) {
-            throw new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN, false);
-        }
+    /** @return 登出的使用者(稽核的 {@code LOGOUT} 行為者;§13.5) */
+    public UserId logout(String refreshToken) {
+        return rotator.revokeSession(refreshToken)
+                .orElseThrow(() -> new InvalidRefreshTokenException(INVALID_REFRESH_TOKEN, false));
     }
 
     /** 解析不出身分(停權或已無成員資格)一律走與密碼錯誤相同的失敗路徑,不揭露差異。 */

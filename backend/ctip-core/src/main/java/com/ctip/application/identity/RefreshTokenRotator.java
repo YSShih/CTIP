@@ -10,6 +10,7 @@ import com.ctip.domain.user.RefreshTokenRotationOutcome;
 import com.ctip.domain.user.RevokedReason;
 import com.ctip.domain.user.TokenHash;
 import com.ctip.domain.user.User;
+import com.ctip.domain.user.UserId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
@@ -77,22 +78,27 @@ public class RefreshTokenRotator {
                 : RotatedTokens.failed(rotation.outcome());
     }
 
-    /** 登出:撤銷該枚所屬 family 的全部 token(§10.4 撤銷清單)。 */
+    /**
+     * 登出:撤銷該枚所屬 family 的全部 token(§10.4 撤銷清單)。
+     *
+     * @return 登出的使用者;空 = 該枚無效。稽核的 {@code LOGOUT} 需要行為者,
+     *     而登出端點是匿名的——這裡不交出使用者,那一列就永遠沒有 actor(§13.5)
+     */
     @Transactional
-    public boolean revokeSession(String refreshToken) {
+    public Optional<UserId> revokeSession(String refreshToken) {
         Optional<RefreshToken> located = locate(refreshToken);
         if (located.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         RefreshToken presented = located.get();
         // 登出刻意不要求 ACTIVE:被停權的使用者仍應能撤銷自己的 token family
         Optional<User> owner = accounts.find(presented.userId());
         if (owner.isEmpty()) {
-            return false;
+            return Optional.empty();
         }
         List<RefreshToken> family = tokens.findByFamily(presented.familyId());
         tokens.saveAll(owner.get().revokeFamily(family, clock.now(), RevokedReason.LOGOUT));
-        return true;
+        return Optional.of(owner.get().id());
     }
 
     private Optional<RefreshToken> locate(String plaintext) {

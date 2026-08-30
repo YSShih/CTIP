@@ -18,4 +18,10 @@ final class JsonPayloads {
     static String toJson(Map<String, Object> payload) {
         return MAPPER.writeValueAsString(payload);
     }
+
+    /** 讀回 JSONB 欄位;內容由本平台寫入,結構固定為物件。 */
+    @SuppressWarnings("unchecked")
+    static Map<String, Object> toMap(String json) {
+        return json == null || json.isBlank() ? Map.of() : MAPPER.readValue(json, Map.class);
+    }
 }

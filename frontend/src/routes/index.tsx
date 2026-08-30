@@ -1,6 +1,8 @@
 import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppLayout } from '../layouts/AppLayout';
 import ApiKeysPage from '../pages/ApiKeysPage';
+import AdminPage from '../pages/AdminPage';
+import AuditLogPage from '../pages/AuditLogPage';
 import DashboardPage from '../pages/DashboardPage';
 import IocDetailPage from '../pages/IocDetailPage';
 import IocImportPage from '../pages/IocImportPage';
@@ -67,6 +69,14 @@ export const routes: RouteObject[] = [
           {
             element: <RequirePermission permission="webhook:manage" />,
             children: [{ path: 'settings/webhooks', element: <WebhooksPage /> }],
+          },
+          {
+            element: <RequirePermission permission="audit:read" />,
+            children: [{ path: 'audit', element: <AuditLogPage /> }],
+          },
+          {
+            element: <RequirePermission permission="system:admin" />,
+            children: [{ path: 'admin', element: <AdminPage /> }],
           },
         ],
       },

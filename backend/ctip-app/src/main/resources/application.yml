@@ -18,6 +18,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # V33 的 GRANT/REVOKE 需要角色名稱;它們是部署設定,不能寫死在 migration 裡
+    placeholders:
+      appRole: ${POSTGRES_APP_USER:${POSTGRES_USER}}
+      retentionRole: ${POSTGRES_RETENTION_USER:ctip_retention}
     # migration 需要 DDL 與擴充權限,以 owner 連線;應用執行期則是上面的非特權角色
     user: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
@@ -140,6 +144,9 @@ ctip:
     # artifact 根目錄(容器內由具名 volume bloom-data 掛載);資料庫存的是相對於它的路徑
     storage-dir: ${BLOOM_STORAGE_DIR:/var/lib/ctip/bloom}
     compression: ${BLOOM_COMPRESSION:ZSTD}
+  audit:
+    # 讀取操作的取樣率(13 §13.5 規則 4:寫入 100%、讀取 1%)
+    sample-read-rate: ${AUDIT_SAMPLE_READ_RATE:0.01}
   retention:
     audit-days: ${AUDIT_RETENTION_DAYS:180}
     raw-payload-days: ${RAW_PAYLOAD_RETENTION_DAYS:30}
@@ -147,6 +154,18 @@ ctip:
     delivery-days: ${DELIVERY_RETENTION_DAYS:30}
     indicator-days: ${INDICATOR_RETENTION_DAYS:365}
     bloom-artifact-keep: ${BLOOM_ARTIFACT_KEEP:30}
+    # 保留清理走**專用角色**(13 §13.5 規則 2):應用角色對 audit_logs 沒有 DELETE 權限,
+    # 而這個角色只讀得到各表的時間欄位(V33 的欄位層授權)
+    username: ${POSTGRES_RETENTION_USER:ctip_retention}
+    password: ${POSTGRES_RETENTION_PASSWORD:}
+    # 六個保留任務的排程(08 §8.7)
+    crons:
+      audit: "${AUDIT_CLEANUP_CRON:0 0 1 * * SUN}"
+      raw-payload: "${PAYLOAD_CLEANUP_CRON:0 30 1 * * *}"
+      rejection: "${REJECTION_CLEANUP_CRON:0 40 1 * * *}"
+      bloom-artifact: "${BLOOM_ARTIFACT_CLEANUP_CRON:0 50 1 * * *}"
+      delivery: "${DELIVERY_CLEANUP_CRON:0 10 2 * * *}"
+      indicator: "${INDICATOR_CLEANUP_CRON:0 20 2 * * *}"
 
 # traceId 進日誌(09 §9.4:錯誤回應的 traceId 必須與日誌可對應;TraceIdFilter 設定 MDC)
 logging:

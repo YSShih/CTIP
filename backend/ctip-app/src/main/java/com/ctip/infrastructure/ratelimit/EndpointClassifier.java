@@ -51,7 +51,7 @@ public final class EndpointClassifier {
      * 逐段百分比解碼(解碼後的 {@code /} 不再視為分隔符,與 {@code RequestPath} 一致)、
      * 去除尾斜線。無法解碼的輸入原樣回傳——那種請求不會 route 到任何 handler。
      */
-    static String normalize(String path) {
+    public static String normalize(String path) {
         if (path == null || path.isEmpty()) {
             return "";
         }

@@ -10,6 +10,7 @@ import com.ctip.domain.shared.Visibility;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.sdk.IocType;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,15 @@ public final class InMemoryIndicatorRepository implements IndicatorRepository {
     public List<Indicator> findVisibleOffset(Visibility visibility, IndicatorFilter filter, int offset, int limit) {
         return findVisible(visibility, filter, null, offset + limit).items().stream()
                 .skip(offset)
+                .toList();
+    }
+
+    @Override
+    public List<Indicator> findAllAfter(IndicatorId afterId, int limit) {
+        return store.values().stream()
+                .sorted(Comparator.comparing(indicator -> indicator.id().value()))
+                .filter(indicator -> afterId == null || indicator.id().value().compareTo(afterId.value()) > 0)
+                .limit(limit)
                 .toList();
     }
 

@@ -21,6 +21,7 @@ import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.IndicatorRepository;
 import com.ctip.application.port.SourceRepository;
 import com.ctip.application.port.StixObjectPort;
+import com.ctip.application.stix.StixProjectionFactory;
 import com.ctip.domain.fingerprint.FingerprintStrategy;
 import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
 import com.ctip.domain.indicator.RuleBasedThreatScorer;
@@ -48,6 +49,22 @@ public class IngestionPipelineConfig {
             StixObjectPort stixObjects,
             BloomChangeTracker bloomChanges) {}
 
+    /** pipeline 用到的 port 組合之二(同一個理由:參數數 ≤ 5;僅本組態使用)。 */
+    record Collaborators(
+            IdGeneratorPort idGenerator,
+            EventPublisherPort events,
+            StixProjectionFactory stixProjections,
+            ClockPort clock) {}
+
+    @Bean
+    Collaborators ingestionCollaborators(
+            IdGeneratorPort idGenerator,
+            EventPublisherPort events,
+            StixProjectionFactory stixProjections,
+            ClockPort clock) {
+        return new Collaborators(idGenerator, events, stixProjections, clock);
+    }
+
     @Bean
     Repositories ingestionRepositories(
             IndicatorRepository indicators,
@@ -71,15 +88,11 @@ public class IngestionPipelineConfig {
 
     @Bean
     IngestionPipeline ingestionPipeline(
-            CtipProperties properties,
-            Repositories repositories,
-            IdGeneratorPort idGenerator,
-            EventPublisherPort events,
-            ClockPort clock) {
+            CtipProperties properties, Repositories repositories, Collaborators collaborators) {
         IocNormalizers normalizers =
                 new IocNormalizers(properties.normalization().stripWww());
         FingerprintStrategy fingerprint = new Sha256FingerprintStrategy();
-        ThreatScorer scorer = new RuleBasedThreatScorer(clock::now);
+        ThreatScorer scorer = new RuleBasedThreatScorer(collaborators.clock()::now);
         return new IngestionPipeline(List.of(
                 new ParseStage(normalizers),
                 new ValidateStage(),
@@ -87,15 +100,15 @@ public class IngestionPipelineConfig {
                         normalizers, Set.copyOf(properties.dataQuality().domainAllowlist())),
                 new FingerprintStage(fingerprint),
                 new DeduplicateStage(repositories.indicators()),
-                new MergeStage(idGenerator, fingerprint, repositories.sources()),
+                new MergeStage(collaborators.idGenerator(), fingerprint, repositories.sources()),
                 new ScoreStage(scorer),
                 // stage 8(§8.2):投影建構;寫出由 IngestionBatchExecutor 於交易提交後執行(ADR 0005)
-                new StixProjectionStage(repositories.sources(), repositories.stixObjects(), clock),
+                new StixProjectionStage(collaborators.stixProjections()),
                 new PersistStage(repositories.indicators()),
                 // stage 10(phase-15):標記受影響的 Bloom scope;成員真相仍在資料庫(ADR 0024)
                 new BloomUpdateStage(repositories.bloomChanges()),
                 // stage 11(phase-19):標記待重新索引的 indicator;寫出同樣在交易提交後(ADR 0028)
                 new SearchIndexStage(),
-                new EventPublishStage(events)));
+                new EventPublishStage(collaborators.events())));
     }
 }

@@ -30,7 +30,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceIdFilter extends OncePerRequestFilter {
 
-    static final String MDC_KEY = "traceId";
+    public static final String MDC_KEY = "traceId";
     private static final Logger log = LoggerFactory.getLogger(TraceIdFilter.class);
     private static final Pattern TRACEPARENT = Pattern.compile("^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$");
 

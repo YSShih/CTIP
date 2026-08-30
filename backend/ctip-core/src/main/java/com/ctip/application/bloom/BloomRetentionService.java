@@ -31,10 +31,12 @@ public class BloomRetentionService {
         this.planner = planner;
     }
 
-    public void purgeAll() {
+    /** @return 實際刪除的 artifact 份數(§13.4 要求每個清理任務記錄清理筆數) */
+    public int purgeAll() {
+        int deleted = 0;
         for (BloomTarget target : planner.targets()) {
             try {
-                purge(target);
+                deleted += purge(target);
             } catch (RuntimeException e) {
                 log.error(
                         "Bloom artifact 保留清理失敗:{} / {}",
@@ -43,6 +45,7 @@ public class BloomRetentionService {
                         e);
             }
         }
+        return deleted;
     }
 
     public int purge(BloomTarget target) {

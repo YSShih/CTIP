@@ -31,7 +31,7 @@ frontend/src/
 ├── components/     共用展示元件（含 shadcn/ui、VirtualTable、StateViews）
 ├── features/
 │   ├── ioc/  threat/  stix/  sync/  auth/
-│   └── subscription/  apikey/  notification/  audit/
+│   └── subscription/  apikey/  notification/  audit/  admin/
 ├── hooks/          跨 feature 的共用 hook
 ├── layouts/        AppLayout、AuthLayout
 ├── pages/          每個路由一個頁面元件
@@ -139,14 +139,21 @@ npm run api:check       # 重新產生後 git diff --exit-code src/api/generated
 | STIX Viewer | M3 | ✓ | `/stix/:id` |
 | Notification Center | M3 | ✗ | `/notifications` |
 | Webhook 管理 | M3 | ✗ | `/settings/webhooks` |
-| Audit Log | M3 | ✗ | `/audit` |
-| Admin Panel | M3 | ✗ | `/admin` |
+| Audit Log | M3 | ✗ | `/audit`（`audit:read`） |
+| Admin Panel | M3 | ✗ | `/admin`（`system:admin`） |
 
 > **Webhook 管理頁為 2026-08-29(Phase 20)補列**([ADR 0022](../architecture/decisions/0022-orphan-deliverables.md)、
 > [ADR 0029](../architecture/decisions/0029-phase20-kafka-and-notifications.md) 第 8 節):
 > [09 §9.1](09-api.md#91-端點清單) 有三個 `/webhooks` 端點與 `webhook:manage` 權限,
 > 而本表原本沒有對應頁——那三個端點在 UI 上永遠不可達。
 > 需登入 + `webhook:manage`;簽章密鑰只在建立當下顯示一次(不變量 W2)。
+
+> **Audit Log 與 Admin Panel 為 2026-08-30(Phase 21)交付**
+> ([ADR 0022](../architecture/decisions/0022-orphan-deliverables.md)、
+> [ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md) 第 12 節):
+> 本表原本沒有標註兩頁所需的權限,而 [09 §9.1](09-api.md#91-端點清單) 有——已補上。
+> §12.2 的目錄樹原本只有 `audit/` 沒有 `admin/`,同時補入(`eslint.config.js` 的 F1 zones 一併同步)。
+> 稽核頁**只讀**:稽核軌跡是 append-only 的(13 §13.5 規則 1),沒有刪除與編輯。
 
 需登入的頁面必須在路由層強制授權（`RequireAuth` / `RequirePermission` 元件），**並在後端再次驗證**。
 

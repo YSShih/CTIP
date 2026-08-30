@@ -133,6 +133,16 @@ class IndicatorRepositoryAdapter implements IndicatorRepository {
                 .toList();
     }
 
+    /** STIX 重建的逐批掃描(ADR 0031);軟刪除者不重投影——它們不該出現在對外的 STIX 中。 */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Indicator> findAllAfter(IndicatorId afterId, int limit) {
+        List<IndicatorEntity> rows = afterId == null
+                ? jpa.findByDeletedAtIsNullOrderByIdAsc(Limit.of(limit))
+                : jpa.findByDeletedAtIsNullAndIdGreaterThanOrderByIdAsc(afterId.value(), Limit.of(limit));
+        return rows.stream().map(mapper::toDomain).toList();
+    }
+
     @Override
     public Indicator save(Indicator indicator) {
         IndicatorEntity entity = jpa.findWithSourcesById(indicator.id().value()).orElseGet(IndicatorEntity::new);

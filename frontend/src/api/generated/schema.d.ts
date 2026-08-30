@@ -4,6 +4,130 @@
  */
 
 export interface paths {
+    "/api/v1/admin/data-subjects/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report the personal data held about one user
+         * @description GDPR subject access (13 §13.4). Returns the user record, how many refresh tokens still carry that person's IP and user agent, and the size and time span of their audit trail. Audit contents are not returned — they may concern other people's operations. 認證:需要 Bearer JWT 或 X-API-Key,權限 system:admin。
+         */
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        /**
+         * Erase the personal data held about one user
+         * @description GDPR erasure (13 §13.4). Deletes every refresh token of that user (their rows carry IP and user agent) and replaces the user's identifying fields with a placeholder, suspending the account. The user row itself is kept because other tenant records reference it. Audit entries are append-only and are NOT deleted: they expire under AUDIT_RETENTION_DAYS, and what remains of the subject there is a pseudonymous actor id. 認證:需要 Bearer JWT 或 X-API-Key,權限 system:admin。
+         */
+        delete: operations["erase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/sources/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Enable or disable a source
+         * @description enabled is the only externally decided field on a source; health, cursor and counters are written by ingestion itself. Disabling stops both scheduled and manual synchronisation. 認證:需要 Bearer JWT 或 X-API-Key,權限 source:manage。
+         */
+        patch: operations["updateSource"];
+        trace?: never;
+    };
+    "/api/v1/admin/sources/{id}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a source synchronisation now
+         * @description Runs one synchronisation for the source immediately, ignoring its recommended interval. Disabled sources are rejected. Fetching happens outside the request's transaction and the response reports what the run ingested. 認證:需要 Bearer JWT 或 X-API-Key,權限 source:sync。
+         */
+        post: operations["syncNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/stix/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild every STIX projection from the domain
+         * @description stix_objects is derived data and can always be recomputed from indicators. Use this after projection writes have failed or after the projection rules changed. Runs in batches; a single bad row is logged and skipped rather than aborting the rebuild. 認證:需要 Bearer JWT 或 X-API-Key,權限 system:admin。
+         */
+        post: operations["rebuildStix"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all tenants
+         * @description Every tenant on the platform with the plan it currently holds; tenants without an active subscription report FREE. 認證:需要 Bearer JWT 或 X-API-Key,權限 system:admin。
+         */
+        get: operations["listTenants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tenants/{id}/subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Assign or cancel a tenant's plan
+         * @description Assigns the given plan to the tenant, creating a MANUAL subscription when none is active; planCode=CANCEL cancels the active subscription instead. A cancelled subscription can never return to ACTIVE (invariant B3) — assigning a plan afterwards creates a new one. 認證:需要 Bearer JWT 或 X-API-Key,權限 system:admin。
+         */
+        patch: operations["assignPlan"];
+        trace?: never;
+    };
     "/api/v1/api-keys": {
         parameters: {
             query?: never;
@@ -43,6 +167,46 @@ export interface paths {
          * @description Revocation is irreversible. Keys belonging to another tenant are reported as not found rather than forbidden. 認證:需要 Bearer JWT 或 X-API-Key,權限 apikey:revoke。
          */
         delete: operations["revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit log entries
+         * @description Cursor-paginated audit trail for the caller's own tenant, newest first. The trail is append-only: entries are never updated or deleted by the application, and are removed only by the retention job after AUDIT_RETENTION_DAYS. Optionally filtered by action. 認證:需要 Bearer JWT 或 X-API-Key,權限 audit:read。
+         */
+        get: operations["listAuditLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the caller's password
+         * @description Verifies the current password, stores the new one, and revokes every refresh token family of that user — including the session that issued this request, so the caller must log in again. API key identities have no user and are rejected. 認證:需要 Bearer JWT(不接受 X-API-Key);任何已登入的角色皆可變更自己的密碼。
+         */
+        post: operations["changePassword"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -847,9 +1011,36 @@ export interface components {
             revokedAt?: string;
             scopes?: string[];
         };
+        AssignPlanRequest: {
+            /**
+             * @example PREMIUM
+             * @enum {string}
+             */
+            planCode: "FREE" | "PREMIUM" | "ENTERPRISE" | "CANCEL";
+        };
         AttributionDto: {
             homepage?: string;
             sourceName?: string;
+        };
+        AuditLogDto: {
+            action?: string;
+            /** Format: uuid */
+            actorId?: string;
+            actorType?: string;
+            /** Format: uuid */
+            id?: string;
+            ip?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            occurredAt?: string;
+            /** Format: uuid */
+            resourceId?: string;
+            resourceType?: string;
+            result?: string;
+            traceId?: string;
+            userAgent?: string;
         };
         AuthResponse: {
             /** @example eyJhbGciOiJIUzI1NiJ9... */
@@ -922,11 +1113,46 @@ export interface components {
              */
             sizeBytes?: number;
         };
+        ChangePasswordRequest: {
+            /** @example old-correct-horse */
+            currentPassword: string;
+            /** @example new-correct-horse-battery */
+            newPassword: string;
+        };
+        ChangePasswordResponse: {
+            /** Format: int32 */
+            revokedSessions?: number;
+        };
         DailyCountDto: {
             /** Format: int64 */
             count?: number;
             /** Format: date */
             date?: string;
+        };
+        DataSubjectErasureDto: {
+            /** Format: int32 */
+            deletedRefreshTokens?: number;
+            /** Format: int64 */
+            retainedAuditEntries?: number;
+            /** Format: uuid */
+            userId?: string;
+        };
+        DataSubjectReportDto: {
+            /** Format: int32 */
+            activeRefreshTokens?: number;
+            /** Format: int64 */
+            auditEntries?: number;
+            displayName?: string;
+            /** Format: date-time */
+            earliestAuditEntry?: string;
+            email?: string;
+            /** Format: date-time */
+            lastLoginAt?: string;
+            /** Format: date-time */
+            latestAuditEntry?: string;
+            status?: string;
+            /** Format: uuid */
+            userId?: string;
         };
         ErrorResponse: {
             code?: string;
@@ -1136,6 +1362,11 @@ export interface components {
             items?: unknown[];
             nextCursor?: string;
         };
+        PageResponseAuditLogDto: {
+            hasMore?: boolean;
+            items?: components["schemas"]["AuditLogDto"][];
+            nextCursor?: string;
+        };
         PageResponseNotificationDto: {
             hasMore?: boolean;
             items?: components["schemas"]["NotificationDto"][];
@@ -1270,6 +1501,13 @@ export interface components {
             /** @example 3f1b0c2e-9a4d-4c1a-8b77-2b0f1a9c5d10 */
             userId?: string;
         };
+        SourceAdminDto: {
+            enabled?: boolean;
+            /** Format: uuid */
+            id?: string;
+            lastErrorMessage?: string;
+            status?: string;
+        };
         SourceDto: {
             defaultTlp?: string;
             displayName?: string;
@@ -1285,6 +1523,10 @@ export interface components {
             syncable?: boolean;
             /** Format: int64 */
             totalRecordsIngested?: number;
+        };
+        SourcePatchRequest: {
+            /** @example false */
+            enabled: boolean;
         };
         SourceStatsDto: {
             displayName?: string;
@@ -1314,6 +1556,20 @@ export interface components {
             lastSyncAt?: string;
             status?: string;
         };
+        SourceSyncResultDto: {
+            failureReason?: string;
+            /** Format: int32 */
+            recordsAccepted?: number;
+            /** Format: int32 */
+            recordsFetched?: number;
+            /** Format: int32 */
+            recordsMerged?: number;
+            /** Format: int32 */
+            recordsRejected?: number;
+            /** Format: uuid */
+            sourceId?: string;
+            success?: boolean;
+        };
         SseEmitter: {
             /** Format: int64 */
             timeout?: number;
@@ -1325,6 +1581,20 @@ export interface components {
             /** Format: int64 */
             totalActive?: number;
             trend?: components["schemas"]["DailyCountDto"][];
+        };
+        StixRebuildResultDto: {
+            /** Format: int32 */
+            indicatorsRebuilt?: number;
+        };
+        SubscriptionAssignmentDto: {
+            /** Format: date-time */
+            cancelledAt?: string;
+            planCode?: string;
+            status?: string;
+            /** Format: uuid */
+            subscriptionId?: string;
+            /** Format: uuid */
+            tenantId?: string;
         };
         SubscriptionDto: {
             /**
@@ -1407,6 +1677,15 @@ export interface components {
             notCovered?: string[];
             public?: components["schemas"]["BloomManifestDto"];
             tenant?: components["schemas"]["BloomManifestDto"];
+        };
+        TenantOverviewDto: {
+            /** Format: uuid */
+            id?: string;
+            name?: string;
+            planCode?: string;
+            slug?: string;
+            status?: string;
+            type?: string;
         };
         ThreatCreateRequest: {
             aliases?: string[];
@@ -1549,6 +1828,499 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the platform holds about this data subject */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "activeRefreshTokens": 2,
+                     *       "auditEntries": 417,
+                     *       "displayName": "Alice Analyst",
+                     *       "earliestAuditEntry": "2026-03-04T11:02:00Z",
+                     *       "email": "analyst@example.org",
+                     *       "lastLoginAt": "2026-08-30T09:15:04Z",
+                     *       "latestAuditEntry": "2026-08-30T09:15:04Z",
+                     *       "status": "ACTIVE",
+                     *       "userId": "a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DataSubjectReportDto"];
+                };
+            };
+            /** @description Missing system:admin permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DataSubjectReportDto"];
+                };
+            };
+            /** @description No such user (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DataSubjectReportDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    erase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was erased and what is retained */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "deletedRefreshTokens": 2,
+                     *       "retainedAuditEntries": 417,
+                     *       "userId": "a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DataSubjectErasureDto"];
+                };
+            };
+            /** @description Missing system:admin permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DataSubjectErasureDto"];
+                };
+            };
+            /** @description No such user (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DataSubjectErasureDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    updateSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourcePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "enabled": false,
+                     *       "id": "3f4a1c0e-2b7d-4f10-9c11-8a2e5d6b7c90",
+                     *       "lastErrorMessage": null,
+                     *       "status": "DISABLED"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SourceAdminDto"];
+                };
+            };
+            /** @description enabled is missing (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceAdminDto"];
+                };
+            };
+            /** @description Missing source:manage permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceAdminDto"];
+                };
+            };
+            /** @description No such source (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceAdminDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    syncNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run finished; success=false means the source failed and the reason is masked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "failureReason": null,
+                     *       "recordsAccepted": 98,
+                     *       "recordsFetched": 120,
+                     *       "recordsMerged": 18,
+                     *       "recordsRejected": 4,
+                     *       "sourceId": "3f4a1c0e-2b7d-4f10-9c11-8a2e5d6b7c90",
+                     *       "success": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SourceSyncResultDto"];
+                };
+            };
+            /** @description Missing source:sync permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceSyncResultDto"];
+                };
+            };
+            /** @description No such source (NOT_FOUND) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceSyncResultDto"];
+                };
+            };
+            /** @description The source is disabled (CONFLICT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SourceSyncResultDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rebuildStix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many indicators were re-projected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "indicatorsRebuilt": 1020
+                     *     }
+                     */
+                    "application/json": components["schemas"]["StixRebuildResultDto"];
+                };
+            };
+            /** @description Missing system:admin permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StixRebuildResultDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listTenants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All tenants, ordered by slug */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "00000000-0000-0000-0000-000000000001",
+                     *         "name": "Public",
+                     *         "planCode": "FREE",
+                     *         "slug": "public",
+                     *         "status": "ACTIVE",
+                     *         "type": "SYSTEM"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["TenantOverviewDto"][];
+                };
+            };
+            /** @description Missing system:admin permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TenantOverviewDto"][];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    assignPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description The resulting subscription */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "cancelledAt": null,
+                     *       "planCode": "PREMIUM",
+                     *       "status": "ACTIVE",
+                     *       "subscriptionId": "7c1f0a35-2b6d-4c11-9e83-5f0a1b2c3d4e",
+                     *       "tenantId": "a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SubscriptionAssignmentDto"];
+                };
+            };
+            /** @description Unknown plan code (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionAssignmentDto"];
+                };
+            };
+            /** @description Missing system:admin permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionAssignmentDto"];
+                };
+            };
+            /** @description No such plan, or the tenant has no subscription to cancel */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionAssignmentDto"];
+                };
+            };
+            /** @description The public tenant cannot hold a subscription (CONFLICT) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubscriptionAssignmentDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listApiKeys: {
         parameters: {
             query?: never;
@@ -1722,6 +2494,164 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listAuditLogs: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                action?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of audit entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "hasMore": false,
+                     *       "items": [
+                     *         {
+                     *           "action": "IOC_SUBMIT",
+                     *           "actorId": "a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c",
+                     *           "actorType": "USER",
+                     *           "id": "0b6a5c2e-1f43-4c2b-9f0a-6d5e4c3b2a10",
+                     *           "ip": "198.51.100.7",
+                     *           "metadata": {
+                     *             "path": "/api/v1/iocs"
+                     *           },
+                     *           "occurredAt": "2026-08-30T09:15:04Z",
+                     *           "resourceId": null,
+                     *           "resourceType": "indicator",
+                     *           "result": "SUCCESS",
+                     *           "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                     *           "userAgent": "curl/8.7.1"
+                     *         }
+                     *       ],
+                     *       "nextCursor": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PageResponse"];
+                };
+            };
+            /** @description Unknown action, or cursor cannot be parsed (INVALID_CURSOR) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseAuditLogDto"];
+                };
+            };
+            /** @description Missing audit:read permission (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseAuditLogDto"];
+                };
+            };
+            /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unexpected error (INTERNAL_ERROR) */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password changed; the response reports how many sessions were revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "revokedSessions": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ChangePasswordResponse"];
+                };
+            };
+            /** @description New password fails the password policy (INVALID_REQUEST) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChangePasswordResponse"];
+                };
+            };
+            /** @description Current password is wrong (UNAUTHENTICATED) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChangePasswordResponse"];
+                };
+            };
+            /** @description Anonymous caller, or an API key identity (FORBIDDEN) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ChangePasswordResponse"];
+                };
             };
             /** @description Rate limit exceeded (RATE_LIMIT_EXCEEDED) */
             429: {

@@ -35,6 +35,9 @@ services:
       # 應用執行期以非特權角色連線;Flyway 另以 owner 連線跑 DDL(ADR 0021)
       POSTGRES_APP_USER:           ${POSTGRES_APP_USER:-ctip_app}
       POSTGRES_APP_PASSWORD:       ${POSTGRES_APP_PASSWORD:?}
+      # 保留清理專用角色(13 §13.5 規則 2);應用角色對 audit_logs 沒有 DELETE 權限
+      POSTGRES_RETENTION_USER:     ${POSTGRES_RETENTION_USER:-ctip_retention}
+      POSTGRES_RETENTION_PASSWORD: ${POSTGRES_RETENTION_PASSWORD:?}
       REDIS_HOST:                     ${REDIS_HOST:-redis}
       REDIS_PORT:                     ${REDIS_PORT:-6379}
       REDIS_PASSWORD:                 ${REDIS_PASSWORD:-}
@@ -92,6 +95,13 @@ services:
       BLOOM_ARTIFACT_KEEP:            ${BLOOM_ARTIFACT_KEEP:-30}
       DELIVERY_CLEANUP_CRON:          ${DELIVERY_CLEANUP_CRON:-0 10 2 * * *}
       INDICATOR_CLEANUP_CRON:         ${INDICATOR_CLEANUP_CRON:-0 20 2 * * *}
+      # 稽核讀取取樣率(13 §13.5 規則 4:寫入 100%、讀取 1%)
+      AUDIT_SAMPLE_READ_RATE:         ${AUDIT_SAMPLE_READ_RATE:-0.01}
+      # 其餘四個保留任務的排程(08 §8.7);上面兩個自 Phase 20 起就已宣告
+      AUDIT_CLEANUP_CRON:             ${AUDIT_CLEANUP_CRON:-0 0 1 * * SUN}
+      PAYLOAD_CLEANUP_CRON:           ${PAYLOAD_CLEANUP_CRON:-0 30 1 * * *}
+      REJECTION_CLEANUP_CRON:         ${REJECTION_CLEANUP_CRON:-0 40 1 * * *}
+      BLOOM_ARTIFACT_CLEANUP_CRON:    ${BLOOM_ARTIFACT_CLEANUP_CRON:-0 50 1 * * *}
     volumes:
       # Bloom artifact 是檔案(04 表 23 的 storage_kind=FILESYSTEM、storage_path NOT NULL);
       # 沒有這個 volume 時,每次容器重建就全部消失(ADR 0019)

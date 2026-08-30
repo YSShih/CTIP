@@ -1,5 +1,7 @@
 package com.ctip.interfaces.rest.error;
 
+import com.ctip.application.admin.AdminConflictException;
+import com.ctip.application.admin.AdminResourceNotFoundException;
 import com.ctip.application.identity.ApiKeyNotFoundException;
 import com.ctip.application.identity.AuthenticationFailedException;
 import com.ctip.application.identity.EmailAlreadyRegisteredException;
@@ -149,6 +151,17 @@ public class ApiExceptionHandler {
     /** Threat 的 H1／H4 衝突與「已退役／已是該狀態」(§2.3):409,不假成功。 */
     @ExceptionHandler(ThreatConflictException.class)
     ResponseEntity<ErrorResponse> threatConflict(ThreatConflictException e, HttpServletRequest request) {
+        return respond(ErrorCode.CONFLICT, e.getMessage(), List.of(), request);
+    }
+
+    /** 管理端點的目標不存在／狀態衝突(§9.1「管理」)。 */
+    @ExceptionHandler(AdminResourceNotFoundException.class)
+    ResponseEntity<ErrorResponse> adminNotFound(AdminResourceNotFoundException e, HttpServletRequest request) {
+        return respond(ErrorCode.NOT_FOUND, "Resource not found", List.of(), request);
+    }
+
+    @ExceptionHandler(AdminConflictException.class)
+    ResponseEntity<ErrorResponse> adminConflict(AdminConflictException e, HttpServletRequest request) {
         return respond(ErrorCode.CONFLICT, e.getMessage(), List.of(), request);
     }
 

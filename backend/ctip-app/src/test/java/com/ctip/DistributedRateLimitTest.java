@@ -145,6 +145,9 @@ class DistributedRateLimitTest extends AbstractPostgresIntegrationTest {
         properties.put("POSTGRES_PASSWORD", POSTGRES.getPassword());
         properties.put("POSTGRES_APP_USER", APP_USER);
         properties.put("POSTGRES_APP_PASSWORD", APP_PASSWORD);
+        // 保留清理連線(Phase 21):空密碼會讓 Hikari 在啟動時就丟 SCRAM 認證失敗
+        properties.put("POSTGRES_RETENTION_USER", RETENTION_USER);
+        properties.put("POSTGRES_RETENTION_PASSWORD", RETENTION_PASSWORD);
         properties.put("ENVIRONMENT", "mvp");
         properties.put("JWT_SECRET", TEST_JWT_SECRET);
         properties.put("WEBHOOK_SECRET_KEK", "integration-test-only-webhook-kek-0123456789");

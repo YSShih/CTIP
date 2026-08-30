@@ -1,6 +1,8 @@
 package com.ctip.interfaces.rest.openapi;
 
 import com.ctip.interfaces.rest.dto.auth.AuthResponse;
+import com.ctip.interfaces.rest.dto.auth.ChangePasswordRequest;
+import com.ctip.interfaces.rest.dto.auth.ChangePasswordResponse;
 import com.ctip.interfaces.rest.dto.auth.LoginRequest;
 import com.ctip.interfaces.rest.dto.auth.RefreshRequest;
 import com.ctip.interfaces.rest.dto.auth.RegisterRequest;
@@ -9,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -90,4 +93,24 @@ public interface AuthApi {
     @ApiResponse(responseCode = "401", description = "Unknown refresh token (UNAUTHENTICATED)")
     @SecurityRequirements
     ResponseEntity<Void> logout(RefreshRequest request);
+
+    @Operation(
+            summary = "Change the caller's password",
+            description = "Verifies the current password, stores the new one, and revokes every refresh token "
+                    + "family of that user — including the session that issued this request, so the caller must "
+                    + "log in again. API key identities have no user and are rejected. "
+                    + "認證:需要 Bearer JWT(不接受 X-API-Key);任何已登入的角色皆可變更自己的密碼。")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Password changed; the response reports how many sessions were revoked",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ChangePasswordResponse.class),
+                            examples = @ExampleObject(value = "{\"revokedSessions\":2}")))
+    @ApiResponse(responseCode = "400", description = "New password fails the password policy (INVALID_REQUEST)")
+    @ApiResponse(responseCode = "401", description = "Current password is wrong (UNAUTHENTICATED)")
+    @ApiResponse(responseCode = "403", description = "Anonymous caller, or an API key identity (FORBIDDEN)")
+    @SecurityRequirement(name = "bearerAuth")
+    ChangePasswordResponse changePassword(ChangePasswordRequest request);
 }

@@ -37,6 +37,11 @@ public abstract class AbstractPostgresIntegrationTest {
 
     protected static final String APP_PASSWORD = "ctip_app_test";
 
+    /** 保留清理專用角色(13 §13.5 規則 2);V33 逐表授權,這裡只負責把角色建出來。 */
+    protected static final String RETENTION_USER = "ctip_retention";
+
+    protected static final String RETENTION_PASSWORD = "ctip_retention_test";
+
     /** 與 {@link #ctipEnvironment} 一致;第二個實例得用同一把金鑰才能驗同一組 token。 */
     protected static final String TEST_JWT_SECRET = "integration-test-only-secret-0123456789abcdef";
 
@@ -45,19 +50,17 @@ public abstract class AbstractPostgresIntegrationTest {
 
     static {
         POSTGRES.start();
-        createApplicationRole();
+        createApplicationRoles();
     }
 
     /** 對應 compose 的 {@code config/postgres/01-app-roles.sh};兩者內容必須保持一致。 */
-    private static void createApplicationRole() {
+    private static void createApplicationRoles() {
         String owner = POSTGRES.getUsername();
         try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), owner, POSTGRES.getPassword());
                 Statement statement = connection.createStatement()) {
-            statement.execute("DO $$ BEGIN"
-                    + " IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '" + APP_USER + "') THEN"
-                    + " CREATE ROLE " + APP_USER + " LOGIN PASSWORD '" + APP_PASSWORD + "'"
-                    + " NOSUPERUSER NOCREATEDB NOCREATEROLE;"
-                    + " END IF; END $$;");
+            statement.execute(createRole(APP_USER, APP_PASSWORD));
+            statement.execute(createRole(RETENTION_USER, RETENTION_PASSWORD));
+            statement.execute("GRANT USAGE ON SCHEMA public TO " + RETENTION_USER);
             statement.execute("GRANT USAGE ON SCHEMA public TO " + APP_USER);
             statement.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + APP_USER);
             statement.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO " + APP_USER);
@@ -68,6 +71,14 @@ public abstract class AbstractPostgresIntegrationTest {
         } catch (SQLException e) {
             throw new IllegalStateException("建立測試用的非特權角色失敗", e);
         }
+    }
+
+    private static String createRole(String role, String password) {
+        return "DO $$ BEGIN"
+                + " IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '" + role + "') THEN"
+                + " CREATE ROLE " + role + " LOGIN PASSWORD '" + password + "'"
+                + " NOSUPERUSER NOCREATEDB NOCREATEROLE;"
+                + " END IF; END $$;";
     }
 
     private static Path createBloomDirectory() {
@@ -100,6 +111,10 @@ public abstract class AbstractPostgresIntegrationTest {
         registry.add("POSTGRES_PASSWORD", POSTGRES::getPassword);
         registry.add("POSTGRES_APP_USER", () -> APP_USER);
         registry.add("POSTGRES_APP_PASSWORD", () -> APP_PASSWORD);
+        registry.add("POSTGRES_RETENTION_USER", () -> RETENTION_USER);
+        registry.add("POSTGRES_RETENTION_PASSWORD", () -> RETENTION_PASSWORD);
+        // 取樣是機率,測試不能靠機率:整合測試一律全記(§13.5 規則 4 的比率本身由單元測試驗)
+        registry.add("AUDIT_SAMPLE_READ_RATE", () -> "1.0");
         registry.add("ENVIRONMENT", () -> "mvp");
         registry.add("JWT_SECRET", () -> TEST_JWT_SECRET);
         // webhook 簽章密鑰的 KEK(不變量 W2 定調,ADR 0021);測試用固定值,與 prod 無關

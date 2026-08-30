@@ -197,7 +197,8 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 ⚠️ **IP 位址在 GDPR 下可能構成個人資料。**
 
 - `docs/deployment/privacy.md` 必須說明處理的資料類型與法律基礎（正當利益：網路與資訊安全，GDPR Recital 49）
-- 提供資料主體查詢與刪除的操作程序（M3 提供管理端點）
+- 提供資料主體查詢與刪除的操作程序（M3 提供管理端點：`GET`／`DELETE /api/v1/admin/data-subjects/{userId}`，
+  權限 `system:admin`；程序與法律基礎見 `docs/deployment/privacy.md`）
 - **不主動關聯 IOC 與可識別自然人**
 - `audit_logs.ip` 與 `refresh_tokens.ip` 屬個資，受 `AUDIT_RETENTION_DAYS` 保留政策約束
 
@@ -210,13 +211,25 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 | `ingestion_rejections` | 30 天 | `REJECTION_RETENTION_DAYS` | DELETE |
 | `webhook_deliveries` | 30 天 | `DELIVERY_RETENTION_DAYS` | DELETE |
 | `EXPIRED` 狀態的 indicator | 1 年後軟刪除（`deleted_at`） | `INDICATOR_RETENTION_DAYS` | UPDATE |
-| Bloom artifact | 最近 30 個版本 | `BLOOM_ARTIFACT_KEEP` | DELETE + 檔案移除 |
+| Bloom artifact | 最近 30 個版本 | `BLOOM_ARTIFACT_KEEP` | DELETE + 檔案移除（**由應用角色執行**，見下方註）|
 
 由 [08-ingestion-sdk.md](08-ingestion-sdk.md#排程) 的排程任務執行。每個清理任務必須：
 
 1. 分批執行（每批上限 10,000 列），避免長交易鎖表
 2. 記錄清理筆數至日誌
 3. 失敗不影響其他任務
+
+> **實作回饋修訂（2026-08-30，Phase 21；[ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md) 第 3 節）**：
+> **Bloom artifact 的清理沿用 Phase 15 就有的 `BloomRetentionService`，以應用角色連線執行。**
+> 「保留最近 N 份」不是一句 SQL：它必須避開「仍有存活版本的 dataset 的 full snapshot」
+> （先刪掉它，那條 delta 鏈就永遠重建不了），並一併刪除檔案系統上的 artifact 檔。
+> 以 SQL 重寫一份等於讓保留策略有兩份實作，而寫錯的後果是 `/sync/delta` 斷鏈。
+> 這一項刪的是平台自己的**衍生產物**、不涉及個資，`audit_logs` 的
+> `REVOKE UPDATE, DELETE`（規則 1）不受影響。其餘五項一律走 `ctip_retention`。
+>
+> 另：`AUDIT_SAMPLE_READ_RATE` 與四個保留 cron（`AUDIT_CLEANUP_CRON`、`PAYLOAD_CLEANUP_CRON`、
+> `REJECTION_CLEANUP_CRON`、`BLOOM_ARTIFACT_CLEANUP_CRON`）原本只出現在本檔與 08 §8.7 的內文，
+> 05 §5.4 的變數清單與 compose 都沒有宣告——已補齊（`ConfigSymmetryTest` 現在會擋）。
 
 ### 情資再散布
 
@@ -233,13 +246,29 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 | # | 規則 |
 |---|---|
 | 1 | **僅新增（append-only）**：資料庫層以 `REVOKE UPDATE, DELETE ON audit_logs FROM <app_role>` 強制 |
-| 2 | 保留清理任務使用**專用 DB 角色**（`ctip_retention`），該角色有 DELETE 權限但無 SELECT 業務表之權限 |
+| 2 | 保留清理任務使用**專用 DB 角色**（`ctip_retention`），該角色有 DELETE 權限，且**只有**判斷保留期所需欄位的欄位層級 SELECT（見下方修訂） |
 | 3 | 稽核寫入失敗**不得**使主要業務操作失敗（非同步寫入 + 本地有界佇列 + 溢出時記錄 ERROR） |
 | 4 | 高頻的 `API_ACCESS` 使用取樣：**寫入操作 100%、讀取操作 1%**（可設定 `AUDIT_SAMPLE_READ_RATE`） |
 | 5 | `metadata` JSONB **絕不含**憑證、token 原文、密碼、完整 `Authorization` 標頭 |
 | 6 | `audit_logs` 表**沒有 `updated_at` 欄位**——加上它即為設計錯誤 |
 
 第 1、2 條需在 migration `V33__create_audit_logs.sql` 中以 SQL 實作，並有一條整合測試驗證應用角色的 UPDATE/DELETE 被 DB 拒絕。
+
+> **實作回饋修訂（2026-08-30，Phase 21；[ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md) 第 2 節）**：
+> 規則 2 原文寫「無 SELECT 業務表之權限」，**照字面授權，六項清理任務全部會 `permission denied`**：
+> PostgreSQL 對 `DELETE … WHERE` 與 `UPDATE … WHERE` 仍要求 WHERE 子句所引用欄位的 SELECT 權限，
+> 而每一項清理的條件都是保留期。V33 因此以**欄位層級**授權
+> （`GRANT SELECT (id, occurred_at) ON audit_logs TO <retentionRole>`）——
+> 清理角色讀不到 `action`／`metadata`／`ip` 等稽核內容，規則的目的成立而語句可執行。
+> 批次也因此以 `id IN (SELECT id … LIMIT n)` 表達，不用 `ctid`（系統欄位不在欄位層級授權範圍內）。
+>
+> **觸發點的實作位置**：對照表把行為指到具體的 service 方法上，但實作以兩個**橫切消費端**承接
+> ——`AuditAccessFilter`（security chain 尾端，17 種以請求為觸發點的行為）與
+> `AuditEventListener`（`@EventListener`，9 種以 domain event 為觸發點的行為）。
+> 業務服務一行都不改（同 §13.1「發佈端程式碼永不修改」的原則），
+> 稽核寫入的失敗因此在結構上不可能傳回業務路徑（規則 3）。
+> 消費端接的是**程序內**的 `DomainEventEnvelope` 而非 `ctip.audit.events.v1` 的 Kafka 消費端：
+> mvp／dev 沒有 broker，稽核不能只在 staging/prod 才寫得出來。
 
 ### 觸發點對照表（強制，26 種行為）
 
@@ -270,7 +299,7 @@ API 使用 Bearer token / API key，無 cookie session，因此 CSRF 保護可�
 | `USER_CREATED` | `UserRegistered` 事件 listener | `user` | 100% |
 | `API_KEY_CREATED` | `ApiKeyService.issue` | `api_key` | 100% |
 | `API_KEY_REVOKED` | `ApiKeyService.revoke` | `api_key` | 100% |
-| `SUBSCRIPTION_CHANGED` | `Subscription.changePlan` / `cancel` | `subscription` | 100% |
+| `SUBSCRIPTION_CHANGED` | `Subscription.changePlan` / `cancel`（唯一的呼叫端是 `PATCH /api/v1/admin/tenants/{id}/subscription`，Phase 21 補；ADR 0031 第 4 節） | `subscription` | 100% |
 | `WEBHOOK_CREATED` | `POST /webhooks` | `webhook` | 100% |
 | `WEBHOOK_DELETED` | `DELETE /webhooks/{id}`，以及 `Webhook` 因連續失敗被自動 `DISABLED` | `webhook` | 100% |
 

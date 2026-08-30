@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
 | M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
-| M3 — Production | 20–23 | 進行中:Phase 20 完成,下一步 Phase 21 |
+| M3 — Production | 20–23 | 進行中:Phase 21 完成,下一步 Phase 22 |
 
 ---
 
@@ -1634,5 +1634,100 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - surefire 會把外層 `@Test` 歸到第一個 `@Nested` 類別的報表裡,
     看到 `Tests run: 0` **不代表沒執行**(已實測確認)
   - Phase 21 仍是下一步,本次複查未改動任何 phase 範圍
+
+---
+
+## Phase 21 — Audit Log + 資料保留 `[M3]`
+
+- **狀態**:done(2026-08-30)
+- **執行單**:`docs/spec/phases/phase-21.md`
+- **Commit**:(見 git log,message `Phase 21: audit log, data retention and admin endpoints`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-integration -Dtest='AuditAppendOnlyTest,AuditFailureIsolationTest,RetentionTaskTest,AuditCompletenessTest'`
+    (逐字)✅ **13/13**
+  - `clean verify -Ptest-integration` 無過濾 ✅ **1,055 tests**
+    (sdk 13 + core 459 + adapters 33 + app 550;Spotless / Checkstyle / JaCoCo 全過)
+  - frontend `tsc` / `eslint --max-warnings 0` / `prettier --check` / `vitest`(162)✅;`npm run build` ✅
+  - `dod.sh full --only M3-24`(規格交叉引用)✅
+    (順手修掉 §0.27 留下的兩個壞 anchor:`10-identity-plans.md#104-認證-…` 與 `#107-限流-phase-1417--m2`)
+  - **mvp 實機驗證**(`up.sh mvp`,三容器 healthy):
+    - `\dp audit_logs` 顯示 `ctip_app=ar`(只有 INSERT/SELECT)、`ctip_retention=d` + 欄位層級
+      `id`/`occurred_at` 的 `r`——**與設計完全一致**
+    - 以 `ctip_app` 連線下 `DELETE`/`UPDATE audit_logs` → `permission denied for table audit_logs`
+    - 以 `ctip_retention` 下保留期 DELETE → 成功;`SELECT action` → `permission denied`
+    - 註冊 → `TENANT_CREATED`/`USER_CREATED` 落庫(actorType=SYSTEM);已認證請求 → `API_ACCESS`(帶 ip)
+    - `POST /auth/change-password` 回 `{"revokedSessions":1}`,**原本的 refresh token 隨即 401**
+      (ADR 0015 的 M3 責任端到端成立)
+    - `GET /iocs` 沒有留下 `IOC_QUERY`——正確,`AUDIT_SAMPLE_READ_RATE` 預設 1%
+- **交付物**:
+  - Flyway `V33`:`audit_logs`(含補上的 `ck_al_action`)+ 四個索引 +
+    `REVOKE UPDATE, DELETE … FROM ${appRole}` + 清理角色的**欄位層級**授權(五張表);
+    角色名以 Flyway placeholder 帶入(`spring.flyway.placeholders.{appRole,retentionRole}`)
+  - core `domain/audit/`:`AuditAction`(26)、`AuditActorType`、`AuditResult`
+  - core `application/audit/`:`AuditEvent`(+`AuditMetadata` 憑證遮蔽)、`AuditRecord`、
+    `AuditLogQuery`、`AuditActorSummary`、`AuditQueryService`;port:`AuditPort`(非同步寫入面)、
+    `AuditLogPort`(append + 查詢 + 行為者摘要)
+  - core `application/admin/`:`TenantAdminService`、`SourceAdminService`、`SubscriptionAdminService`、
+    `StixRebuildService`、`DataSubjectService` + 兩個例外;`application/identity/PasswordChangeService`;
+    `application/stix/StixProjectionFactory`(自 stage 8 抽出,rebuild 與 ingestion 共用)
+  - app `infrastructure/audit/`:`AuditWriter`(有界佇列 + 單執行緒 + pending 計數)、`AuditContext`
+    (補 ip/ua/traceId/行為者)、`AuditAccessFilter`(chain 尾端)、`AuditEndpoints`(§13.5 對照表)、
+    `AuditEventListener`(9 種 domain event)、`AuditSampler`、`AuditSignals`、`AuditClientIp`
+  - app `infrastructure/retention/`:`RetentionConnection`(**非 DataSource 型別**的 bean)、
+    `RetentionTasks`(五項 SQL,分批 ≤10,000)、`RetentionService`(六項、失敗隔離、記筆數)、
+    `RetentionPolicy`／`RetentionReport`;`infrastructure/scheduling/RetentionSchedulers`(六個 cron)
+  - app `infrastructure/persistence/`:`AuditLogEntity`／`AuditLogStatements`／`AuditLogAdapter`
+  - app `interfaces/rest/`:`AuditLogController`、`AdminTenantController`、`AdminSourceController`、
+    `AdminStixController`、`AdminDataSubjectController`、`AuthController` 的 `change-password`;
+    DTO／mapper／五個 OpenAPI 文件介面;`ApiExceptionHandler` 兩個新 handler
+  - 設定:`ctip.audit.sample-read-rate`、`ctip.retention.{username,password,crons.*}`、
+    compose 七個新變數、05 §5.4 清單
+  - 前端:`features/audit/`、`features/admin/`(eslint FEATURES 同步)、`pages/AuditLogPage`、
+    `pages/AdminPage`、路由與導覽、`api/client.ts` 三個新包裝(無 body 的 POST、帶 body 的 PATCH、
+    有回應的 DELETE)、MSW handlers 與 fixture
+  - 文件:`docs/deployment/privacy.md`(M3-23 的 12 份必要文件之一,一直不存在)
+  - 測試:`AuditAppendOnlyTest`(4)、`AuditFailureIsolationTest`(2)、`RetentionTaskTest`(6)、
+    `AuditCompletenessTest`(1,26 種行為逐一驅動)、`AuditRecordContentTest`(6)、
+    `AuditEndpointsTest`(17)、`AuditSamplerTest`(4)、`RetentionServiceTest`(3)、
+    `AuditActionTest`(2)、`AuditEventTest`(5)、`AuditQueryServiceTest`(1)、
+    `PasswordChangeServiceTest`(5)、四個 admin service 測試(11);前端兩個頁面測試(7)
+- **偏離事項 / ADR**:12 節見 `docs/architecture/decisions/0031-phase21-audit-and-retention.md`;
+  規格回寫 `00 §0.28`(13 §13.4/§13.5、09 §9.1、04 表 27、05 §5.4、12 §12.2/§12.5)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. **§13.5 規則 2「清理角色無 SELECT 業務表之權限」照字面授權,六項清理全部 `permission denied`**
+     ——PostgreSQL 對 `DELETE/UPDATE … WHERE` 仍要求 WHERE 欄位的 SELECT 權限。改欄位層級授權,
+     並因此不能用 `ctid` 分批(系統欄位不在欄位授權範圍),改用 `id IN (SELECT … LIMIT n)`
+  2. **`SUBSCRIPTION_CHANGED` 原本永不可達**:`Subscription.changePlan`/`cancel` 自 Phase 14 就存在,
+     全專案零生產呼叫端,而它是 26 種強制稽核行為之一 → 補 `PATCH /admin/tenants/{id}/subscription`
+  3. **稽核不能靠改業務服務**:`AuthService` 與 `RefreshTokenRotator` 的建構子已經是 5 個參數
+     (checkstyle 上限),加 `AuditPort` 就違規 → 兩個橫切消費端(filter + event listener),
+     業務服務一行不改。副作用是「稽核失敗不影響業務」變成結構保證而非自律
+  4. **`AuditWriter.awaitQuiescence` 不能看佇列長度**:工作被取出佇列到 `activeCount` 加一之間
+     兩者同時為零,測試因此讀到空表(實測)。改用自己的 pending 計數
+  5. **多宣告一個 `DataSource` 型別的 bean 會讓主資料源整個不建立**
+     (`DataSourceAutoConfiguration` 是 `@ConditionalOnMissingBean(DataSource.class)`)→
+     清理連線包在 `RetentionConnection` 裡
+  6. **整合測試互相污染的兩個新來源**:`AuditCompletenessTest` 真的跑一次來源同步會弄髒
+     `IngestionEndToEndTest` 的「第一次同步」斷言(它連 `last_sync_at` 都會讓那支少同步一個來源);
+     `RetentionTaskTest` 留下的拒絕記錄會讓「拒絕 12 筆」變成 13 筆。兩支現在都自己清乾淨
+  7. **`LogCapture` 對背景執行緒不安全**:logback 的 `ListAppender` 收在普通 ArrayList 裡,
+     而稽核/Kafka/重試都會在背景寫日誌 → `SecurityTest` 條號 8 拿到 `ConcurrentModificationException`,
+     症狀完全像被測程式的問題。改用自己的 `CopyOnWriteArrayList` appender
+  8. **compose 的 postgres 服務早就宣告了 `POSTGRES_RETENTION_*`,backend 服務沒有**——
+     批次改檔時兩處都命中,產生重複鍵而 `docker compose` 直接拒絕解析(`up.sh` 立刻抓到)
+- **給下一 session 的注意事項(下一步 Phase 22 = 監控、日誌、追蹤)**:
+  - **M3 的 gate 仍未執行**(`dod.sh full` 25 項);M3-01 要求 mvp 與 phase2 兩個 gate 仍全綠
+  - `npm run api:check` 在 commit 之前必然紅(它比對 **committed** 的 generated 型別),同 Phase 16/18/19
+  - **新增端點時的三件事**:同步 `WebCorsConfig.allowedMethods`、補 `interfaces/rest/openapi/*Api`
+    文件介面(否則 `OpenApiCompletenessTest` 擋)、若屬 §13.5 對照表則在 `AuditEndpoints` 補一列
+  - `AuditEndpoints` 是 26 種行為的**唯一**對照表(另 9 種在 `AuditEventListener`);
+    改任何一邊都要看 `AuditCompletenessTest` 是否仍全綠——它是真的把 26 條路徑各走一遍
+  - 新的整合測試請自己分配 client IP(本 phase 用 `10.80.0.11`、`10.90.0.11`、`10.90.0.21`);
+    **會動到共用資料(sources、indicators、ingestion_rejections)的測試必須自己還原**
+  - `AUDIT_SAMPLE_READ_RATE` 在整合測試基底固定為 `1.0`(取樣是機率,測試不能靠機率);
+    比率本身由 `AuditSamplerTest` 驗
+  - **回報三件未做的事**(見 ADR 0031 末段):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)至今無實作;
+    12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點因此還沒有前端入口。
+    兩者都屬 M2 的遺漏,建議指派給 Phase 23
 
 ---

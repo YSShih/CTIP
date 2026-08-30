@@ -120,7 +120,23 @@ class PlanOverridesInitializerTest {
                         "0 */5 * * * *",
                         200,
                         10),
-                new CtipProperties.Retention(180, 30, 30, 30, 365, 30));
+                new CtipProperties.Audit(1.0),
+                new CtipProperties.Retention(
+                        180,
+                        30,
+                        30,
+                        30,
+                        365,
+                        30,
+                        "ctip_retention",
+                        "unit-test",
+                        new CtipProperties.RetentionCrons(
+                                "0 0 1 * * SUN",
+                                "0 30 1 * * *",
+                                "0 40 1 * * *",
+                                "0 50 1 * * *",
+                                "0 10 2 * * *",
+                                "0 20 2 * * *")));
     }
 
     /** PREMIUM 一份(§10.6 的值);save 只記錄,不改變後續查詢結果。 */

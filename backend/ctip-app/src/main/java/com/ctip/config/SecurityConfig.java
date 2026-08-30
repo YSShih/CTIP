@@ -9,6 +9,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.PasswordHasherPort;
 import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.application.port.SecureTokenGeneratorPort;
+import com.ctip.infrastructure.audit.AuditAccessFilter;
 import com.ctip.infrastructure.ratelimit.IdentityRateLimitFilter;
 import com.ctip.infrastructure.security.AccessTokenIdentityResolver;
 import com.ctip.infrastructure.security.BCryptPasswordHasher;
@@ -162,7 +163,8 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             CtipAuthenticationFilter authenticationFilter,
-            IdentityRateLimitFilter identityRateLimitFilter)
+            IdentityRateLimitFilter identityRateLimitFilter,
+            AuditAccessFilter auditAccessFilter)
             throws Exception {
         return http.csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
@@ -174,6 +176,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(identityRateLimitFilter, CtipAuthenticationFilter.class)
+                // §13.5:API_ACCESS 的觸發點是「security filter chain 尾端」,而稽核要看得到
+                // 已解析的身分與最終狀態碼,故排在限流之後
+                .addFilterAfter(auditAccessFilter, IdentityRateLimitFilter.class)
                 .build();
     }
 }

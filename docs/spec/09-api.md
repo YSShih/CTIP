@@ -145,6 +145,7 @@ POST   /api/v1/auth/register                       （匿名）
 POST   /api/v1/auth/login                          （匿名）
 POST   /api/v1/auth/refresh                        （以請求主體的 refresh token 認證）
 POST   /api/v1/auth/logout                         （以請求主體的 refresh token 認證）
+POST   /api/v1/auth/change-password                （需已登入的使用者身分；Phase 21 補，見「管理」節的說明）
 ```
 
 > **實作回饋修訂（2026-08-27,Phase 13;ADR 0012 決策 13)**
@@ -213,7 +214,19 @@ GET    /api/v1/admin/tenants                       system:admin
 POST   /api/v1/admin/sources/{id}/sync             source:sync
 PATCH  /api/v1/admin/sources/{id}                  source:manage
 POST   /api/v1/admin/stix/rebuild                  system:admin
+PATCH  /api/v1/admin/tenants/{id}/subscription     system:admin
+GET    /api/v1/admin/data-subjects/{userId}        system:admin
+DELETE /api/v1/admin/data-subjects/{userId}        system:admin
 ```
+
+> **本節後三列與 `POST /auth/change-password` 為 2026-08-30(Phase 21)補列**
+> ([ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md) 第 4–6 節):
+>
+> | 端點 | 為什麼原本不存在是缺陷 |
+> |---|---|
+> | `PATCH /admin/tenants/{id}/subscription` | `Subscription.changePlan`／`cancel` 自 Phase 14 就存在、`SUBSCRIPTION_CHANGED` 是 [13 §13.5](13-platform-ops.md#135-稽核-phase-21--m3) 強制的 26 種稽核行為之一,而本檔**沒有任何端點會呼叫它們**——那條稽核行為與那兩個聚合方法都永不可達(執行規則 16)。04 表 18 早已寫明 M2 的訂閱「由 SYSTEM_ADMIN 手動指派(provider = MANUAL)」,這支就是那條路徑。`planCode` 為 `CANCEL` 代表取消(不變量 B3:取消後不得回到 ACTIVE) |
+> | `GET`／`DELETE /admin/data-subjects/{userId}` | [13 §13.4](13-platform-ops.md#134-隱私與資料保留) 要求「M3 提供管理端點」,但本檔沒有定義。以 `userId` 而非 email／IP 定位:路徑會進反向代理與存取日誌,個資不得出現在 URL。**刪除不含稽核軌跡**(§13.5 規則 1 的 append-only 優先),回應會告知保留了幾列;法律基礎見 `docs/deployment/privacy.md` |
+> | `POST /auth/change-password` | 本檔全文沒有這個端點,而 [ADR 0015](../architecture/decisions/0015-future-phase-hardening.md) 把「改密碼必須撤銷該使用者全部 token family」指定為 M3 責任(ADR 0022 指派到 Phase 21)。需已登入的**使用者**身分(API key 身分沒有使用者,回 403);成功後全部 family 撤銷,含發出這次請求的那一個 |
 
 ---
 

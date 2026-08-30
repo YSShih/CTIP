@@ -10,4 +10,8 @@ interface RefreshTokenJpaRepository extends JpaRepository<RefreshTokenEntity, UU
     Optional<RefreshTokenEntity> findByTokenHash(String tokenHash);
 
     List<RefreshTokenEntity> findByFamilyId(UUID familyId);
+
+    List<RefreshTokenEntity> findByUserIdAndRevokedAtIsNull(UUID userId);
+
+    int deleteByUserId(UUID userId);
 }

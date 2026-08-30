@@ -7,6 +7,7 @@ import tseslint from 'typescript-eslint';
 // F3(api/generated 勿手改)由 CI 的 `npm run api:check` 驗證(Phase 10 起),
 // generated 目錄同時排除於 lint 之外。
 const FEATURES = [
+  'admin',
   'ioc',
   'threat',
   'stix',

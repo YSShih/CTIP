@@ -4,6 +4,8 @@ import com.ctip.application.port.TenantRepository;
 import com.ctip.domain.tenant.Tenant;
 import com.ctip.domain.tenant.TenantId;
 import com.ctip.domain.tenant.TenantSlug;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,15 @@ class TenantRepositoryAdapter implements TenantRepository {
     @Transactional(readOnly = true)
     public Optional<Tenant> findBySlug(TenantSlug slug) {
         return jpa.findBySlug(slug.value()).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Tenant> findAll() {
+        return jpa.findAll().stream()
+                .map(mapper::toDomain)
+                .sorted(Comparator.comparing(tenant -> tenant.slug().value()))
+                .toList();
     }
 
     @Override

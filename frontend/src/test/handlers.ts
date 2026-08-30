@@ -208,6 +208,48 @@ export const issuedWebhook = {
   webhook: sampleWebhook,
 } satisfies ApiSchemas['IssuedWebhookDto'];
 
+export const sampleAuditLog = {
+  id: '0b6a5c2e-1f43-4c2b-9f0a-6d5e4c3b2a10',
+  occurredAt: '2026-08-30T09:15:04Z',
+  actorType: 'USER',
+  actorId: 'a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c',
+  action: 'IOC_SUBMIT',
+  resourceType: 'indicator',
+  resourceId: undefined,
+  ip: '198.51.100.7',
+  userAgent: 'curl/8.7.1',
+  result: 'SUCCESS',
+  traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+  metadata: { path: '/api/v1/iocs' },
+} satisfies ApiSchemas['AuditLogDto'];
+
+export const sampleAuditLogPage = {
+  items: [sampleAuditLog],
+  nextCursor: undefined,
+  hasMore: false,
+} satisfies PageOf<ApiSchemas['AuditLogDto']>;
+
+export const sampleTenantOverview = {
+  id: 'a3ae65fa-28ce-454c-9d85-c2db2bdc8080',
+  slug: 'acme-soc',
+  name: 'Acme SOC',
+  type: 'ORGANIZATION',
+  status: 'ACTIVE',
+  planCode: 'PREMIUM',
+} satisfies ApiSchemas['TenantOverviewDto'];
+
+export const sampleDataSubjectReport = {
+  userId: 'a2f1c0d4-9b8e-4a71-8c33-0e1d2f3a4b5c',
+  email: 'analyst@example.org',
+  displayName: 'Alice Analyst',
+  status: 'ACTIVE',
+  lastLoginAt: '2026-08-30T09:15:04Z',
+  activeRefreshTokens: 2,
+  auditEntries: 417,
+  earliestAuditEntry: '2026-03-04T11:02:00Z',
+  latestAuditEntry: '2026-08-30T09:15:04Z',
+} satisfies ApiSchemas['DataSubjectReportDto'];
+
 export const sampleSession = {
   accessToken: 'access-token-1',
   refreshToken: 'refresh-token-1',
@@ -387,4 +429,28 @@ export const handlers = [
   http.get('*/api/v1/webhooks', () => HttpResponse.json([sampleWebhook])),
   http.post('*/api/v1/webhooks', () => HttpResponse.json(issuedWebhook, { status: 201 })),
   http.delete('*/api/v1/webhooks/:id', () => new HttpResponse(null, { status: 204 })),
+  http.get('*/api/v1/audit-logs', () => HttpResponse.json(sampleAuditLogPage)),
+  http.get('*/api/v1/admin/tenants', () => HttpResponse.json([sampleTenantOverview])),
+  http.patch('*/api/v1/admin/tenants/:id/subscription', () =>
+    HttpResponse.json({
+      subscriptionId: '7c1f0a35-2b6d-4c11-9e83-5f0a1b2c3d4e',
+      tenantId: sampleTenantOverview.id,
+      planCode: 'ENTERPRISE',
+      status: 'ACTIVE',
+      cancelledAt: undefined,
+    } satisfies ApiSchemas['SubscriptionAssignmentDto']),
+  ),
+  http.post('*/api/v1/admin/stix/rebuild', () =>
+    HttpResponse.json({ indicatorsRebuilt: 1020 } satisfies ApiSchemas['StixRebuildResultDto']),
+  ),
+  http.get('*/api/v1/admin/data-subjects/:userId', () =>
+    HttpResponse.json(sampleDataSubjectReport),
+  ),
+  http.delete('*/api/v1/admin/data-subjects/:userId', () =>
+    HttpResponse.json({
+      userId: sampleDataSubjectReport.userId,
+      deletedRefreshTokens: 2,
+      retainedAuditEntries: 417,
+    } satisfies ApiSchemas['DataSubjectErasureDto']),
+  ),
 ];

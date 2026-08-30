@@ -1,5 +1,7 @@
 package com.ctip.application.source;
 
+import com.ctip.application.admin.AdminConflictException;
+import com.ctip.application.admin.AdminResourceNotFoundException;
 import com.ctip.application.ingestion.BatchOutcome;
 import com.ctip.application.ingestion.IngestionBatchExecutor;
 import com.ctip.application.ingestion.IngestionRun;
@@ -9,6 +11,7 @@ import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.SourceRepository;
 import com.ctip.application.source.SourceSyncRecorder.SyncRun;
 import com.ctip.domain.source.Source;
+import com.ctip.domain.source.SourceId;
 import com.ctip.sdk.FetchContext;
 import com.ctip.sdk.FetchResult;
 import com.ctip.sdk.RawThreatRecord;
@@ -64,6 +67,20 @@ public class SourceSyncService {
     /** 失敗重試排程(§8.7):針對連續失敗中的來源,不等 recommendedInterval。 */
     public List<SourceSyncOutcome> retryFailedSources() {
         return syncEach(source -> source.health().consecutiveFailures() > 0);
+    }
+
+    /**
+     * 手動觸發單一來源的同步({@code POST /api/v1/admin/sources/{id}/sync},§9.1「管理」)。
+     * 不看 {@code recommendedInterval}——手動觸發的意思就是「現在就抓」;
+     * 但仍要求 enabled,停用中的來源不該因為一個 API 呼叫就開始抓資料。
+     */
+    public SourceSyncOutcome syncNow(SourceId sourceId) {
+        Source source = sources.findById(sourceId)
+                .orElseThrow(() -> new AdminResourceNotFoundException("No such source: " + sourceId.value()));
+        if (!source.enabled()) {
+            throw new AdminConflictException("Source is disabled: " + sourceId.value());
+        }
+        return syncOne(source);
     }
 
     private List<SourceSyncOutcome> syncEach(Predicate<Source> due) {

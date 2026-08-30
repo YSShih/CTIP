@@ -117,6 +117,11 @@ class StixExportServiceTest {
         }
 
         @Override
+        public List<Indicator> findAllAfter(IndicatorId afterId, int limit) {
+            return List.of();
+        }
+
+        @Override
         public Optional<Indicator> findByIdentity(IocType type, String normalizedValue, TenantId ownerTenantId) {
             return Optional.empty();
         }

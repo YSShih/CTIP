@@ -1057,6 +1057,7 @@ CREATE INDEX ix_notif_user_unread ON notifications (user_id, created_at DESC) WH
 CONSTRAINT fk_al_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id)
 CONSTRAINT ck_al_actor  CHECK (actor_type IN ('ANONYMOUS','USER','API_KEY','SYSTEM'))
 CONSTRAINT ck_al_result CHECK (result IN ('SUCCESS','FAILURE','DENIED'))
+CONSTRAINT ck_al_action CHECK (action IN (…§4.5 的 26 種行為…))
 
 CREATE INDEX ix_al_tenant_time ON audit_logs (tenant_id, occurred_at DESC);
 CREATE INDEX ix_al_actor       ON audit_logs (actor_type, actor_id, occurred_at DESC);
@@ -1065,6 +1066,11 @@ CREATE INDEX ix_al_gc          ON audit_logs (occurred_at);
 ```
 
 **無 `updated_at` 欄位**——本表永不更新，加上該欄位即為設計錯誤。
+
+> **實作回饋修訂（2026-08-30，Phase 21；[ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md) 第 7 節）**：
+> `ck_al_action` 為本次補上。本表原本只列三條 constraint，而 §4.0 通用約定明文
+> 「列舉以 VARCHAR + CHECK 對應」——少了它，拼錯的 `action` 會靜靜寫進一張**永不更新**的表，
+> 沒有任何後續操作會發現。26 個值逐字列於 `V33__create_audit_logs.sql`。
 
 ---
 

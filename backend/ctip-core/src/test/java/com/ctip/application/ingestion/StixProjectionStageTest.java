@@ -7,6 +7,7 @@ import static com.ctip.testing.IndicatorTestBuilder.report;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ctip.application.port.StixObjectPort;
+import com.ctip.application.stix.StixProjectionFactory;
 import com.ctip.domain.indicator.Indicator;
 import com.ctip.domain.indicator.IndicatorSource;
 import com.ctip.domain.source.Reputation;
@@ -51,7 +52,8 @@ class StixProjectionStageTest {
                 new Reputation(60));
         IngestionContext context = contextWith(indicator);
 
-        new StixProjectionStage(sourcesWithNames(), stixObjects(Optional.empty()), () -> NOW).execute(context);
+        new StixProjectionStage(new StixProjectionFactory(sourcesWithNames(), stixObjects(Optional.empty()), () -> NOW))
+                .execute(context);
 
         StixProjection projection = indicatorProjection(context);
         assertThat(projection).isNotNull();
@@ -81,7 +83,8 @@ class StixProjectionStageTest {
         IngestionContext context = contextWith(indicator);
         Instant existingCreated = T0.minus(Duration.ofDays(10));
 
-        new StixProjectionStage(sourcesWithNames(), stixObjects(Optional.of(existingCreated)), () -> NOW)
+        new StixProjectionStage(new StixProjectionFactory(
+                        sourcesWithNames(), stixObjects(Optional.of(existingCreated)), () -> NOW))
                 .execute(context);
 
         assertThat(indicatorProjection(context).created()).isEqualTo(existingCreated);
@@ -100,7 +103,7 @@ class StixProjectionStageTest {
             }
         };
 
-        new StixProjectionStage(sourcesWithNames(), failing, () -> NOW).execute(context);
+        new StixProjectionStage(new StixProjectionFactory(sourcesWithNames(), failing, () -> NOW)).execute(context);
 
         assertThat(context.rejected()).isFalse();
         assertThat(context.stixProjections()).isEmpty();

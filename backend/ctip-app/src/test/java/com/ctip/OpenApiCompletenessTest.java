@@ -67,14 +67,30 @@ class OpenApiCompletenessTest extends AbstractPostgresIntegrationTest {
                 assertOkResponseWithSchema(op, where);
                 assertErrorResponse(op, where);
                 assertThat(containsExample(op)).as("%s 至少一個範例", where).isTrue();
-                if ("post".equals(method.getKey())) {
-                    assertThat(op.at("/requestBody/content/application~1json/schema")
-                                    .isMissingNode())
-                            .as("%s request schema", where)
-                            .isFalse();
-                }
+                assertRequestSchema(op, method.getKey(), where);
             }
         }
+    }
+
+    /**
+     * 有請求本文就必須有 schema。
+     *
+     * <p>條件是「宣告了 requestBody」而不是「method 是 POST」:springdoc 只在 handler 真的收
+     * {@code @RequestBody} 時才產生 requestBody,因此兩者等價;而 §9.1 的管理端點裡有兩支
+     * 是<strong>無本文的動作端點</strong>({@code POST /admin/stix/rebuild}、
+     * {@code POST /admin/sources/{id}/sync}),照「POST 必有 body」的字面判會把它們判成缺文件
+     * ——而正確的做法不是替它們捏一個空的請求物件(執行規則 16、18)。
+     */
+    private static void assertRequestSchema(JsonNode op, String method, String where) {
+        if (!"post".equals(method) && !"patch".equals(method) && !"put".equals(method)) {
+            return;
+        }
+        if (op.at("/requestBody").isMissingNode()) {
+            return;
+        }
+        assertThat(op.at("/requestBody/content/application~1json/schema").isMissingNode())
+                .as("%s request schema", where)
+                .isFalse();
     }
 
     /**

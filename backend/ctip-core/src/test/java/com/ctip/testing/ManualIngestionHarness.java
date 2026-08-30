@@ -18,6 +18,7 @@ import com.ctip.application.ingestion.ValidateStage;
 import com.ctip.application.port.IdGeneratorPort;
 import com.ctip.application.port.StixObjectPort;
 import com.ctip.application.search.SearchIndexWriter;
+import com.ctip.application.stix.StixProjectionFactory;
 import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.domain.event.DomainEvent;
 import com.ctip.domain.fingerprint.Sha256FingerprintStrategy;
@@ -74,7 +75,8 @@ public final class ManualIngestionHarness {
                 new DeduplicateStage(indicators),
                 new MergeStage(ids, fingerprint, sources),
                 new ScoreStage(new RuleBasedThreatScorer(clock)),
-                new StixProjectionStage(sources, stixObjects, FixedClockPort.at(FixedClockPort.DEFAULT_NOW)),
+                new StixProjectionStage(
+                        new StixProjectionFactory(sources, stixObjects, FixedClockPort.at(FixedClockPort.DEFAULT_NOW))),
                 new PersistStage(indicators),
                 new EventPublishStage(events::add)));
         this.executor = new IngestionBatchExecutor(

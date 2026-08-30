@@ -5,6 +5,7 @@ import com.ctip.domain.user.RefreshToken;
 import com.ctip.domain.user.RefreshTokenId;
 import com.ctip.domain.user.TokenFamilyId;
 import com.ctip.domain.user.TokenHash;
+import com.ctip.domain.user.UserId;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -44,8 +45,22 @@ class RefreshTokenRepositoryAdapter implements RefreshTokenRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<RefreshToken> findActiveByUser(UserId userId) {
+        return jpa.findByUserIdAndRevokedAtIsNull(userId.value()).stream()
+                .map(mapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public void saveAll(List<RefreshToken> tokens) {
         tokens.forEach(this::save);
+    }
+
+    /** 資料主體刪除:ip / user_agent 是個資,撤銷只讓 token 失效、列還在(13 §13.4)。 */
+    @Override
+    public int deleteByUser(UserId userId) {
+        return jpa.deleteByUserId(userId.value());
     }
 
     @Override

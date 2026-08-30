@@ -5,6 +5,7 @@ import com.ctip.domain.user.RefreshToken;
 import com.ctip.domain.user.RefreshTokenId;
 import com.ctip.domain.user.TokenFamilyId;
 import com.ctip.domain.user.TokenHash;
+import com.ctip.domain.user.UserId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,24 @@ public final class InMemoryRefreshTokenRepository implements RefreshTokenReposit
         return byId.values().stream()
                 .filter(token -> token.familyId().equals(familyId))
                 .toList();
+    }
+
+    @Override
+    public List<RefreshToken> findActiveByUser(UserId userId) {
+        return byId.values().stream()
+                .filter(token -> token.userId().equals(userId))
+                .filter(token -> token.revokedAt() == null)
+                .toList();
+    }
+
+    @Override
+    public int deleteByUser(UserId userId) {
+        List<RefreshTokenId> victims = byId.values().stream()
+                .filter(token -> token.userId().equals(userId))
+                .map(RefreshToken::id)
+                .toList();
+        victims.forEach(byId::remove);
+        return victims.size();
     }
 
     @Override

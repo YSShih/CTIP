@@ -321,8 +321,20 @@ INDICATOR_RETENTION_DAYS       # 預設 365
 BLOOM_ARTIFACT_KEEP            # 預設 30
 DELIVERY_CLEANUP_CRON          # 預設 0 10 2 * * *（08 §8.7）
 INDICATOR_CLEANUP_CRON         # 預設 0 20 2 * * *（同上）
+AUDIT_CLEANUP_CRON             # 預設 0 0 1 * * SUN（08 §8.7，每週日 01:00）
+PAYLOAD_CLEANUP_CRON           # 預設 0 30 1 * * *（同上）
+REJECTION_CLEANUP_CRON         # 預設 0 40 1 * * *（同上）
+BLOOM_ARTIFACT_CLEANUP_CRON    # 預設 0 50 1 * * *（同上）
+
+AUDIT_SAMPLE_READ_RATE         # 讀取操作的稽核取樣率，預設 0.01（13 §13.5 規則 4）
 ```
 
+> **實作回饋修訂（2026-08-30；Phase 21）**：`AUDIT_SAMPLE_READ_RATE` 只出現在 13 §13.5 的
+> 內文、其餘四個保留 cron 只出現在 08 §8.7 的排程表，本清單與 compose 都沒有宣告——
+> 同一項缺陷的第三次復發。`ConfigSymmetryTest` 現在會擋住它(它比對 `application.yml`、
+> compose 與本節三處)。`POSTGRES_RETENTION_USER`／`_PASSWORD` 原本只傳給 postgres 服務,
+> backend 服務沒有,而 Phase 21 的清理連線就在 backend 裡——一併補上。
+>
 > 後六個保留政策變數在 v1.1 只出現於 §55.3，變數清單裡沒有——本版補齊。這是第三項缺陷（變數宣告與使用不對稱）。
 >
 > **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：

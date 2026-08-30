@@ -8,6 +8,8 @@ import {
   Monitor,
   Moon,
   Radar,
+  ScrollText,
+  ShieldCheck,
   Sun,
   Upload,
   Webhook,
@@ -84,6 +86,8 @@ export function AppLayout() {
   const canReadSubscription = useHasPermission('subscription:read');
   const canReadNotifications = useHasPermission('notification:read');
   const canManageWebhooks = useHasPermission('webhook:manage');
+  const canReadAudit = useHasPermission('audit:read');
+  const canAdminister = useHasPermission('system:admin');
   const logout = useLogout();
 
   async function handleLogout() {
@@ -142,6 +146,18 @@ export function AppLayout() {
                   <NavLink to="/settings/webhooks" className={secondaryLinkClass}>
                     <Webhook aria-hidden className="size-4" />
                     Webhook
+                  </NavLink>
+                ) : null}
+                {canReadAudit ? (
+                  <NavLink to="/audit" className={secondaryLinkClass}>
+                    <ScrollText aria-hidden className="size-4" />
+                    稽核
+                  </NavLink>
+                ) : null}
+                {canAdminister ? (
+                  <NavLink to="/admin" className={secondaryLinkClass}>
+                    <ShieldCheck aria-hidden className="size-4" />
+                    管理
                   </NavLink>
                 ) : null}
                 {canManageApiKeys ? (

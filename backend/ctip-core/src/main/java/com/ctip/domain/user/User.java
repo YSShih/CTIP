@@ -19,7 +19,7 @@ public final class User {
     private final PendingEvents pendingEvents = new PendingEvents();
 
     private final UserId id;
-    private final EmailAddress email;
+    private EmailAddress email;
     private final TenantId primaryTenantId;
     private PasswordHash passwordHash;
     private String displayName;
@@ -158,6 +158,19 @@ public final class User {
     }
 
     public void suspend() {
+        this.status = UserStatus.SUSPENDED;
+    }
+
+    /**
+     * 資料主體刪除(GDPR;docs/spec/13-platform-ops.md §13.4):抹除可識別欄位並停權,
+     * <strong>保留這一列</strong>——{@code tenant_users}、{@code api_keys} 等以 FK 指向它,
+     * 而那些列承載的是租戶的營運事實,不是這個人的個資。
+     *
+     * <p>{@code replacement} 必須是唯一且不可路由的佔位 email(不變量 U1 仍須成立)。
+     */
+    public void erasePersonalData(EmailAddress replacement) {
+        this.email = Objects.requireNonNull(replacement, "replacement 不得為 null");
+        this.displayName = null;
         this.status = UserStatus.SUSPENDED;
     }
 

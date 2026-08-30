@@ -730,9 +730,9 @@ Kafka、事件 schema、站內通知、WebSocket／SSE 與 webhook 送達,逐項
 |---|---|---|---|
 | 1 | ⚠️ **CORS `allowedMethods` 漏了 PUT 與 PATCH**:清單停在 `GET/POST/DELETE`,但 Phase 18 加了兩支 `PUT`(威脅關聯、威脅狀態)、Phase 20 加了 `PATCH /notifications/{id}/read`。前端是獨立來源的 SPA(nginx 不 proxy `/api`),這三支端點的 preflight 一律 403,**在瀏覽器端完全打不通**;`MockMvc` 不走 preflight,所以測試全綠 | 清單補為 `GET, POST, PUT, PATCH, DELETE`;`CorsPreflightTest` 改為對 `PATCH` 端點實際發 preflight。§5.7 加註「新增端點時同步這份清單是硬性步驟」 | [05 §5.7](05-environment.md#57-spring-設定對應本版新增) |
 | 2 | ⚠️ **Webhook 送達是未設防的 SSRF 入口**:W1 只要求 `https://`,而送達是「伺服器主動對租戶指定的 URL 發 POST」。任何持 `webhook:manage` 的租戶都能存進 `https://169.254.169.254/…`(雲端 metadata)或 `https://10.0.0.5:8080/admin`;本文雖被丟棄,`webhook_deliveries` 仍記下狀態碼與延遲 | 兩道防線:建立時對**字串**判定(`WebhookTarget`,domain 純運算)、每次送達前對**解析後位址**判定(`WebhookTargetGuard`,擋主機名指向內網與 DNS rebinding)。範圍共用同一組判定。`reconstitute` 刻意只驗 scheme——一列舊資料不得讓整個租戶的扇出停擺 | [02 §2.3](02-ddd-model.md#webhook)、[13 §13.2](13-platform-ops.md#132-通知-phase-20--m3) |
-| 3 | ⚠️ **登入鎖定期滿後 `failed_login_count` 不歸零 → 帳號可被永久鎖定**:計數一旦到 10 就永遠是 10,鎖定一過期,任何一次失敗都立刻再鎖 15 分鐘。攻擊者每 15 分鐘一個錯密碼即可讓受害帳號永久登不進來。U7 說的是「**連續**失敗 10 次」,原實作是「一生失敗 10 次」 | 記錄本次失敗之前先檢查上一段鎖定是否已過期,過期即歸零重新起算;§10.4 補明 | [10 §10.4](10-identity-plans.md#104-認證-phase-13--m2) |
+| 3 | ⚠️ **登入鎖定期滿後 `failed_login_count` 不歸零 → 帳號可被永久鎖定**:計數一旦到 10 就永遠是 10,鎖定一過期,任何一次失敗都立刻再鎖 15 分鐘。攻擊者每 15 分鐘一個錯密碼即可讓受害帳號永久登不進來。U7 說的是「**連續**失敗 10 次」,原實作是「一生失敗 10 次」 | 記錄本次失敗之前先檢查上一段鎖定是否已過期,過期即歸零重新起算;§10.4 補明 | [10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2) |
 | 4 | **匯入端點的請求本文沒有容器層上限**:`@RequestBody byte[]` 先把整包讀進記憶體,64 MB 檢查在那之後才跑;Tomcat 對非表單本文沒有預設上限。持 `ioc:import` 的帳號送數 GB 本文即可耗盡堆積 | 新增排在 security chain 之前的 `RequestBodySizeLimitFilter`:有 `Content-Length` 的看標頭回 413,**chunked 的由包裝過的 input stream 在讀滿上限時中止**(只檢查標頭等於沒擋)。端點層檢查保留為兜底,兩處共用同一常數 | [09 §9.7](09-api.md#97-寫入端點細節-m2) |
-| 5 | **限流的端點分類可被路徑編碼繞過**:分類拿 `getRequestURI()` 原文比對,而 routing 拿的是解碼後、去路徑參數的段落。`/api/v1/iocs/%69mport` 照樣打到 import handler,上限卻從 `heavy` 的 5% 變成 `write` 的 20% | 比對前正規化(逐段去路徑參數、逐段百分比解碼、去尾斜線);解碼出來的 `/` 不得成為段落分隔符,壞掉的百分比序列不得拋例外(那條路徑未認證即可觸發) | [10 §10.7](10-identity-plans.md#107-限流-phase-1417--m2) |
+| 5 | **限流的端點分類可被路徑編碼繞過**:分類拿 `getRequestURI()` 原文比對,而 routing 拿的是解碼後、去路徑參數的段落。`/api/v1/iocs/%69mport` 照樣打到 import handler,上限卻從 `heavy` 的 5% 變成 `write` 的 20% | 比對前正規化(逐段去路徑參數、逐段百分比解碼、去尾斜線);解碼出來的 `/` 不得成為段落分隔符,壞掉的百分比序列不得拋例外(那條路徑未認證即可觸發) | [10 §10.7](10-identity-plans.md#107-限流) |
 
 > **檢查過但未發現問題**(記下來,免得下一輪重查):JWT 簽發與驗證(無 alg confusion)、
 > API key 常數時間比對、refresh token 輪替與重用偵測、RBAC 矩陣與端點授權宣告
@@ -746,4 +746,40 @@ Kafka、事件 schema、站內通知、WebSocket／SSE 與 webhook 送達,逐項
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29 實作回饋修訂，見 §0.7–§0.27）。*
+## 0.28 實作回饋修訂（2026-08-30，Phase 21 實測後回寫）
+
+Phase 21（Audit Log + 資料保留）的修訂**已全數註記進對應主題檔**;
+完整決策記錄見 [ADR 0031](../architecture/decisions/0031-phase21-audit-and-retention.md)（12 節）。
+
+### 照字面實作會失敗或永不可達（4 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | §13.5 規則 2「清理角色無 SELECT 業務表之權限」——**PostgreSQL 對 `DELETE/UPDATE … WHERE` 仍要求 WHERE 欄位的 SELECT 權限**,六項清理全部會 `permission denied` | 改以**欄位層級**授權(只給主鍵與時間欄位);批次用 `id IN (SELECT … LIMIT n)` 而非 `ctid`(系統欄位不在欄位授權範圍) | [13 §13.5](13-platform-ops.md#135-稽核-phase-21--m3) |
+| 2 | `SUBSCRIPTION_CHANGED` 是 §13.5 強制的 26 種行為之一,但 09 §9.1 **沒有任何端點**會呼叫 `Subscription.changePlan`／`cancel`——該行為與那兩個聚合方法都永不可達(執行規則 16) | 補 `PATCH /api/v1/admin/tenants/{id}/subscription`(`system:admin`;`planCode=CANCEL` 為取消) | [09 §9.1](09-api.md#91-端點清單) |
+| 3 | §13.4 要求「M3 提供資料主體查詢與刪除的管理端點」,但 09 全文未定義路徑/方法/權限;而刪除權與 §13.5 規則 1 的 append-only 直接衝突 | 補 `GET`／`DELETE /api/v1/admin/data-subjects/{userId}`;**稽核軌跡不在刪除範圍內**,以 180 天保留期收斂,法律基礎寫入 `docs/deployment/privacy.md` | [09 §9.1](09-api.md#91-端點清單)、[13 §13.4](13-platform-ops.md#134-隱私與資料保留) |
+| 4 | `POST /auth/change-password` 在 09 全文不存在,而 ADR 0015 把「改密碼撤銷全部 token family」指定為 M3 責任(ADR 0022 指派本 phase) | 補端點與全撤;撤銷原因沿用 `ADMIN`(表 15 的列舉固定五值,不為此改 schema) | [09 §9.1](09-api.md#91-端點清單) |
+
+### 規格缺口補齊（3 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 5 | 表 27 沒有 `action` 的 CHECK,而 §4.0 明文「列舉以 VARCHAR + CHECK 對應」——拼錯的 action 會靜靜寫進一張永不更新的表 | V33 補 26 值的 `ck_al_action` | [04 表 27](04-data-dictionary.md#27-auditlogs-phase-21--m3) |
+| 6 | `AUDIT_SAMPLE_READ_RATE` 與四個保留 cron 只出現在內文,05 §5.4 與 compose 都沒宣告;`POSTGRES_RETENTION_*` 沒傳給 backend 服務 | 三處補齊(`ConfigSymmetryTest` 現在會擋) | [05 §5.4](05-environment.md#54-環境變數清單) |
+| 7 | 12 §12.2 的目錄樹有 `audit/` 但沒有 `admin/`,而 §12.5 有 Admin Panel;兩頁也沒標所需權限 | 補 `admin/` 與兩頁的權限(`audit:read`／`system:admin`) | [12 §12.2、§12.5](12-frontend.md#125-頁面) |
+
+### 實作決策（不改規格正文，僅記於 ADR 0031）
+
+稽核以兩個橫切消費端實作(filter + event listener),業務服務一行不改;
+Bloom artifact 清理沿用 Phase 15 的 `BloomRetentionService`(以應用角色執行,使用者裁示);
+`RetentionConnection` 刻意不是 `DataSource` 型別的 bean(否則主資料源不會建立);
+`OpenApiCompletenessTest` 的「POST 必有 request schema」改為「宣告了 requestBody 才要求」
+(§9.1 有兩支無本文的動作端點)。
+
+> **本 phase 未做而回報的三件事**(見 ADR 0031 末段):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)
+> 至今無實作;12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點因此還沒有前端入口。
+> 兩者都屬 M2 的遺漏,建議指派給 Phase 23。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.28）。*
