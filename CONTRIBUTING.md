@@ -27,6 +27,18 @@
 cd frontend && npm ci && npx tsc --noEmit && npx eslint . --max-warnings 0
 ```
 
+完整的上手說明(啟動、熱重載、測試分層、DoD gate、CI/CD、佈署)見
+[docs/development/getting-started.md](docs/development/getting-started.md)。
+
+## CI
+
+`.github/workflows/` 共 11 支;PR 會跑後端測試/lint、前端測試、build、compose 驗證、
+OpenAPI 比對、映像建置與安全掃描。**本機的完成判準與 CI 是同一組指令**——
+CI 不是額外的一關,是忘了在本機跑時的第二道網。
+
+⚠️ 依 [06 §6.1.2](docs/spec/06-tech-stack.md#612-凍結與浮動強制),
+**不得自行合併 Dependabot 的版本升級 PR**;major 升級須人工核准並寫 ADR。
+
 ## Commit 慣例
 
 - main 直接 commit,一個 phase 一個 commit,message 格式:`Phase N: <內容摘要>`

@@ -1,0 +1,88 @@
+# 相依弱點掃描、secret 掃描、容器映像掃描(13 §13.8、06 §6.2.3b;規格標 M2,Phase 23 補齊)
+#
+# 依 06 §6.1.2:安全掃描類 action **釘 commit SHA**(它們讀得到 repo 內容與 token,
+# 浮動 tag 等於把供應鏈信任交給第三方)。tag 與 SHA 的對應寫在每個 uses 後面,
+# 升版時必須同時更新兩者,並依 §6.1.2 由人工核准(Coding LLM 不得自行升版)。
+#
+# 相依弱點:§6.2.3b 允許「OWASP Dependency-Check 或 Dependabot alerts」二擇一。
+# 本專案選 Dependabot(設定見 .github/dependabot.yml,alerts 於 repo 設定啟用),
+# 並以 Trivy 的檔案系統掃描在 CI 產生同一份訊號的可失敗檢查(Dependabot alerts 本身不會擋 PR)。
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 每日 03:17 UTC:弱點資料庫每天在動,只在 push 時掃會漏掉「昨天還乾淨」的相依
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    name: secret 掃描(Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks 掃整段歷史,不只工作區
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_LICENSE 只有組織帳號需要;本 repo 屬個人帳號,不需設定
+
+  dependency-scan:
+    name: 相依弱點掃描(Trivy fs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          # 上游還沒有修補版本的項目不擋 PR——否則 CI 會長期紅著,紅燈就失去意義
+          ignore-unfixed: true
+          exit-code: "1"
+
+  image-scan:
+    name: 容器映像掃描(Trivy image)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: environment/docker/backend/Dockerfile
+          - name: frontend
+            dockerfile: environment/docker/frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 建置待掃描映像(不推送)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: production
+          load: true
+          tags: ctip-${{ matrix.name }}:scan
+          cache-from: type=gha,scope=ctip-${{ matrix.name }}
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ctip-${{ matrix.name }}:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"

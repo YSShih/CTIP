@@ -1,0 +1,43 @@
+# L1–L3 測試、JaCoCo 覆蓋率門檻、ArchUnit(13 §13.8;規格標 M1,Phase 23 補齊)
+# -Ptest-integration = 排除 heavy(L4);L4 由 heavy-test.yml 於 nightly 執行(14 §14.1)。
+# verify 同時綁 Spotless / Checkstyle / JaCoCo check,因此覆蓋率不足會讓本 workflow 轉紅。
+name: backend-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-test:
+    runs-on: ubuntu-latest
+    # Testcontainers 會拉 postgres / redis / kafka / elasticsearch 映像;
+    # 本機一輪無過濾的 verify 約 25 分鐘,CI 需更寬的上限
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: clean verify(L1–L3 + JaCoCo + ArchUnit)
+        run: ./backend/mvnw -f backend/pom.xml -B clean verify -Ptest-integration
+
+      - name: 上傳測試報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/*/target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: 上傳 JaCoCo 報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jacoco
+          path: backend/*/target/site/jacoco/
+          if-no-files-found: ignore

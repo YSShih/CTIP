@@ -1,4 +1,6 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router';
+import { LoadingState } from '../components/StateViews';
 import { AppLayout } from '../layouts/AppLayout';
 import ApiKeysPage from '../pages/ApiKeysPage';
 import AdminPage from '../pages/AdminPage';
@@ -21,8 +23,12 @@ import { RequireAuth } from './RequireAuth';
 import { RequirePermission } from './RequirePermission';
 import { RootErrorBoundary } from './RootErrorBoundary';
 
+// STIX Viewer 是唯一用到 Cytoscape.js 的頁面(約 370 kB)。其餘頁面不該為它付這個下載成本,
+// 因此只有這一條路由 code-split。
+const StixViewerPage = lazy(() => import('../pages/StixViewerPage'));
+
 /**
- * 路由表(§12.5)。匿名可存取:儀表板、IOC 檢索/詳情、威脅情報/詳情、Bloom 同步說明、登入、註冊;
+ * 路由表(§12.5)。匿名可存取:儀表板、IOC 檢索/詳情、威脅情報/詳情、STIX Viewer、Bloom 同步說明、登入、註冊;
  * 需登入的頁面掛 RequireAuth,需權限者再套 RequirePermission。
  * 前端守衛只是 UX——後端一律再驗一次(§12.5)。
  * routes 獨立匯出供測試以 createMemoryRouter 掛載。
@@ -40,6 +46,14 @@ export const routes: RouteObject[] = [
       { path: 'iocs/:id', element: <IocDetailPage /> },
       { path: 'threats', element: <ThreatFeedPage /> },
       { path: 'threats/:id', element: <ThreatDetailPage /> },
+      {
+        path: 'stix/:id',
+        element: (
+          <Suspense fallback={<LoadingState rows={6} label="載入 STIX Viewer" />}>
+            <StixViewerPage />
+          </Suspense>
+        ),
+      },
       { path: 'sync', element: <SyncPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'register', element: <RegisterPage /> },

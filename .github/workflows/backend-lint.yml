@@ -1,0 +1,28 @@
+# Spotless check + Checkstyle(13 §13.8;規格標 M1,Phase 23 補齊)
+# 與 backend-test 分開是為了「格式/風格」與「行為」兩種訊號各自可讀:
+# verify 也會跑這兩個 plugin,但要等整輪測試跑完才看得到結果。
+name: backend-lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Spotless check(格式)
+        run: ./backend/mvnw -f backend/pom.xml -B spotless:check
+
+      - name: Checkstyle check(01 §1.8 可讀性規則)
+        run: ./backend/mvnw -f backend/pom.xml -B checkstyle:check

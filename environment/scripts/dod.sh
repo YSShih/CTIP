@@ -303,6 +303,24 @@ dod_prod_config_guard() { # M3-17:prod 設定驗證(對真實 .env.prod)
   [ "$v" = "false" ] || { echo "SWAGGER_ENABLED 必須為 false"; return 1; }
 }
 
+dod_ci_green() { # M3-19:11 支 workflow 皆存在 + 最後一次 CI run 全綠
+  # 檔案存在性先於 run 結論:只看最後一次 run 的結論時,「只有兩支 workflow 且都綠」
+  # 也會通過——13 §13.8 的六支 M1/M2 workflow 逾期到 Phase 23 才被發現就是這樣來的
+  # (ADR 0016 Z3、ADR 0022)。清單即 13 §13.8 的 11 支。
+  local w rc=0
+  for w in backend-test backend-lint frontend-test build compose-validate openapi-check \
+           docker-build security heavy-test deploy-staging deploy-prod; do
+    [ -s ".github/workflows/${w}.yml" ] || { echo "缺少 workflow:.github/workflows/${w}.yml"; rc=1; }
+  done
+  [ "$rc" -eq 0 ] || return 1
+  # deploy-prod 必須綁 protected environment(phase-23「不得做的事」);
+  # required reviewers 存在 GitHub repo 設定,不是版控檔案能表達的部分,列於 15.5 人工確認
+  grep -qE '^ +name: production$' .github/workflows/deploy-prod.yml \
+    || { echo "deploy-prod.yml 未綁定 production environment"; return 1; }
+  command -v gh >/dev/null 2>&1 || { echo "本項需要 gh CLI 並已推上 GitHub 跑過 CI(15 §15.3 註)"; return 1; }
+  gh run list --limit 1 --json conclusion -q '.[0].conclusion == "success"' | grep -q true
+}
+
 dod_sbom_present() { # M3-20
   find backend -path '*/target/bom.json' 2>/dev/null | grep -q . \
     || { echo "backend CycloneDX bom.json 不存在"; return 1; }
@@ -460,7 +478,7 @@ gate_full() {
   check M3-16 "traceId 同時出現在錯誤回應與日誌" "${MVNT}TracePropagationTest"
   check M3-17 "prod 設定驗證:不掛原始碼、無明文 secret、CORS 非 *、Swagger 關閉" dod_prod_config_guard
   check M3-18 "prod 啟動守衛生效(樣板 JWT_SECRET 與 CORS=* 皆拒絕啟動)" "${MVNT}StartupValidatorTest"
-  check M3-19 "CI 全綠:測試、lint、build、compose 驗證、掃描" "gh run list --limit 1 --json conclusion -q '.[0].conclusion == \"success\"' | grep -q true"
+  check M3-19 "11 支 workflow 皆存在且最後一次 CI run 全綠" dod_ci_green
   check M3-20 "SBOM 產出(backend CycloneDX + frontend npm sbom)" dod_sbom_present
   check M3-21 "ctip-sdk 可獨立打包" "${MVN} -pl ctip-sdk package"
   check M3-22 "ExampleThreatSourceAdapter 可編譯並通過測試" "${MVN} -pl ctip-sdk test -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ExampleAdapterTest"
@@ -494,5 +512,6 @@ info "  P-03 程式碼「人類易讀」"
 info "  P-04 Grafana dashboard 的圖表確實有意義"
 info "  P-05 docs/architecture/decisions/ 的 ADR 內容正確"
 info "  P-06 版本表的「推估」支援終止日(需上網查證,見 06-tech-stack.md §6.4)"
+info "  P-07 deploy-prod 的 production environment 已設定 required reviewers(GitHub repo 設定,非版控檔案)"
 
 [ -z "$FAILED_IDS" ]

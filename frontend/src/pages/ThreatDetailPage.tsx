@@ -43,7 +43,7 @@ export default function ThreatDetailPage() {
           onRetry={() => void links.refetch()}
         />
         <ExternalReferenceList references={detail.data.externalReferences ?? []} />
-        {stixId ? <StixJsonViewer stixId={stixId} /> : null}
+        {stixId ? <StixJsonViewer stixId={stixId} viewerLink /> : null}
       </div>
     );
   }

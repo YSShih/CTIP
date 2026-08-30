@@ -1,0 +1,60 @@
+# 正式環境佈署(13 §13.8:placeholder,**必須使用 protected environment 並要求人工核准**)
+#
+# 兩道人工關卡:
+#   1. 只能手動觸發(workflow_dispatch)——不會有任何 push 自動打到正式環境
+#   2. `environment: production` 綁定 GitHub 的 protected environment;
+#      該環境在 repo 設定中必須勾選 **Required reviewers**,job 才會停在待核准狀態
+#
+# ⚠️ 第 2 點的 reviewer 設定存在 GitHub 的 repo 設定裡,不是版控檔案能表達的部分:
+#    首次啟用時必須由維運者手動建立 `production` 環境並加上 required reviewers
+#    (步驟見 docs/development/getting-started.md「CI/CD」節)。沒有這一步,
+#    這支 workflow 仍會等待環境核准規則,但規則是空的——等於沒有人工核准。
+#
+# 佈署指令本身同 deploy-staging 為 placeholder(規則 16:不寫假實作)。
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 輸入 deploy-prod 以確認佈署正式環境
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # 輸入值經 env 傳入,不直接內插進 shell:`${{ }}` 會在 shell 解析前被字面展開,
+      # 那是 GitHub Actions 的 script injection 面
+      - name: 確認字串必須相符
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" != "deploy-prod" ]; then
+            echo "確認字串不符,中止"; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: 佈署前檢查:prod 設定不得掛載原始碼、不得含 debug agent
+        run: |
+          docker compose --env-file environment/.env.prod.example \
+            -f environment/docker-compose.yml config > /tmp/prod-config.yml
+          ! grep -qE '\.\./(backend|frontend)' /tmp/prod-config.yml
+          ! grep -qi jdwp /tmp/prod-config.yml
+
+      - name: 佈署(placeholder)
+        run: |
+          echo "正式環境佈署尚未接上實機。"
+          echo "接上時在此填入該環境的指令(docs/development/getting-started.md「佈署」節)。"

@@ -138,7 +138,7 @@
 | `@hookform/resolvers` | 支援 Zod 4 的版本 | ~ | 複查日確認 |
 | lucide-react | 1.x | ~ | icon |
 | Recharts | 3.x | ~ | dashboard 圖表 |
-| Cytoscape.js | 3.x | ~ | STIX 關聯圖（M3） |
+| Cytoscape.js | 3.x | ~ | STIX 關聯圖（M3）。**Phase 23 安裝 3.34.2**；它**自帶型別宣告**（`types: index.d.ts`），不需 `@types/cytoscape` |
 | Vitest | **4.1.x** | ~ | |
 | `@testing-library/react` | 16.x | ~ | |
 | Playwright | 1.x | ~ | E2E（M2 起） |
@@ -157,7 +157,18 @@
 | OWASP Dependency-Check 或 Dependabot alerts | 相依弱點 | 二擇一即可（[13 §13.9](13-platform-ops.md)） |
 | Gitleaks | secret 掃描 | **釘 commit SHA** |
 | Trivy | 容器映像掃描 | **釘 commit SHA** |
-| CycloneDX（Maven plugin）+ `npm sbom` | SBOM | plugin 版本見 6.2.2 |
+| CycloneDX（Maven plugin）+ `npm sbom` | SBOM | plugin 版本見 6.2.2。綁在 `package`（`makeAggregateBom`）；frontend 由 `npm run sbom` 產生。**兩者皆為建置產物，不進版控** |
+
+> **實作回饋修訂（2026-08-30，Phase 23；[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md)）**——三項落地細節：
+>
+> 1. **相依弱點選 Dependabot alerts**（`.github/dependabot.yml`）。OWASP Dependency-Check 現在需要
+>    NVD API key 才有可用的更新速率，那是一個新的外部前置，而它解的問題 alerts 已經解了。
+>    但 alerts **不會擋 PR**，因此另以 Trivy 的檔案系統掃描（`exit-code: 1`、`ignore-unfixed: true`）
+>    提供會失敗的 CI 訊號。
+> 2. **釘住的 commit SHA**：`gitleaks/gitleaks-action` v3.0.0 =
+>    `e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e`；`aquasecurity/trivy-action` v0.36.0 =
+>    `ed142fd0673e97e23eac54620cfb913e5ce36c25`。tag 寫在 `uses` 後面的註解，升版時兩者必須同時改。
+> 3. `GITLEAKS_LICENSE` 只有**組織帳號**需要；本 repo 屬個人帳號，workflow 內以註解說明。
 
 ### 6.2.4 Infrastructure Images
 

@@ -1,0 +1,47 @@
+# 相依更新(13 §13.8、06 §6.1.3 規則 3):patch/minor 自動開 PR、major 需人工審核。
+#
+# ⚠️ 依 06 §6.1.2,**Coding LLM 不得自行合併版本升級 PR**——本檔只負責「開 PR」,
+#    合併一律由人決定;major 升級另須寫 ADR。
+#
+# 同時作為 §6.2.3b「相依弱點:OWASP Dependency-Check 或 Dependabot alerts 二擇一」
+# 的選項:本專案選 Dependabot(alerts 於 repo 設定啟用),
+# CI 端的可失敗訊號由 .github/workflows/security.yml 的 Trivy fs 掃描提供。
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+    ignore:
+      # major 不自動開 PR:需人工核准並寫 ADR(06 §6.1.2)
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies, ci]
+
+  - package-ecosystem: docker
+    directories:
+      - /environment/docker/backend
+      - /environment/docker/frontend
+    schedule:
+      interval: weekly
+    labels: [dependencies, docker]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]

@@ -37,10 +37,10 @@ CTIP/
 ├── docs/
 │   ├── architecture/{overview.md,security.md,decisions/}
 │   ├── api/{README.md,openapi.json,sync-client-contract.md,events/}
-│   ├── deployment/{licensing.md,privacy.md}
+│   ├── deployment/{licensing.md,privacy.md,rate-limiting.md}
 │   ├── development/{getting-started.md,plugin-sdk.md,version-audit.md}
 │   └── spec/                       ← 本規格書（本版新增）
-├── .github/workflows/
+├── .github/{workflows/,dependabot.yml}
 ├── .gitignore  README.md  SECURITY.md  CONTRIBUTING.md  LICENSE
 ```
 

@@ -1,0 +1,65 @@
+# 建置並推送映像檔(含 SBOM)(13 §13.8;規格標 M2,Phase 23 補齊)
+# PR 只建置不推送;推 main 時才推 GHCR,並由 buildkit 附上 SBOM 與 provenance attestation。
+# 兩個 image 皆以 repo 根為 build context、以唯一的 Dockerfile 的 production target 建置
+# (05 §5.3:禁止 Dockerfile.<env>)。
+name: docker-build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: environment/docker/backend/Dockerfile
+          - name: frontend
+            dockerfile: environment/docker/frontend/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 登入 GHCR(僅推 main 時)
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 產生 tag 與 label
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/ctip-${{ matrix.name }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: build（+ push on main）
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: production
+          push: ${{ github.event_name == 'push' }}
+          # attestation 需要 registry 承載,PR 的純建置不產生
+          sbom: ${{ github.event_name == 'push' }}
+          provenance: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=ctip-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=ctip-${{ matrix.name }}

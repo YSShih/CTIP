@@ -577,6 +577,25 @@ public interface SearchPort {
 啟用 Dependabot 或 Renovate：patch/minor 自動開 PR、major 需人工審核。
 ⚠️ 依 [06-tech-stack.md](06-tech-stack.md#612-凍結與浮動強制)，**Coding LLM 不得自行合併版本升級 PR**。
 
+> **實作回饋修訂（2026-08-30，Phase 23 交付；[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md)）**
+>
+> 11 支 workflow 全部就位（含逾期的六支），並補上 `.github/dependabot.yml`
+> （maven / npm / github-actions / docker 四個 ecosystem，major 不自動開 PR）。四項落地細節：
+>
+> 1. **相依弱點選 Dependabot alerts**（本節表格「二擇一」）。但 alerts 是 repo 面板、**不會擋 PR**，
+>    因此 `security.yml` 另跑 Trivy 的**檔案系統掃描**（讀 `pom.xml` / `package-lock.json`，`exit-code: 1`）
+>    作為會失敗的 CI 訊號；`ignore-unfixed: true`——上游還沒有修補版本的項目不擋 PR，
+>    否則 CI 會長期紅著，紅燈就失去意義。
+> 2. **SBOM 是建置產物**：backend 由 CycloneDX maven plugin 綁在 `package`
+>    （`makeAggregateBom`，`includeTestScope=false`——SBOM 描述可佈署產物的相依），
+>    frontend 由新增的 `npm run sbom` 產生；兩者皆不進版控（理由見 [15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) 的註記）。
+> 3. **`deploy-prod.yml` 的人工核准分兩半**：`workflow_dispatch` + 確認字串 + `environment: production`
+>    寫在檔案裡；**required reviewers 存在 GitHub 的 repo 設定**，版控檔案表達不了。
+>    後者已列入 [15 §15.5](15-dod-gates.md#155-需人工確認未被自動驗證) 的 **P-07**（需人工確認），
+>    步驟寫在 [`docs/development/getting-started.md`](../development/getting-started.md) §6。
+> 4. **`dod.sh` 的 M3-19 就地擴充**為「11 支檔案存在 → `deploy-prod` 綁定 environment → CI 全綠」，
+>    不新增第 26 項。
+
 ---
 
 *檔案結束。上次校對：2026-08-21。*

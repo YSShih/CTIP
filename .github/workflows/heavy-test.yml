@@ -1,0 +1,33 @@
+# nightly L4 測試(13 §13.8;14 §14.1 的 heavy 標籤)
+# -Ptest-all 不排除任何標籤,因此包含 L4:多容器、長時間、資源密集的測試。
+# 只在 nightly 與手動觸發時跑——它比 backend-test 慢一個量級,不適合擋 PR。
+name: heavy-test
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Asia/Taipei
+  workflow_dispatch:
+
+jobs:
+  heavy-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: clean verify -Ptest-all(L1–L4)
+        run: ./backend/mvnw -f backend/pom.xml -B clean verify -Ptest-all
+
+      - name: 上傳測試報告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: heavy-surefire-reports
+          path: backend/*/target/surefire-reports/
+          if-no-files-found: ignore

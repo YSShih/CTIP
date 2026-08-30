@@ -29,6 +29,10 @@ coverage/
 playwright-report/
 test-results/
 
+# ---------- SBOM（建置產物,DoD M3-20 只檢查存在性,不進版控）----------
+# backend 由 CycloneDX maven plugin 產於 target/(已被 target/ 涵蓋)
+frontend/sbom.json
+
 # ---------- IDE ----------
 .idea/
 *.iml

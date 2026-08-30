@@ -189,6 +189,21 @@ components/StateViews/
 支援：物件詳情、關聯、圖形檢視（Cytoscape.js）、節點展開、基本篩選。
 **圖形視覺化不得成為 MVP 的阻塞項。**
 
+> **實作回饋修訂（2026-08-30，Phase 23 交付；[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md) §7）**
+>
+> 1. **SRO 畫成邊，不畫成節點**：`relationship` 物件的語意就是兩端之間的一條邊；
+>    其餘 `*_ref` / `*_refs` 內嵌參照同樣畫成邊，標籤取自欄位名。
+> 2. ⚠️ **「關聯」的可達範圍受資料存取面限制**：[09 §9.1](09-api.md#91-端點清單) 的
+>    `GET /api/v1/stix/{stixId}` 只回**單一物件**，平台沒有「哪些 relationship 指向我」的反查端點。
+>    因此圖只能**順著物件自身的參照往外長**——從一個 indicator 出發看不到指向它的 relationship，
+>    除非直接開該 relationship 的 id。要改善需新增反查端點（未在任何 phase 的交付物內，
+>    且會是新的可見度述詞面）。
+> 3. **只有這一條路由 code-split**（`React.lazy` + `Suspense`）：Cytoscape.js 約 370 kB，
+>    其餘頁面不該為一個 M3 頁面付這個下載成本。
+> 4. 圖的建構是純函式（`features/stix/graph.ts`），與 Cytoscape 完全分離因此可單獨測；
+>    頁面測試把 `cytoscape` 模組 mock 掉（jsdom 沒有 canvas），驗的是「餵給它什麼元素」。
+> 5. 入口：IOC 詳情與威脅詳情的 STIX 面板各有一個「在 STIX Viewer 開啟」連結。
+
 ### 即時更新 `[M3]`
 
 ```text

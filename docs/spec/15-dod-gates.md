@@ -188,7 +188,7 @@
 | M3-16 | `traceId` 同時出現在錯誤回應與日誌 | 同 M3-14 |
 | M3-17 | prod 設定驗證：不掛載原始碼、無明文 secret、CORS 非 `*`、Swagger 關閉 | `./environment/scripts/dod.sh full M3-17` |
 | M3-18 | prod 啟動守衛生效（樣板 JWT_SECRET 與 `CORS=*` 皆拒絕啟動） | `test -Dtest=StartupValidatorTest` |
-| M3-19 | CI 全綠：測試、lint、build、compose 驗證、弱點掃描、secret 掃描、映像掃描 | `gh run list --limit 1 --json conclusion -q '.[0].conclusion == "success"'` |
+| M3-19 | **11 支 workflow 檔案皆存在**、`deploy-prod` 綁定 protected environment，且 CI 全綠：測試、lint、build、compose 驗證、弱點掃描、secret 掃描、映像掃描 | `./environment/scripts/dod.sh full --only M3-19`（依序：檔案存在性 → environment 綁定 → `gh run list --limit 1 --json conclusion -q '.[0].conclusion == "success"'`） |
 | M3-20 | SBOM 產出（backend CycloneDX + frontend npm sbom） | `test -f target/bom.json && test -f frontend/sbom.json` |
 | M3-21 | `ctip-sdk` 可獨立打包 | `./mvnw -f backend/pom.xml -pl ctip-sdk package` |
 | M3-22 | `ExampleThreatSourceAdapter` 可編譯並通過測試 | `./mvnw -f backend/pom.xml -pl ctip-sdk test -Dtest=ExampleAdapterTest` |
@@ -201,6 +201,17 @@
 > 「全部可執行」有兩項前置未在此註明——**M3-17** 需要 `environment/.env.prod`（真實檔，
 > 依 `.gitignore` 不進版控，須由操作者先從樣板建立）；**M3-19** 需要本機安裝 `gh` 並已推上 GitHub 跑過 CI。
 > 兩者都不是腳本能自備的，執行 `dod.sh full` 前必須先備妥。
+
+> **實作回饋修訂（2026-08-30，Phase 23；[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md)）**——前置再加一項，M3-19 的內容擴充：
+>
+> 1. **M3-20 需要先跑過一次建置**：SBOM 是建置產物而非版控檔案——backend 由 CycloneDX maven plugin
+>    於 `package` 產出聚合 BOM `backend/target/bom.json`（各 module 另有自己的一份，並嵌入 jar 的 `META-INF/sbom/`），frontend 由 `npm run sbom` 產出
+>    `frontend/sbom.json`（兩者皆不進版控）。**不 commit 的理由**：SBOM 隨每次相依變動而變，
+>    而沒有任何檢查能驗證它是最新的——一份過期的 SBOM 比沒有 SBOM 更危險，它看起來像有效的供應鏈證據。
+> 2. **M3-19 併入「11 支 workflow 檔案皆存在」與「`deploy-prod` 綁定 `production` environment」**，
+>    不新增第 26 項（那會讓「25 項」失真）。這個檢查在語意上就是 M3-19 的前置：
+>    「只有兩支 workflow 且都綠」正是六支 M1/M2 workflow 逾期十個 phase 沒被發現的原因
+>    （[13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有) 的修訂註記、[ADR 0022](../architecture/decisions/0022-orphan-deliverables.md)）。
 
 M3-23 檢查的 12 份文件：`README.md`、`SECURITY.md`、`CONTRIBUTING.md`、`LICENSE`、`docs/architecture/overview.md`、`docs/architecture/security.md`、`docs/deployment/licensing.md`、`docs/deployment/privacy.md`、`docs/development/getting-started.md`、`docs/development/plugin-sdk.md`、`docs/development/version-audit.md`、`docs/api/openapi.json`。
 
@@ -230,9 +241,10 @@ M3-23 檢查的 12 份文件：`README.md`、`SECURITY.md`、`CONTRIBUTING.md`�
 | P-04 | Grafana dashboard 的圖表確實有意義 | M3-13 只驗證 JSON 有效 |
 | P-05 | `docs/architecture/decisions/` 的 ADR 內容正確 | 只能驗證檔案存在 |
 | P-06 | 版本表的「推估」支援終止日 | 需上網查證，見 [06-tech-stack.md](06-tech-stack.md#64-版本複查程序強制) |
+| P-07 | `deploy-prod` 的 `production` environment 已加上 **required reviewers** | 核准規則存在 GitHub 的 repo 設定裡，不是版控檔案能表達的部分。M3-19 只驗得到 workflow **有沒有綁** `production` environment；綁了但規則是空的，workflow 照跑——這正是「看起來有、實際沒有」的缺口（2026-08-30 Phase 23 新增，[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md) §6） |
 
 **P-02 的可自動化部分必須實作**（列為 ArchUnit 規則的擴充），剩餘部分才算人工項。
 
 ---
 
-*檔案結束。可執行項：90。需人工確認：6。上次校對：2026-08-21。*
+*檔案結束。可執行項：90。需人工確認：7。上次校對：2026-08-30（Phase 23）。*

@@ -818,4 +818,44 @@ Phase 22（監控、日誌、追蹤）的修訂**已全數註記進對應主題�
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.29）。*
+## 0.30 實作回饋修訂（2026-08-30，Phase 23 實測後回寫）
+
+Phase 23（CI/CD 完整化、安全掃描、文件）的修訂**已註記進對應主題檔**；
+完整決策記錄見 `docs/architecture/decisions/0041-phase23-cicd-security-docs.md`。
+本 phase 另補齊八則跨 phase 的架構 ADR（0033–0040）。
+
+### 規格缺口補齊（4 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | 「相依弱點」二擇一選 Dependabot alerts，但 alerts 是 repo 面板、**不會擋 PR**——照字面實作，CI 上等於沒有這一道 | 選 Dependabot（`.github/dependabot.yml`），另以 Trivy 檔案系統掃描（`exit-code: 1`、`ignore-unfixed`）提供會失敗的 CI 訊號 | [13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有) |
+| 2 | **M3-20 的 SBOM 沒有產生路徑**：`bom.json` / `sbom.json` 從未被任何建置步驟產出，DoD 只檢查存在性 | CycloneDX plugin 綁 `package`（`makeAggregateBom`、`includeTestScope=false`）；frontend 新增 `npm run sbom`。**兩者皆為建置產物不進版控**——過期的 SBOM 比沒有 SBOM 更危險 | [15 §15.3](15-dod-gates.md#153-dod-fullphase-2023)、[13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有) |
+| 3 | `deploy-prod` 的「人工核准」有一半**版控檔案表達不了**：required reviewers 存在 GitHub repo 設定裡，綁了 `production` environment 但規則是空的，workflow 照跑 | 檔案端做到 `workflow_dispatch` + 確認字串 + `environment: production`，M3-19 驗 environment 綁定；reviewer 設定列入需人工確認 **P-07**（清單由 6 項增為 7 項） | [15 §15.5](15-dod-gates.md#155-需人工確認未被自動驗證)、[13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有) |
+| 4 | STIX Viewer 要求「關聯」，但 `GET /api/v1/stix/{stixId}` 只回單一物件，**平台沒有反查端點**——從 indicator 出發看不到指向它的 relationship | 圖只順著物件自身的參照往外長（SRO 畫成邊）；限制寫入規格與 UI 文案，不以假資料掩蓋 | [12 §12.6](12-frontend.md#stix-viewer-m3) |
+
+### 判準本身的修訂（1 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 5 | phase-23 要求 `dod.sh` 增設「11 支 workflow 檔案皆存在」的檢查，但新增一個 ID 會讓 [15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) 的「25 項」失真 | **M3-19 就地擴充**為「11 支檔案存在 → `deploy-prod` 綁定 environment → CI 全綠」；那個檢查在語意上本來就是 M3-19 的前置（「只有兩支且都綠」正是六支 workflow 逾期十個 phase 的原因） | [15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) |
+
+### 實作決策（不改規格正文，僅記於 ADR 0041）
+
+`ExampleThreatSourceAdapter` 放 `ctip-sdk` 的**測試**原始碼並沿用既有 `SourceType` 成員
+（新增 `EXAMPLE` 成員會留下永不可達的列舉值，違反規則 16）；
+安全掃描 action 釘 commit SHA（gitleaks v3.0.0、trivy-action v0.36.0，tag 寫在註解裡）；
+STIX Viewer 是唯一 code-split 的路由（Cytoscape.js 約 370 kB）。
+
+### 依規則 17 回報（3 項，未實作）
+
+1. **M3-19 在本機無法通過**：`gh` 未安裝、repo 從未推上 GitHub，CI 從未跑過
+   （[15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) 註明的操作者前置）
+2. **`TOKEN_CLEANUP_CRON`**（[08 §8.7](08-ingestion-sdk.md)，標 M2）至今無實作——第三次回報
+3. **[12 §12.5](12-frontend.md#125-頁面) 的 Settings 頁（`/settings`，標 M2）不存在**，
+   `POST /api/v1/auth/change-password` 仍無前端入口——第三次回報
+
+第 2、3 項屬 M2 的遺漏且不在 phase-23 的交付物清單內，因此未實作。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.30）。*

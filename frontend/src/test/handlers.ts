@@ -101,6 +101,17 @@ export const sampleStixObject = {
   pattern_type: 'stix',
   pattern: `[domain-name:value = '${sampleIoc.value}']`,
   valid_from: '2026-08-01T00:00:00.000Z',
+  // 投影一律帶 object_marking_refs(07 §7.8.2);STIX Viewer 的圖靠它才有第一條邊
+  object_marking_refs: ['marking-definition--94868c89-83c2-464b-929b-a1a8aa3c8487'],
+};
+
+/** TLP:CLEAR 的 OASIS 固定 marking(07 §7.8.4);indicator / malware 都以 object_marking_refs 指向它。 */
+export const sampleStixMarking = {
+  type: 'marking-definition',
+  spec_version: '2.1',
+  id: 'marking-definition--94868c89-83c2-464b-929b-a1a8aa3c8487',
+  created: '2022-10-01T00:00:00.000Z',
+  name: 'TLP:CLEAR',
 };
 
 export const sampleThreat = {
@@ -151,6 +162,20 @@ export const sampleThreatStixObject = {
   name: sampleThreat.name,
   is_family: true,
   aliases: ['Agent Tesla'],
+};
+
+/** SRO:indicator --indicates--> malware(07 §7.8.7 的方向)。 */
+export const sampleStixRelationship = {
+  type: 'relationship',
+  spec_version: '2.1',
+  id: 'relationship--0f9c1a2b-3d4e-4a5b-8c7d-9e0f1a2b3c4d',
+  created: '2026-08-01T00:00:00.000Z',
+  modified: '2026-08-20T00:00:00.000Z',
+  relationship_type: 'indicates',
+  source_ref: `indicator--${sampleIoc.id}`,
+  target_ref: `malware--${sampleThreat.id}`,
+  description: 'Indicator role within the threat: PRIMARY',
+  object_marking_refs: ['marking-definition--94868c89-83c2-464b-929b-a1a8aa3c8487'],
 };
 
 export const notFoundError = {
@@ -402,6 +427,10 @@ export const handlers = [
     if (params.stixId === sampleThreatStixObject.id) {
       return HttpResponse.json(sampleThreatStixObject);
     }
+    if (params.stixId === sampleStixRelationship.id) {
+      return HttpResponse.json(sampleStixRelationship);
+    }
+    if (params.stixId === sampleStixMarking.id) return HttpResponse.json(sampleStixMarking);
     return HttpResponse.json(notFoundError, { status: 404 });
   }),
   http.post('*/api/v1/auth/register', () => HttpResponse.json(sampleSession, { status: 201 })),

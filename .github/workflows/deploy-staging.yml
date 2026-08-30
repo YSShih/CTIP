@@ -1,0 +1,39 @@
+# staging 佈署(13 §13.8:placeholder)
+#
+# 這支 workflow 刻意不含任何真實的佈署指令:本專案沒有 staging 主機,
+# 憑空寫死一段 ssh / kubectl 會是規則 16 禁止的假實作。它交付的是**流程骨架**:
+# 觸發條件、環境綁定、以及「佈署前必須先有可佈署產物」這件事的強制。
+# 真正接上主機時,只需在「佈署」步驟填入該環境的指令。
+name: deploy-staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # GitHub environment:secret 與保護規則掛在環境上,不散在 workflow 內
+    environment:
+      name: staging
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 佈署前檢查:staging 設定必須可解析
+        run: |
+          docker compose --env-file environment/.env.staging.example \
+            -f environment/docker-compose.yml config -q
+
+      - name: 佈署(placeholder)
+        run: |
+          echo "staging 佈署尚未接上實機。"
+          echo "接上時在此填入該環境的指令(docs/development/getting-started.md「佈署」節)。"

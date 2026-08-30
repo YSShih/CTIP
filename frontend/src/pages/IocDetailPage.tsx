@@ -33,7 +33,7 @@ export default function IocDetailPage() {
           sourcesError={sources.isError}
           onRetrySources={() => void sources.refetch()}
         />
-        <StixJsonViewer stixId={`indicator--${id}`} />
+        <StixJsonViewer stixId={`indicator--${id}`} viewerLink />
       </div>
     );
   }

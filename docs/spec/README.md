@@ -1,8 +1,8 @@
 # CTIP 規格書導覽
 
-**CTIP Master Specification v2.0** — 2026-08-21（含 §0.7–§0.13 七輪實作回饋修訂，至 2026-08-27）
+**CTIP Master Specification v2.0** — 2026-08-21（含 §0.7–§0.30 二十四輪實作回饋修訂，至 2026-08-30）
 
-這是一份**供 AI 直接消費**的軟體規格書。它描述一個 Cyber Threat Intelligence Platform，設計目標是讓任何具備程式能力的 AI agent 能依此獨立完成開發，且不同 agent 在不同時間讀同一份規格會產出相容的結果。目前 **M1（Phase 1–12）已依本規格實作完成**（`dod.sh mvp` 38/38），實作進度與偏離事項見 [../progress.md](../progress.md)。
+這是一份**供 AI 直接消費**的軟體規格書。它描述一個 Cyber Threat Intelligence Platform，設計目標是讓任何具備程式能力的 AI agent 能依此獨立完成開發，且不同 agent 在不同時間讀同一份規格會產出相容的結果。目前 **M1（Phase 1–12）已依本規格實作完成**（`dod.sh mvp` 38/38）、**M2（Phase 13–19）完成**（`dod.sh phase2` 27/27）、**M3（Phase 20–23）的四個 phase 全部交付**（`dod.sh full` 的 25 項閘門待獨立 session 執行）。實作進度與偏離事項見 [../progress.md](../progress.md)。
 
 ---
 
@@ -30,7 +30,7 @@
 
 | 檔案 | 行數 | 職責 |
 |---|---|---|
-| [00-master.md](00-master.md) | ~760 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.27 實作回饋修訂索引 |
+| [00-master.md](00-master.md) | ~860 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.30 實作回饋修訂索引 |
 | [01-architecture.md](01-architecture.md) | ~330 | 分層與依賴方向、4 個 Maven module、抽象判準、9 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
 | [02-ddd-model.md](02-ddd-model.md) | ~360 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、19 個 domain event、Shared Kernel、18 個值物件 |
 | [03-diagrams.md](03-diagrams.md) | ~740 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
@@ -77,7 +77,7 @@ v1.1 → v2.0 的實質改動：修正 **4 項建置阻斷缺陷**、**3 項版�
 
 完整變更清單見 [00-master.md §0.6](00-master.md#06-相對-v11-的變更摘要)。
 
-v2.0 定稿後，實作期間（Phase 2–20）與各輪複查陸續發現的規格衝突與缺口以**實作回饋修訂**回寫：修正直接寫進主題檔對應章節，並在 [00-master.md](00-master.md) 的 **§0.7–§0.27** 建立索引、於 `docs/architecture/decisions/` 留下 ADR。照字面實作會踩的坑集中在 [05 §5.8.1](05-environment.md) 與 [06 §6.3.6](06-tech-stack.md)。
+v2.0 定稿後，實作期間（Phase 2–23）與各輪複查陸續發現的規格衝突與缺口以**實作回饋修訂**回寫：修正直接寫進主題檔對應章節，並在 [00-master.md](00-master.md) 的 **§0.7–§0.30** 建立索引、於 `docs/architecture/decisions/` 留下 ADR。照字面實作會踩的坑集中在 [05 §5.8.1](05-environment.md) 與 [06 §6.3.6](06-tech-stack.md)。
 
 ### 安全性複查的結論（§0.27，2026-08-29）
 

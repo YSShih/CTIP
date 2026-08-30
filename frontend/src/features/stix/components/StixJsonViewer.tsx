@@ -1,4 +1,5 @@
-import { Copy } from 'lucide-react';
+import { Copy, Network } from 'lucide-react';
+import { Link } from 'react-router';
 import { ApiError } from '../../../api/client';
 import { EmptyState, ErrorState, LoadingState } from '../../../components/StateViews';
 import { Button } from '../../../components/ui/button';
@@ -9,10 +10,12 @@ import { useStixObject } from '../hooks/useStixObject';
 
 export interface StixJsonViewerProps {
   stixId: string;
+  /** 顯示「在 STIX Viewer 開啟」入口;STIX Viewer 頁自己用時關掉(§12.5 /stix/:id) */
+  viewerLink?: boolean;
 }
 
-/** IOC 的 STIX 2.1 投影檢視(M3 才有圖形檢視;M1 呈現原始 JSON)。 */
-export function StixJsonViewer({ stixId }: StixJsonViewerProps) {
+/** STIX 2.1 投影的原始 JSON 檢視;圖形檢視在 /stix/:id(§12.6)。 */
+export function StixJsonViewer({ stixId, viewerLink = false }: StixJsonViewerProps) {
   const dispatch = useAppDispatch();
   const { data, isPending, isError, error, refetch } = useStixObject(stixId);
 
@@ -54,8 +57,16 @@ export function StixJsonViewer({ stixId }: StixJsonViewerProps) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle>STIX 2.1</CardTitle>
+        {viewerLink ? (
+          <Link
+            to={`/stix/${stixId}`}
+            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Network aria-hidden className="size-4" />在 STIX Viewer 開啟
+          </Link>
+        ) : null}
       </CardHeader>
       <CardContent>{body}</CardContent>
     </Card>

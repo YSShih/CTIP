@@ -240,6 +240,33 @@
           </dependency>
         </dependencies>
       </plugin>
+      <!--
+        CycloneDX SBOM(13 §13.8、DoD M3-20)。makeAggregateBom 在 reactor 最後一個 module
+        跑一次,產出整個後端的合併 SBOM 於 backend/target/bom.json;綁在 package,
+        因此 `mvnw package` 與 `mvnw verify` 都會產生,dod.sh 的 M3-20 只檢查存在性。
+        版本未由 Boot BOM 納管,依 06 §6.1.3 規則 2 定義於本檔 <properties>。
+      -->
+      <plugin>
+        <groupId>org.cyclonedx</groupId>
+        <artifactId>cyclonedx-maven-plugin</artifactId>
+        <version>${cyclonedx-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>aggregate-bom</id>
+            <goals>
+              <goal>makeAggregateBom</goal>
+            </goals>
+            <phase>package</phase>
+          </execution>
+        </executions>
+        <configuration>
+          <projectType>application</projectType>
+          <outputFormat>json</outputFormat>
+          <outputName>bom</outputName>
+          <!-- SBOM 描述的是可佈署產物的相依,test scope 不隨映像檔出貨 -->
+          <includeTestScope>false</includeTestScope>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
