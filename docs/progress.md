@@ -2298,3 +2298,74 @@ token 為 fine-grained PAT,僅 `YSShih/CTIP` + **Actions: Read-only**,
   因為整個 `ctip-app` 共用一個資料庫
 
 ---
+
+## 基底映像弱點 + dependabot(2026-08-30)
+
+- **完整記錄**:[ADR 0049](architecture/decisions/0049-base-image-vulnerability-remediation.md);規格回寫 `00 §0.33`、`05 §5.3` 註 ²
+- **使用者指示**:「引導我修復這兩個問題」(security 長期紅、Dependabot PR 累積)
+
+### 最重要的一件事:我們先前判斷錯了
+
+[ADR 0044](architecture/decisions/0044-security-findings-remediation.md) 對基底映像的弱點寫的是
+「**這個 repo 沒有任何動作可做**,上游一修補就會自動消失」。那句話被後續每一輪回報沿用
+(progress.md、README、ADR 0048),成為「`security` 只能一直紅」的既定前提。**它是錯的。**
+
+錯在**沒有進到映像裡看**,只憑「弱點在基底映像的套件裡」就推論「只有上游修得掉」:
+
+```
+$ dpkg -S /usr/bin/pebble
+dpkg-query: no path found matching pattern     ← 不屬於任何 apt 套件
+                                                  → apt-get upgrade 永遠修不到它
+                                                  → 「等上游」這條路本身就不通
+$ apk policy libcrypto3
+  3.5.7-r0:  lib/apk/db/installed              ← 映像內
+  3.5.8-r0:  .../alpine/v3.24/main             ← 修補版早就在 repo 裡了
+```
+
+而 `pebble` 是 Canonical 的服務管理器,本容器 `ENTRYPOINT` 是 `java -jar`,**從不使用它**
+—— 一個 9.9MB、用不到、又修不掉的 Go binary,帶進 8 個 HIGH。
+
+**教訓**:「弱點在基底映像裡」≠「我們無能為力」。下結論前先問兩題:
+**套件管理器管得到它嗎?我們真的需要它嗎?** 兩題各自都可能給出一條 repo 層的修法。
+
+### 修法與結果
+
+| 檔案 | 變更 | 結果 |
+|---|---|---|
+| backend Dockerfile(production) | `&& rm -f /usr/bin/pebble` | 8 HIGH → **0** |
+| frontend Dockerfile(production) | `RUN apk --no-cache upgrade libcrypto3 libssl3` | 2 HIGH → **0** |
+
+`image-scan` **維持會擋 PR**,不拆成「只回報」的第二道 —— 弱點既然修得掉,
+先調鬆閘門等於把可修的東西歸類為不可修(使用者在三個選項中選了「只修弱點」)。
+
+**代價(刻意接受)**:`apk upgrade` 使映像不再逐位元可重現(但浮動 tag 本來就有這性質);
+未來出現「上游已修、基底映像未重建」的新 CVE 時仍會紅 —— 本次確立的是**處置模式**,不是一次性補丁。
+
+### dependabot 的兩個漏洞
+
+1. **`github-actions` 區塊漏了 `semver-major` 的 ignore** —— 檔案開頭寫著「major 需人工審核」,
+   maven/npm/docker 三個都實作了,只有它沒有。五支跨 major 的 Action PR 因此自動出現。已補,五支關閉
+2. **手動關閉對「被版本表 pin 住」的相依無效**:PR #8(TanStack Query)`12:49` 關閉,
+   Dependabot `13:41` 以 5.102.7 重開為 #15。`06 §6.2` 把數個相依 pin 在 **minor 層級**,
+   但 dependabot 只被告知「major 不提」→ 改為讓它表達版本表的 pin
+   (ArchUnit／Resilience4j／ESLint／TanStack Query 各加 `semver-minor`;**patch 仍會提出**)
+
+**PR 從 14 支降到 4 支**(#15 #14 #11 #3),其餘合併與否由使用者決定(規則 6)。
+
+### 驗證(全部實測)
+
+frontend 映像掃描 **0 弱點**、backend **0 弱點**(`pebble` 不再出現,`app.jar` 亦為 0);
+兩個容器仍正常(frontend HTTP 200;backend `java 25.0.4` + `curl 8.18.0` 都在);
+`M1-11` / `M3-23` / `M3-24` / **`M2-25`**(staging 實際用改過的 production 映像)皆 PASS;
+dependabot YAML 經 `yq` 驗證,四個 ecosystem 皆有 ignore。
+
+### 給下一輪的注意事項
+
+- ⚠️ **本機掃 backend 必須掛 `~/.m2`**:Trivy 會連 Maven Central 解析 jar 內相依,
+  撞 429(Retry-After 1800,會封該 IP)。指令見 ADR 0049
+- ⚠️ **推上去才算數**:本機掃描是必要條件不是充分條件。要確認 CI 的 `security` 轉綠,
+  以及 `00 §0.32` 修的 `backend-test` 也轉綠(那個尚未經 CI 實測)
+- **M3-19 屆時應可轉綠** —— 九支 push 觸發的 workflow 若全綠,它就會過
+- 剩 4 支 PR 的合併由使用者決定;`typescript-eslint` 建議順手補進 `06 §6.2.3` 版本表
+
+---

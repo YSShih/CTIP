@@ -943,4 +943,34 @@ Bloom 位元布局 vs `11 §11.4`、ArchUnit 規則數 vs `01 §1.9`、DoD 項�
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.32）。*
+## 0.33 實作回饋修訂（2026-08-30，基底映像弱點與 dependabot）
+
+使用者要求引導修復兩件懸著的事:`security` workflow 長期紅、以及 repo 累積的 Dependabot PR。
+完整記錄見 [ADR 0049](../architecture/decisions/0049-base-image-vulnerability-remediation.md)。
+
+### 更正一個先前的錯誤判斷（本輪最重要的一項）
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | [ADR 0044](../architecture/decisions/0044-security-findings-remediation.md) 判定基底映像的弱點「**本 repo 沒有任何動作可做**,上游重建才會消失」,該句被後續每一輪回報沿用。**實測後證實是錯的**:`/usr/bin/pebble` **不受 apt 管理**(`dpkg -S` 查無所屬套件)——「等上游」這條路本身不通;而它是服務管理器,本容器 `java -jar` **從不使用**。`nginx` 的 `libcrypto3` 修補版 **3.5.8-r0 早已在 Alpine v3.24 main**,只是映像未重建 | backend `rm -f /usr/bin/pebble`、frontend `apk upgrade libcrypto3 libssl3`。兩個映像修後 Trivy 掃描皆 **0 個弱點**(原共 10 個 HIGH)。`image-scan` **維持會擋 PR**,不拆成「只回報」的第二道——弱點既然修得掉,調鬆閘門等於把可修的東西歸類為不可修 | [05 §5.3](05-environment.md#53-dockerfile-契約) 兩個 Dockerfile 的列出內容 + 註 ² |
+
+> **教訓**:「弱點在基底映像裡」不等於「我們無能為力」。下結論前要先問兩題——
+> **套件管理器管得到它嗎?我們真的需要它嗎?** 這兩題各自都可能給出一條 repo 層的修法。
+> 當時的錯誤是**沒有進到映像裡看**。ADR 0044 原文刻意不修改,只加後續註記。
+
+### dependabot 的兩個漏洞
+
+| # | 發現 | 處置 |
+|---|---|---|
+| 2 | `.github/dependabot.yml` 開頭寫著「major 需人工審核」,`maven`／`npm`／`docker` 都實作了 `semver-major` 的 ignore,**只有 `github-actions` 沒有** —— 五支跨 major 的 Action PR 因此自動出現 | 補上 ignore,五支一併關閉 |
+| 3 | **手動關閉對「被版本表 pin 住」的相依無效**:PR #8(TanStack Query)`12:49` 關閉,Dependabot `13:41` 以更新的 patch 號重開為 #15 | `06 §6.2` 把數個相依 pin 在 **minor 層級**,但 dependabot 只被告知「major 不提」。改為讓它表達版本表的 pin:ArchUnit／Resilience4j／ESLint／TanStack Query 各加 `semver-minor` ignore(patch 仍會提出),升 minor 改在 [§6.4](06-tech-stack.md#64-版本複查程序強制) 的複查日評估 |
+
+### 尚待確認
+
+本機掃描與 YAML 驗證只是**必要條件**。`security` 是否真的轉綠、以及
+[§0.32](#032-實作回饋修訂2026-08-30全專案複查後回寫) 修的 `backend-test` 是否轉綠,
+都要**推上去由 CI 實測**才算數。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.33）。*

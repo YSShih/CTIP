@@ -18,6 +18,14 @@ updates:
       # major 不自動開 PR:需人工核准並寫 ADR(06 §6.1.2)
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+      # 06 §6.2.2 的版本表把這兩項 pin 在 **minor 層級**(ArchUnit 1.4.x、Resilience4j 2.3.x),
+      # 跨出 pin 要先改版本表並寫 ADR。不加這條的話 Dependabot 會反覆提同一個 minor 升版
+      # ——實測:手動關閉後它換一個 patch 號重開一支新 PR(ADR 0049)。patch 仍會自動提出。
+      # 升 minor 改在 06 §6.4 的版本複查日(2027-02-21)一併評估。
+      - dependency-name: "com.tngtech.archunit:*"
+        update-types: [version-update:semver-minor]
+      - dependency-name: "io.github.resilience4j:*"
+        update-types: [version-update:semver-minor]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -28,12 +36,30 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+      # 同 maven 區塊:06 §6.2.3 把 ESLint pin 在 10.8.x、TanStack Query 在 5.101.x,
+      # 且 package.json 用 `~` 本來就鎖 minor。實測 Dependabot 會反覆重開(#8 關掉後
+      # 換 5.102.7 重開為 #15),因此以 ignore 表達版本表的 pin(ADR 0049)。patch 仍會提出。
+      - dependency-name: "eslint"
+        update-types: [version-update:semver-minor]
+      - dependency-name: "@tanstack/react-query"
+        update-types: [version-update:semver-minor]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     labels: [dependencies, ci]
+    ignore:
+      # 與 maven / npm / docker 一致:major 不自動開 PR,需人工核准並寫 ADR(06 §6.1.2)。
+      # 本區塊原本**漏了這一條**——檔案開頭寫著「major 需人工審核」,另外三個 ecosystem 都實作了,
+      # 只有這裡沒有,於是 setup-node 4→7、setup-java 4→6、upload-artifact 4→7、
+      # docker/build-push-action 6→7、docker/metadata-action 5→6 自動開了五支 PR(ADR 0049)。
+      # 跨 major 會改變輸入參數與 runtime,必須看過 release note;升版改在 06 §6.4 的複查日手動做。
+      #
+      # 這條**不影響**安全掃描類 action 的 SHA-pin 規則(06 §6.2.3b):
+      # Gitleaks / Trivy 釘的是 commit SHA、不用浮動 tag,是另一回事。
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: docker
     directories:

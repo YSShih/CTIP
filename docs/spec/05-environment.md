@@ -150,9 +150,12 @@ RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests package
 
 ########## production ##########
 FROM eclipse-temurin:25-jre AS production
+# 基底映像放了一個 9.9MB 的 /usr/bin/pebble，它**不受 apt 管理**，
+# apt-get upgrade 永遠修不到它內嵌的 Go stdlib；本容器從不使用它（見下方註 ²）
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/* \
+ && rm -f /usr/bin/pebble \
  && useradd -r -u 10001 ctip
 WORKDIR /app
 COPY --from=build /src/ctip-app/target/*.jar app.jar
@@ -189,6 +192,8 @@ RUN npm run build
 
 ########## production ##########
 FROM nginx:1.30-alpine AS production
+# 上游映像未重建時，就地補上 Alpine repo 已有的安全修補（見下方註 ²）
+RUN apk --no-cache upgrade libcrypto3 libssl3
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY environment/config/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
@@ -203,6 +208,27 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
 > `config/nginx/default.conf` 的 `listen 80;` 只綁 IPv4——**busybox 的 `wget` 不會回退到 IPv4**，
 > healthcheck 因此永遠失敗、容器永遠 `unhealthy`（`curl` 會回退，所以手動驗證時看起來一切正常）。
 > 這個缺陷從 Phase 2 就存在，但 production stage 只有 `M2-25`（`up.sh staging`）會實際執行到。
+
+---
+
+> ² **實作回饋修訂（2026-08-30；[ADR 0049](../architecture/decisions/0049-base-image-vulnerability-remediation.md)）——基底映像帶進來的弱點，在上游重建前由 Dockerfile 就地處置。**
+>
+> [ADR 0044](../architecture/decisions/0044-security-findings-remediation.md) 曾判定這類弱點
+> 「本 repo 沒有任何動作可做，上游重建映像才會消失」。**那個判斷是錯的**，實測後兩者都有修法：
+>
+> | 映像 | 弱點 | 為何 repo 層修得掉 |
+> |---|---|---|
+> | `eclipse-temurin:25-jre` | `/usr/bin/pebble` 內嵌的 Go stdlib，**8 個 HIGH** | 該檔案**不受 apt 管理**（`dpkg -S` 查無所屬套件），因此 `apt-get upgrade` 永遠修不到；而 entrypoint 是 `java -jar`，**從不使用它** → 刪除 |
+> | `nginx:1.30-alpine` | `libcrypto3`／`libssl3` 3.5.7-r0（CVE-2026-14456） | 修補版 **3.5.8-r0 已在 Alpine v3.24 main**，只是 nginx 映像尚未重建 → `apk upgrade` 該兩項 |
+>
+> 這與 [06 §6.1.2](06-tech-stack.md#612-凍結與浮動強制)「image 用 major 浮動 tag，**自動吃到安全修補**」
+> 是同一個意圖的延伸——上游還沒重建時由 Dockerfile 補上，**不是繞過版本政策**
+> （基底映像的 tag 本身未改變）。
+>
+> **代價（刻意接受）**：`apk upgrade` 使映像不再逐位元可重現——但浮動 tag 本來就有這個性質。
+> 且日後出現「上游已修、基底映像未重建」的新 CVE 時 `security` 仍會紅；本次確立的是**處置模式**
+> （先查 apt／apk 管不管得到 → 管得到就升級，管不到且用不到就刪除），而不是一次性補丁。
+> `security.yml` 的 `image-scan` **維持會擋 PR**，不拆成「只回報」的第二道。
 
 ---
 

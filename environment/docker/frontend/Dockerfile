@@ -20,6 +20,11 @@ RUN npm run build
 
 ########## production ##########
 FROM nginx:1.30-alpine AS production
+# 上游 nginx:1.30-alpine 尚未重建,映像內的 libcrypto3/libssl3 停在 3.5.7-r0(CVE-2026-14456),
+# 而 Alpine v3.24 main 已有 3.5.8-r0(2026-08-30 實測 `apk policy libcrypto3` 確認)。
+# 浮動 tag 的用意本來就是「自動吃到安全修補」(06 §6.1.2);上游還沒重建時由此處補上,
+# 語意一致。只升這兩個受影響的套件,不做全域 apk upgrade(範圍最小、可解釋)。見 ADR 0049。
+RUN apk --no-cache upgrade libcrypto3 libssl3
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY environment/config/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

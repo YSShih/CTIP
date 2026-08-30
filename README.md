@@ -27,7 +27,7 @@
 - 附一份中英對照的 Ubiquitous Language 詞彙表——規格是中文而程式碼是英文，沒有這張表命名會發散
 
 規格是 **single source of truth**：實作撞到的每一個規格衝突都寫回規格正文，而不是在程式裡繞過去
-（二十六輪，見 [00 §0.7–§0.32](docs/spec/00-master.md)）。
+（二十七輪，見 [00 §0.7–§0.33](docs/spec/00-master.md)）。
 
 **要讀它** —— AI agent 從 [`docs/spec/README.md`](docs/spec/README.md) 開始，它會告訴你讀取順序，
 **不要一次讀完全部檔案**；人類先讀下面的里程碑表，再讀 [00 §0.6](docs/spec/00-master.md) 的變更摘要
@@ -191,10 +191,10 @@ npx playwright install chromium && npx playwright test
 
 | 項目 | 狀態 |
 |---|---|
-| 規格書 | ✅ v2.0（含二十六輪實作回饋修訂，[00 §0.7–§0.32](docs/spec/00-master.md)） |
+| 規格書 | ✅ v2.0（含二十七輪實作回饋修訂，[00 §0.7–§0.33](docs/spec/00-master.md)） |
 | 實作 | ✅ 23 個 phase 全部交付。後端 **1,131 tests**、前端 **186 tests + 6 E2E**，皆全綠 |
 | 閘門 | ✅ M1 38/38 · ✅ M2 27/27 · 🟠 M3 **23/25**（首次實跑；兩項失敗其後皆已處置，見下） |
-| CI | 11 支 workflow。**兩支仍紅**：`security`（兩組弱點在**基底映像**，本 repo 無動作可做，上游重建即消失）與 `backend-test`（測試順序相依，2026-08-30 已修，待推送後由 CI 確認）。詳見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md) |
+| CI | 11 支 workflow。`security` 的 `dependency-scan`／`secret-scan` 已綠；**`image-scan` 的 10 個 HIGH 已於 2026-08-30 修掉**（`pebble` 不受 apt 管理且本容器用不到 → 刪除；`libcrypto3` 的修補版早在 Alpine repo → `apk upgrade`）。`backend-test` 的測試順序相依亦已修 —— **兩者都待推送後由 CI 實測確認**。見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md)、[0049](docs/architecture/decisions/0049-base-image-vulnerability-remediation.md) |
 
 M3 閘門的兩項失敗：**M3-01**（巢狀 gate 回歸）成因是 Phase 22 換 plain log pattern 時掉了 `%thread`，
 判準要找的 `restartedMain` 是執行緒名、永遠對不到 —— 已修。

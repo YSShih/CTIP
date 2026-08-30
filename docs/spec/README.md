@@ -30,7 +30,7 @@
 
 | 檔案 | 行數 | 職責 |
 |---|---|---|
-| [00-master.md](00-master.md) | ~900 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.32 實作回饋修訂索引 |
+| [00-master.md](00-master.md) | ~900 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.33 實作回饋修訂索引 |
 | [01-architecture.md](01-architecture.md) | ~360 | 分層與依賴方向、4 個 Maven module、抽象判準、11 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
 | [02-ddd-model.md](02-ddd-model.md) | ~440 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、21 個 domain event、Shared Kernel、18 個值物件 |
 | [03-diagrams.md](03-diagrams.md) | ~760 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |

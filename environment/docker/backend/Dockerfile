@@ -32,9 +32,14 @@ RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -DskipTests package
 
 ########## production ##########
 FROM eclipse-temurin:25-jre AS production
+# 基底映像放了一個 9.9MB 的 /usr/bin/pebble(Canonical 的服務管理器)。它**不受 apt 管理**
+# (`dpkg -S /usr/bin/pebble` 查無所屬套件),因此 apt-get upgrade 永遠修不到它內嵌的 Go stdlib
+# ——2026-08-30 實測那支 binary 帶進 8 個 HIGH(Go stdlib v1.26.5,上游 1.26.6 已修)。
+# 本容器的 entrypoint 是 `java -jar`,從不使用 pebble,留著只是把弱點帶進正式映像(ADR 0049)。
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/* \
+ && rm -f /usr/bin/pebble \
  && useradd -r -u 10001 ctip
 WORKDIR /app
 COPY --from=build /src/ctip-app/target/*.jar app.jar
