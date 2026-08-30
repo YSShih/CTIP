@@ -1736,7 +1736,7 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
 
 - **狀態**:done(2026-08-30)
 - **執行單**:`docs/spec/phases/phase-22.md`
-- **Commit**:`__COMMIT__`(`Phase 22: monitoring, structured logging and tracing`)
+- **Commit**:`1657061`(`Phase 22: monitoring, structured logging and tracing`)
 - **完成判準結果**:全綠 —
   - `test -Ptest-all -Dtest='MetricsCompletenessTest,SensitiveLogTest,TracePropagationTest'`(逐字)✅ **23/23**
   - `clean verify -Ptest-integration` 無過濾 ✅ **1,109 tests**
