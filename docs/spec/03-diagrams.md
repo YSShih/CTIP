@@ -505,10 +505,12 @@ erDiagram
     TENANTS ||--o{ BLOOM_VERSIONS : has
     TENANTS ||--o{ WEBHOOKS : has
     TENANTS ||--o{ AUDIT_LOGS : scoped
+    TENANTS ||--o{ IMPORT_JOBS : owns
 
     USERS ||--o{ TENANT_USERS : joins
     USERS ||--o{ REFRESH_TOKENS : holds
     USERS ||--o{ API_KEYS : created
+    USERS ||--o{ IMPORT_JOBS : submitted
     ROLES ||--o{ TENANT_USERS : grants
     ROLES ||--o{ ROLE_PERMISSIONS : has
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : granted
@@ -531,13 +533,14 @@ erDiagram
     BLOOM_VERSIONS ||--|| BLOOM_ARTIFACTS : stores
     WEBHOOKS ||--o{ WEBHOOK_DELIVERIES : attempts
     SOURCE_SYNC ||--o{ INGESTION_REJECTIONS : during
+    IMPORT_JOBS ||--o{ INGESTION_REJECTIONS : "rejected rows"
 
     TENANTS ||--o{ NOTIFICATIONS : scoped
     USERS ||--o{ NOTIFICATIONS : receives
     STIX_OBJECTS ||..o{ STIX_RELATIONSHIPS : "linked via stix_id"
 ```
 
-**全部 27 張表皆已畫入。** 虛線關聯（`..`）表示非 FK 的弱參照——`stix_relationships.source_ref` / `target_ref` 存的是 STIX ID 字串而非 UUID 外鍵，因此 DB 層無 FK 約束。
+**全部 28 張表皆已畫入。** （`IMPORT_JOBS` 為 2026-08-30 補畫——該表於 Phase 14 新增為 [04](04-data-dictionary.md) 的 18b，但本圖與 §4.1 清單當時都漏了同步，見 [ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)。）虛線關聯（`..`）表示非 FK 的弱參照——`stix_relationships.source_ref` / `target_ref` 存的是 STIX ID 字串而非 UUID 外鍵，因此 DB 層無 FK 約束。
 
 ---
 

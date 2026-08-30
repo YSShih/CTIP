@@ -30,22 +30,22 @@
 
 | 檔案 | 行數 | 職責 |
 |---|---|---|
-| [00-master.md](00-master.md) | ~860 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.30 實作回饋修訂索引 |
-| [01-architecture.md](01-architecture.md) | ~330 | 分層與依賴方向、4 個 Maven module、抽象判準、9 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
-| [02-ddd-model.md](02-ddd-model.md) | ~360 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、19 個 domain event、Shared Kernel、18 個值物件 |
-| [03-diagrams.md](03-diagrams.md) | ~740 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
-| [04-data-dictionary.md](04-data-dictionary.md) | ~1120 | **27 張表完整 schema**、約束、索引、列舉、TTL 三步規則、Flyway 對應 |
-| [05-environment.md](05-environment.md) | ~730 | 單一 compose、Dockerfile 契約、四種 profile、全部環境變數、Spring 設定對應、腳本契約、hot reload |
-| [06-tech-stack.md](06-tech-stack.md) | ~320 | 版本表（含支援終止日與複查日）、分級支援窗口政策、linter、編譯地雷 |
-| [07-domain-intel.md](07-domain-intel.md) | ~450 | IOC 模型、正規化與拒絕規則、去重、合併政策、評分、TLP 2.0 可見度、**STIX 2.1 完整映射** |
-| [08-ingestion-sdk.md](08-ingestion-sdk.md) | ~310 | SDK 契約、10 個 pipeline stage、mock adapter、韌性、來源健康、12 個排程任務 |
-| [09-api.md](09-api.md) | ~350 | 47 個端點、認證、cursor 分頁、16 個錯誤碼、DTO 規則、輸出過濾五步、OpenAPI |
-| [10-identity-plans.md](10-identity-plans.md) | ~340 | 租戶隔離、RBAC 權限矩陣、JWT、API key、4 個方案 × 15 個配額維度、限流 |
-| [11-sync-bloom.md](11-sync-bloom.md) | ~240 | 兩層 Bloom、**位元陣列格式**、delta 編碼、client 同步流程與 6 條契約 |
-| [12-frontend.md](12-frontend.md) | ~220 | 結構、4 條 feature 依賴規則、狀態歸屬表、型別產生流程、15 個頁面、UI 要求 |
-| [13-platform-ops.md](13-platform-ops.md) | ~340 | Kafka、通知、安全、隱私與 6 項保留政策、稽核、可觀測性、搜尋與降級、11 支 CI workflow |
-| [14-testing.md](14-testing.md) | ~140 | L1–L4 分層、覆蓋率門檻、9 條安全測試、測試資料 |
-| [15-dod-gates.md](15-dod-gates.md) | ~180 | **90 項可執行 DoD** + 6 項明確標為需人工確認 |
+| [00-master.md](00-master.md) | ~900 | **索引與強制契約摘要**。Phase Plan、執行規則、v1.1→v2.0 變更、§0.7–§0.32 實作回饋修訂索引 |
+| [01-architecture.md](01-architecture.md) | ~360 | 分層與依賴方向、4 個 Maven module、抽象判準、11 條 ArchUnit 規則、可讀性規則與執行工具、M1 最小安全層 |
+| [02-ddd-model.md](02-ddd-model.md) | ~440 | 9 個聚合與 60+ 條不變量、Ubiquitous Language 詞彙表、21 個 domain event、Shared Kernel、18 個值物件 |
+| [03-diagrams.md](03-diagrams.md) | ~760 | 17 張 Mermaid 圖（模組依賴、9 張聚合、ERD、ingestion sequence、前端 5 張），**逐圖標註規範等級** |
+| [04-data-dictionary.md](04-data-dictionary.md) | ~1210 | **28 張表完整 schema**、約束、索引、列舉、TTL 三步規則、Flyway 對應 |
+| [05-environment.md](05-environment.md) | ~920 | 單一 compose、Dockerfile 契約、四種 profile、全部環境變數、Spring 設定對應、腳本契約、hot reload |
+| [06-tech-stack.md](06-tech-stack.md) | ~440 | 版本表（含支援終止日與複查日）、分級支援窗口政策、linter、編譯地雷 |
+| [07-domain-intel.md](07-domain-intel.md) | ~580 | IOC 模型、正規化與拒絕規則、去重、合併政策、評分、TLP 2.0 可見度、**STIX 2.1 完整映射** |
+| [08-ingestion-sdk.md](08-ingestion-sdk.md) | ~350 | SDK 契約、12 個 pipeline stage（M1 裝配 10 個，`BloomUpdate`／`SearchIndex` 為 M2）、mock adapter、韌性、來源健康、14 個排程任務 |
+| [09-api.md](09-api.md) | ~520 | 54 個端點、認證、cursor 分頁、16 個錯誤碼、DTO 規則、輸出過濾五步、OpenAPI |
+| [10-identity-plans.md](10-identity-plans.md) | ~490 | 租戶隔離、RBAC 權限矩陣、JWT、API key、4 個方案 × 15 個配額維度、限流 |
+| [11-sync-bloom.md](11-sync-bloom.md) | ~340 | 兩層 Bloom、**位元陣列格式**、delta 編碼、client 同步流程與 6 條契約 |
+| [12-frontend.md](12-frontend.md) | ~280 | 結構、4 條 feature 依賴規則、狀態歸屬表、型別產生流程、16 列頁面（18 個路由）、UI 要求 |
+| [13-platform-ops.md](13-platform-ops.md) | ~610 | Kafka、通知、安全、隱私與 6 項保留政策、稽核、可觀測性、搜尋與降級、11 支 CI workflow |
+| [14-testing.md](14-testing.md) | ~160 | L1–L4 分層、覆蓋率門檻、9 條安全測試、測試資料 |
+| [15-dod-gates.md](15-dod-gates.md) | ~250 | **90 項可執行 DoD** + 7 項明確標為需人工確認 |
 | `phases/phase-01..23.md` | 各 ~70 | 23 份執行單（薄，指向主題檔，不重複內容） |
 | `archive/v1.1-master-codex.md` | 3038 | v1.1 原始單檔規格。**僅供出處追溯，不得依此開發** |
 

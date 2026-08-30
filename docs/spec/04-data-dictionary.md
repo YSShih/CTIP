@@ -59,6 +59,7 @@
 | 16 | `api_keys` | M2 | **ApiKey**（根） | 三模型 |
 | 17 | `plans` | M2 | — （參考資料） | 兩模型 |
 | 18 | `subscriptions` | M2 | **Subscription**（根） | 三模型 |
+| 18b | `import_jobs` | M2 | — （append-only 進度承載） | 兩模型 |
 | 19 | `threats` | M2 | **Threat**（根） | 三模型 |
 | 20 | `threat_indicators` | M2 | Threat（內部實體） | 三模型 |
 | 21 | `threat_external_references` | M2 | Threat（值物件集合） | 三模型 |
@@ -69,9 +70,11 @@
 | 26 | `notifications` | M3 | — | 兩模型 |
 | 27 | `audit_logs` | M3 | — （append-only） | 兩模型 |
 
-> **共 27 張表。** v1.1 的 §36.1 列了 26 張；新增 `threat_external_references`（v1.1 的 §18.1 把它定義為 Threat 內的 `List<ExternalReference>`，但存 JSONB 會違反白名單，§61 的 ERD 又把它畫成獨立實體 — 此處定為獨立表，同時解決三節不一致）。
+> **共 28 張表。** v2.0 初版定為 27 張（v1.1 的 §36.1 列了 26 張；新增 `threat_external_references`——v1.1 的 §18.1 把它定義為 Threat 內的 `List<ExternalReference>`，但存 JSONB 會違反白名單，§61 的 ERD 又把它畫成獨立實體，此處定為獨立表，同時解決三節不一致）。
 >
-> 九個聚合根：**Tenant、Source、Indicator、User、ApiKey、Subscription、Threat、BloomVersion、Webhook**。
+> **`import_jobs`（18b）於 2026-08-28 補入（Phase 14；[ADR 0019](../architecture/decisions/0019-phase14-16-spec-resolutions.md)）**，表數 27 → **28**。當時新增了本節下方的 18b 欄位定義與 §4.7 的 `V28` 對應，但**本清單、本註記、§3.3 的 ERD 與檔尾計數都漏了同步**（2026-08-30 的全專案複查發現，[ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)）。編號用 `18b` 而不重編 19–27，是為了不動到既有表號。
+>
+> 九個聚合根：**Tenant、Source、Indicator、User、ApiKey、Subscription、Threat、BloomVersion、Webhook**（`import_jobs` 為兩模型表，不屬任何聚合）。
 
 ---
 
@@ -1206,4 +1209,4 @@ SUBSCRIPTION_CHANGED | WEBHOOK_CREATED | WEBHOOK_DELETED
 
 ---
 
-*檔案結束。表數：27。上次校對：2026-08-21。*
+*檔案結束。表數：28（1–18、18b、19–27）。上次校對：2026-08-30（全專案複查：補登 `import_jobs`）。*

@@ -30,7 +30,8 @@ CTIP/
 │   ├── scripts/
 │   │   ├── up.sh  down.sh  restart.sh  logs.sh
 │   │   ├── migrate.sh  reload.sh  dod.sh
-│   │   └── _common.sh
+│   │   ├── _common.sh
+│   │   └── openapi-breaking-check.py   ← Phase 10 新增，見下方註
 │   └── README.md
 ├── frontend/
 ├── backend/                        ← Maven multi-module，見 01-architecture.md
@@ -45,6 +46,11 @@ CTIP/
 ```
 
 **不得增減頂層目錄。** `docs/spec/` 是 `docs/` 之下的子目錄，不違反此規則。
+
+> **`openapi-breaking-check.py` 為 2026-08-30 補列（[ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)）**：
+> 該腳本於 Phase 10 建立（[ADR 0007](../architecture/decisions/0007-phase10-openapi-decisions.md) §2——版本表無 oasdiff，
+> 以標準庫 python 自寫），由 `.github/workflows/openapi-check.yml` 呼叫，用法見 `environment/README.md`。
+> 檔案一直都在，只是本結構契約的樹漏了同步——而 §5.1 是**強制契約**，樹上沒有的東西照字面讀是「不該存在」。
 
 | 目錄 | 只放 | 絕不放 |
 |---|---|---|

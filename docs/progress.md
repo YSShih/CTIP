@@ -2087,3 +2087,59 @@ JaCoCo 的 `jacoco.exec` 預設 **append**,前一輪完整 `verify` 的覆蓋資
 - Dependabot 仍有 14 個開啟中的 PR;**#1 應關閉**(理由見上),**#12 已由本次升版涵蓋**
 
 ---
+
+## 全專案複查 — 程式 vs 規格(2026-08-30)
+
+- **完整記錄**:`docs/architecture/decisions/0045-full-project-review-doc-sync.md`;規格回寫 `00 §0.32`
+- **使用者指示**:逐一 review 整個專案程式碼、確認產出的程式與規格一致、規格或 README 有需要更正的就更正
+
+### 程式端:無偏離,建置全綠
+
+機械比對能對的全對:Flyway 建的 28 張表 vs `04`、`openapi.json` vs `09 §9.1`、
+RBAC 種子 vs `10 §10.3`、`AuditAction` vs `13 §13.5`、TLP 2.0 五個 marking UUID vs `07 §7.8.4`、
+Bloom 位元布局 vs `11 §11.4`、ArchUnit 11 條 vs `01 §1.9`、DoD 90 項 vs `15`。
+
+實測:後端 `clean verify -Ptest-integration` **1,128 tests 全綠**(Spotless／Checkstyle／ArchUnit／JaCoCo 門檻都綁在 `verify`);
+前端 `lint` 0 warning、`build` 通過、`test` **186 全綠**、`api:check` 無型別漂移。
+`09 §9.1` 列的 54 個端點與 `openapi.json` 的 53 個 HTTP operation 完全對得上(差的是 `GET /ws`,
+WebSocket 升級不是 OpenAPI operation)——**沒有多做、也沒有少做**。
+
+### 本輪最值得記住的一件事
+
+**問題全部集中在「規格宣告了自動化,而那個自動化不存在」。**
+
+`03 §3.3` 的 ERD 標著 🔴 **規範·自動驗證**,內文寫「由 CI 比對 Flyway 產生的 schema 與 04」——
+`dod.sh` 與 11 支 workflow 裡**沒有任何一步做這件事**。
+結果是 Phase 14 新增的 `import_jobs` 只進了 `04 §4.3` 的欄位定義與 `§4.7` 的 `V28` 對應,
+而 §4.1 的表清單、§3.3 的 ERD、兩處「27 張表」的計數全部漏了同步,
+**連續九個 phase(14→23)沒有任何檢查變紅**。
+
+這與 ADR 0016 第 3 項是同一類:一個假的守門比明說「這裡沒有守門」更危險。
+反過來看,RBAC 之所以沒出現同類漂移,是因為 `RbacMatrix.parseSpecificationTable()`
+**直接 parse 規格的 markdown 表**——種子與規格任一動了就紅。**計數要靠測試釘,不能靠人記得改。**
+
+### 處置
+
+- 新增 `DataDictionaryConsistencyTest`(L3,`@Tag("integration")`):§4.1 清單、§3.3 ERD、
+  04 檔尾「表數：n」三者**雙向**比對 `pg_tables`(規格漏登、建表沒寫規格,兩邊都紅)。
+  **否定驗證**:移除 `import_jobs` → 三項全紅;還原後全綠。CI 由 `backend-test.yml` 的
+  `clean verify -Ptest-integration` 涵蓋。**不新增 DoD 項目**(「90 項」是契約)
+- 規格計數同步:表 27→**28**、端點 43→**54**、domain event 19→**21**、pipeline stage 10→**12**、
+  `spec/README` 索引表七處計數 + 行數欄重算、`05 §5.1` 結構契約補 `openapi-breaking-check.py`
+- README:二十五→**二十六輪**／§0.7–**§0.32**、ADR 0001–**0045**、8→**9 支腳本**、27→**28 張表**、
+  M3 閘門列補上 ADR 0044 之後的實況(`openapi-check` 已在 CI 轉綠、三個 CVE 已由 Boot 4.1.1 解掉)
+
+### 依規則 17 回報(1 項,未處置)
+
+`WebhookTargetGuard` 判定後、`HttpClient` 送出時**會再解析一次 DNS**,兩次之間有理論上的 rebinding 窗口。
+根治要把已判定的 IP 釘進連線,會動到 HTTP client 的裝配方式;現況已是兩道防線且 JVM DNS 快取使窗口極窄。
+**不自行改動**,交回使用者定調。
+
+### 給下一輪的注意事項
+
+- **M3-01 仍需完整重跑**(mvp 38 + phase2 27);**M3-19 仍待** host 安裝 `gh` 與 CI `security` 轉綠
+  (剩餘兩組弱點在基底映像,上游重建即消失)
+- Dependabot 仍有開啟中的 PR;**#1 應關閉**(nginx 1.31 是 mainline,見 `00 §0.6`)
+- 下次若再新增資料表,`DataDictionaryConsistencyTest` 會強迫你同時改 §4.1、§3.3 與檔尾計數
+
+---

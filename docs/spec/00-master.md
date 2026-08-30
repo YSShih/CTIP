@@ -30,7 +30,7 @@
 | [01-architecture.md](01-architecture.md) | 分層、Maven module、抽象判準、ArchUnit、可讀性規則 | 每次 |
 | [02-ddd-model.md](02-ddd-model.md) | 九個聚合、不變量、Ubiquitous Language、Domain Event | 涉及 domain 時 |
 | [03-diagrams.md](03-diagrams.md) | 模組依賴圖、聚合圖、ERD、ingestion sequence、前端四圖 | 涉及結構時 |
-| [04-data-dictionary.md](04-data-dictionary.md) | 27 張表完整 schema、列舉、TTL 規則、Flyway 對應 | 涉及持久化時 |
+| [04-data-dictionary.md](04-data-dictionary.md) | 28 張表完整 schema、列舉、TTL 規則、Flyway 對應 | 涉及持久化時 |
 | [05-environment.md](05-environment.md) | compose、Dockerfile、env 變數、Spring 設定、腳本、hot reload | Phase 1–2 及部署 |
 | [06-tech-stack.md](06-tech-stack.md) | 版本表與支援窗口、版本政策、linter、編譯地雷 | Phase 1 及升版時 |
 | [07-domain-intel.md](07-domain-intel.md) | IOC 模型、正規化、拒絕規則、去重、合併、評分、TLP、STIX 映射 | Phase 4、6–8 |
@@ -56,7 +56,7 @@
 | Dockerfile 契約（含 build context） | [05-environment.md §5.3](05-environment.md#53-dockerfile-契約) |
 | 版本表與版本政策 | [06-tech-stack.md](06-tech-stack.md) |
 | 分層依賴方向 + 11 條 ArchUnit 規則 | [01-architecture.md](01-architecture.md#19-archunit-規則強制共-11-條) |
-| 27 張表 schema | [04-data-dictionary.md](04-data-dictionary.md) |
+| 28 張表 schema | [04-data-dictionary.md](04-data-dictionary.md) |
 | 九個聚合的不變量 | [02-ddd-model.md](02-ddd-model.md#23-聚合不變量) |
 | TLP 可見度（與方案解耦） | [07-domain-intel.md](07-domain-intel.md#tlp-可見度) |
 | STIX marking UUID（五個固定值） | [07-domain-intel.md](07-domain-intel.md#784-tlp-20-marking-definition固定值不得自行產生) |
@@ -901,4 +901,46 @@ CI 是全新 checkout。**要重現 CI 的覆蓋率失敗，本機必須先 `cle
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.31）。*
+## 0.32 實作回饋修訂（2026-08-30，全專案複查後回寫）
+
+23 個 phase 全部交付、M3 閘門實跑與弱點處置之後，使用者要求對**全部產出**做一次不分 phase 的橫向複查
+（逐一 review 程式、確認程式與規格一致、規格與 README 有錯就改）。
+完整記錄見 [ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)。
+
+### 程式端:無偏離
+
+機械比對能對的全對——Flyway 建的表 vs `04`、`docs/api/openapi.json` vs `09 §9.1`、
+RBAC 種子 vs `10 §10.3`、`AuditAction` vs `13 §13.5`、TLP 2.0 marking UUID vs `07 §7.8.4`、
+Bloom 位元布局 vs `11 §11.4`、ArchUnit 規則數 vs `01 §1.9`、DoD 項數 vs `15`。
+實測:後端 `clean verify -Ptest-integration` **1,128 tests 全綠**、
+前端 `lint`／`build`／`test`／`api:check` 全綠（**186 tests**、0 warning、型別無漂移）。
+**沒有多做、也沒有少做規格要求的東西。**
+
+### 一張標了「自動驗證」但驗證不存在的圖（真缺口）
+
+| # | 發現 | 處置 | 回寫位置 |
+|---|---|---|---|
+| 1 | [03 §3.3](03-diagrams.md#33-erd) 的 ERD 標 **🔴 規範·自動驗證**、內文寫「由 CI 比對 Flyway 產生的 schema 與 04」——**那個比對從來不存在**。後果:Phase 14 新增的 `import_jobs` 只進了 §4.3 欄位定義與 §4.7 對應，**§4.1 清單、§3.3 ERD 與兩處計數全漏**，連續九個 phase 沒有任何檢查變紅。與 §0.18 第 3 項（`15 §15.5` 寫了「必須實作」卻沒人實作）同類 | 新增 `DataDictionaryConsistencyTest`：§4.1 清單、§3.3 ERD、04 檔尾計數三者**雙向**比對 `pg_tables`（少一張、多一張都紅）。已以「移除 `import_jobs` → 三項全紅」否定驗證。**不新增 DoD 項目**（「90 項」是契約，同 §0.30 對 M3-19 的處理） | [03 §3.3](03-diagrams.md#33-erd)、`DataDictionaryConsistencyTest` |
+
+### 規格計數同步（正文皆正確，只有人工維護的計數過時）
+
+| # | 位置 | 原 → 現 |
+|---|---|---|
+| 2 | `04` §4.1 清單／註記／檔尾、§0.2、§0.3、`spec/README`、`README` | 27 張表 → **28**（補登 `import_jobs`／18b） |
+| 3 | `03` §3.3 ERD | 補 `IMPORT_JOBS` 三條關聯；「全部 27 張表」→ **28** |
+| 4 | `09` 檔尾 | 端點數 43 → **54**（53 HTTP + `GET /ws`）。校對停在 Phase 16，Phase 18／20／21 新增的端點都在 §9.1 清單內，只有這一行沒改 |
+| 5 | `02` 檔尾 | 19 個 domain event → **21**（§2.4 的表與 `domain/event` 的 21 個 record 一致，只有計數沒跟上） |
+| 6 | `spec/README` 索引表 | ArchUnit 9→**11**、event 19→**21**、表 27→**28**、pipeline stage 10→**12**、排程 12→**14**、端點 47→**54**、頁面 15→**16 列（18 路由）**、人工確認 6→**7**；行數欄依實際重算（原多處低估，`13` 少 44%——該欄的用途是估 context 成本） |
+| 7 | [05 §5.1](05-environment.md#51-儲存庫結構契約強制) 結構契約樹 | 補 `openapi-breaking-check.py`（Phase 10 建立、`openapi-check.yml` 在用，只有**強制契約**的樹漏了同步——樹上沒有的檔案照字面讀是「不該存在」） |
+
+> `§0.6` 的「27 張表中 19 張無欄位定義」**刻意不改**——那是描述 v1.1 當時的狀態。
+
+### 依規則 17 回報（1 項，未處置）
+
+`WebhookTargetGuard` 判定後、`HttpClient` 送出時會**再解析一次 DNS**，兩次之間有理論上的 rebinding 窗口。
+根治要把已判定的 IP 釘進連線，會動到 HTTP client 的裝配方式。現況已是兩道防線且 JVM DNS 快取使窗口極窄，
+**不自行改動**，交回使用者定調。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.32）。*

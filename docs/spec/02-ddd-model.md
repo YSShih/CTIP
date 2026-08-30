@@ -435,4 +435,4 @@ com.ctip.sdk
 
 ---
 
-*檔案結束。九個聚合、19 個 domain event、18 個值物件。上次校對：2026-08-21。*
+*檔案結束。九個聚合、21 個 domain event（§2.4 共 20 列，`ApiKeyCreated` / `ApiKeyRevoked` 同列）、18 個值物件。上次校對：2026-08-30（全專案複查；計數原寫 19，未計入 Phase 18 新增的 `IndicatorTlpTightened` 與同列的第二個 ApiKey 事件——§2.4 的表本身與程式碼一致，見 [ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)）。*

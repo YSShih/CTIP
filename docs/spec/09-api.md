@@ -521,4 +521,4 @@ OpenAPI JSON: /v3/api-docs
 
 ---
 
-*檔案結束。端點數：43。上次校對：2026-08-28（Phase 16；端點數不變——同步三個端點自 v2.0 起即在清單內）。*
+*檔案結束。端點數：54（53 個 HTTP 端點 + `GET /api/v1/ws` WebSocket 升級）。上次校對：2026-08-30（全專案複查；計數自 Phase 16 起未同步，Phase 18 的 Threat 寫入五支、Phase 20 的通知／SSE／WebSocket、Phase 21 的稽核與 GDPR 端點皆已在 §9.1 清單內，只有本行的計數漏改——見 [ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)）。*
