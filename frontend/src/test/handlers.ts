@@ -441,6 +441,13 @@ export const handlers = [
     }
     return HttpResponse.json(sampleSession);
   }),
+  http.post('*/api/v1/auth/change-password', async ({ request }) => {
+    const body = (await request.json()) as ApiSchemas['ChangePasswordRequest'];
+    if (body.currentPassword === 'wrong-password') {
+      return HttpResponse.json(unauthenticatedError, { status: 401 });
+    }
+    return HttpResponse.json({ revokedSessions: 3 } satisfies ApiSchemas['ChangePasswordResponse']);
+  }),
   http.post('*/api/v1/auth/refresh', () => HttpResponse.json(sampleSession)),
   http.post('*/api/v1/auth/logout', () => new HttpResponse(null, { status: 204 })),
   http.get('*/api/v1/api-keys', () => HttpResponse.json([sampleApiKey])),

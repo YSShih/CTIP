@@ -138,6 +138,7 @@ ctip:
     source-sync-cron: "${SOURCE_SYNC_CRON:0 */5 * * * *}"
     ioc-expiry-cron: "${IOC_EXPIRY_CRON:0 0 3 * * *}"
     ingestion-retry-cron: "${INGESTION_RETRY_CRON:0 */15 * * * *}"
+    token-cleanup-cron: "${TOKEN_CLEANUP_CRON:0 0 2 * * *}"
   search:
     # postgres | elasticsearch(13 §13.7)。ES 不可用時的降級是執行期的 circuit breaker 行為,
     # 這個屬性只決定「有沒有 ES 這條路」——與 rate-limit 的硬切換語意不同。

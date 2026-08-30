@@ -100,7 +100,7 @@ class PlanOverridesInitializerTest {
                 new CtipProperties.Proxy(List.of()),
                 new CtipProperties.Plan(overrides),
                 new CtipProperties.Ingestion(true, 500),
-                new CtipProperties.Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),
+                new CtipProperties.Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *", "0 0 2 * * *"),
                 new CtipProperties.Normalization(false),
                 new CtipProperties.Api(50),
                 new CtipProperties.DataQuality(List.of()),

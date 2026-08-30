@@ -155,6 +155,17 @@ npm run api:check       # 重新產生後 git diff --exit-code src/api/generated
 > §12.2 的目錄樹原本只有 `audit/` 沒有 `admin/`,同時補入(`eslint.config.js` 的 F1 zones 一併同步)。
 > 稽核頁**只讀**:稽核軌跡是 append-only 的(13 §13.5 規則 1),沒有刪除與編輯。
 
+> **Settings 頁為 2026-08-30(Phase 23)交付**
+> ([ADR 0042](../architecture/decisions/0042-m2-gaps-token-cleanup-and-settings.md)):
+> 本表自 v2.0 就有這一列(標 **M2**),但它**不在任何 phase 執行單的交付物清單裡**,
+> 因此連續三次收尾都只被回報而沒有被實作。它的存在理由是一個端點:
+> [09 §9.1](09-api.md#91-端點清單) 的 `POST /auth/change-password`(Phase 21 交付)
+> **在此之前沒有任何前端入口**。
+> 只掛 `RequireAuth`(不需額外權限);內容為帳號資訊、外觀(主題)、變更密碼,
+> 以及依權限顯示的其他設定頁入口。
+> ⚠️ 變更密碼成功後**必須就地清掉本地 session**——後端撤銷該使用者全部 token family
+> (含呼叫端自己那一枚),留著一個再也輪替不了的 session 會讓使用者在 15 分鐘後莫名被踢出。
+
 需登入的頁面必須在路由層強制授權（`RequireAuth` / `RequirePermission` 元件），**並在後端再次驗證**。
 
 ---

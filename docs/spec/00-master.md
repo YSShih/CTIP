@@ -846,15 +846,19 @@ Phase 23（CI/CD 完整化、安全掃描、文件）的修訂**已註記進對�
 安全掃描 action 釘 commit SHA（gitleaks v3.0.0、trivy-action v0.36.0，tag 寫在註解裡）；
 STIX Viewer 是唯一 code-split 的路由（Cytoscape.js 約 370 kB）。
 
-### 依規則 17 回報（3 項，未實作）
+### 兩項 M2 遺漏的補件（Phase 23 補件；[ADR 0042](../architecture/decisions/0042-m2-gaps-token-cleanup-and-settings.md)）
 
-1. **M3-19 在本機無法通過**：`gh` 未安裝、repo 從未推上 GitHub，CI 從未跑過
-   （[15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) 註明的操作者前置）
-2. **`TOKEN_CLEANUP_CRON`**（[08 §8.7](08-ingestion-sdk.md)，標 M2）至今無實作——第三次回報
-3. **[12 §12.5](12-frontend.md#125-頁面) 的 Settings 頁（`/settings`，標 M2）不存在**，
-   `POST /api/v1/auth/change-password` 仍無前端入口——第三次回報
+連續回報三次、且**不在任何 phase 執行單交付物清單裡**的兩項標 `[M2]` 內容，於本 phase 補齊：
 
-第 2、3 項屬 M2 的遺漏且不在 phase-23 的交付物清單內，因此未實作。
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 6 | **`TOKEN_CLEANUP_CRON`**（[08 §8.7](08-ingestion-sdk.md#排程)）自 Phase 13 起就在排程表，但從未實作——表 15 的 `EXPIRED_CLEANUP` 與名為 `ix_rt_gc` 的索引因此一直沒有寫入者 | `ExpiredTokenCleanupService` + `IdentitySchedulers`：**標記為 `EXPIRED_CLEANUP`，不刪除列**（刪列等於偷偷新增第七項保留政策）；語意定調寫入 §8.7 | [08 §8.7](08-ingestion-sdk.md#排程)、[05 §5.4](05-environment.md) |
+| 7 | **[12 §12.5](12-frontend.md#125-頁面) 的 Settings 頁（`/settings`）不存在**，而 `POST /auth/change-password`（Phase 21 交付）因此**沒有任何前端入口** | 交付 `/settings`（只掛 `RequireAuth`）：帳號資訊、外觀、變更密碼、其他設定頁入口。變更密碼成功後**就地清掉本地 session**——後端會撤銷含呼叫端自己在內的全部 token family | [12 §12.5](12-frontend.md#125-頁面) |
+
+### 依規則 17 回報（1 項，未完成）
+
+**M3-19 在本機無法通過**：`gh` 未安裝、repo 從未推上 GitHub，CI 從未跑過
+（[15 §15.3](15-dod-gates.md#153-dod-fullphase-2023) 註明的操作者前置，非專案交付物）。
 
 ---
 

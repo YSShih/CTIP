@@ -124,7 +124,8 @@ public record CtipProperties(
             boolean enabled,
             @NotBlank String sourceSyncCron,
             @NotBlank String iocExpiryCron,
-            @NotBlank String ingestionRetryCron) {}
+            @NotBlank String ingestionRetryCron,
+            @NotBlank String tokenCleanupCron) {}
 
     /** `www.` 前綴去除需可設定且預設不去除(docs/spec/07-domain-intel.md §7.2)。 */
     public record Normalization(boolean stripWww) {}

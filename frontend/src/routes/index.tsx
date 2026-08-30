@@ -14,6 +14,7 @@ import LoginPage from '../pages/LoginPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import NotificationCenterPage from '../pages/NotificationCenterPage';
 import RegisterPage from '../pages/RegisterPage';
+import SettingsPage from '../pages/SettingsPage';
 import SubscriptionPage from '../pages/SubscriptionPage';
 import SyncPage from '../pages/SyncPage';
 import ThreatDetailPage from '../pages/ThreatDetailPage';
@@ -60,6 +61,8 @@ export const routes: RouteObject[] = [
       {
         element: <RequireAuth />,
         children: [
+          // 只需登入,不需額外權限:帳號資訊、外觀與變更密碼人人都有
+          { path: 'settings', element: <SettingsPage /> },
           {
             element: <RequirePermission permission="apikey:create" />,
             children: [{ path: 'settings/api-keys', element: <ApiKeysPage /> }],

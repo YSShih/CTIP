@@ -73,6 +73,7 @@ services:
       SOURCE_SYNC_CRON:               ${SOURCE_SYNC_CRON:-0 */5 * * * *}
       IOC_EXPIRY_CRON:                ${IOC_EXPIRY_CRON:-0 0 3 * * *}
       INGESTION_RETRY_CRON:           ${INGESTION_RETRY_CRON:-0 */15 * * * *}
+      TOKEN_CLEANUP_CRON:             ${TOKEN_CLEANUP_CRON:-0 0 2 * * *}
       ES_RECONCILE_CRON:              ${ES_RECONCILE_CRON:-0 0 5 * * *}
       INGESTION_ENABLED:              ${INGESTION_ENABLED:-true}
       INGESTION_BATCH_SIZE:           ${INGESTION_BATCH_SIZE:-500}

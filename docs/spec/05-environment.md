@@ -301,6 +301,7 @@ SCHEDULER_ENABLED
 SOURCE_SYNC_CRON               # 預設 0 */5 * * * *（08 §8.7）
 IOC_EXPIRY_CRON                # 預設 0 0 3 * * *
 INGESTION_RETRY_CRON           # 預設 0 */15 * * * *
+TOKEN_CLEANUP_CRON             # 預設 0 0 2 * * *（08 §8.7；過期 refresh token 標為 EXPIRED_CLEANUP）
 ES_RECONCILE_CRON              # 預設 0 0 5 * * *（08 §8.7；DB 與 ES 對帳，13 §13.7）
 NOTIFICATION_RETRY_CRON        # [M3] 預設 0 */5 * * * *（08 §8.7；webhook 送達重試）
 INGESTION_ENABLED

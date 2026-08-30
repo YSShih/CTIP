@@ -150,7 +150,7 @@ feature 之間不得互相 import,只有 `pages/`、`routes/`、`app/` 可跨 fe
 | `ctip-sdk` 作為 Shared Kernel | [0039](decisions/0039-ctip-sdk-shared-kernel.md) |
 | Repository port 分層 | [0040](decisions/0040-repository-port-layering.md) |
 
-逐 phase 的實作決策見 [`decisions/`](decisions/) 的其餘 ADR(0001–0032、0041)。
+逐 phase 的實作決策見 [`decisions/`](decisions/) 的其餘 ADR(0001–0032、0041–0042)。
 
 ---
 

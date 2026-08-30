@@ -117,6 +117,9 @@ phase-23 要求「至少 8 則 ADR」。這八則記錄的是**跨越單一 phas
 
 ## 9. 已知未完成 / 需要人接手的三件事
 
+> **2026-08-30 更新**:第 2、3 項已於本 phase 的補件中實作,見
+> [ADR 0042](0042-m2-gaps-token-cleanup-and-settings.md)。第 1 項仍未解。
+
 1. **M3-19 在本機無法通過**:`gh` 未安裝,且 `git remote` 的 host key 未驗證,
    本 repo 從未推上 GitHub、CI 從未跑過。這是 [15 §15.3](../../spec/15-dod-gates.md#153-dod-fullphase-2023)
    註明的操作者前置([ADR 0022](0022-orphan-deliverables.md) 已列為「沒有歸位的一項」)
@@ -125,5 +128,5 @@ phase-23 要求「至少 8 則 ADR」。這八則記錄的是**跨越單一 phas
 3. **[12 §12.5](../../spec/12-frontend.md) 的 Settings 頁(`/settings`,標 M2)不存在**,
    `POST /api/v1/auth/change-password` 因此仍無前端入口——同樣自 Phase 21 起第三次回報
 
-第 2、3 項屬 M2 的遺漏,**不在 phase-23 的交付物清單內**,因此本 phase 未實作
-(規則:一次只做一個 phase 的交付物);依規則 17 明確回報。
+第 2、3 項屬 M2 的遺漏,**不在 phase-23 的交付物清單內**,當下依規則 17 明確回報而未實作;
+使用者隨後指派補齊,見 [ADR 0042](0042-m2-gaps-token-cleanup-and-settings.md)。

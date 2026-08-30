@@ -114,7 +114,7 @@ class StartupValidatorTest {
                 new CtipProperties.Proxy(java.util.List.of()),
                 new CtipProperties.Plan(""),
                 new Ingestion(true, 500),
-                new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *"),
+                new Scheduler(true, "0 */5 * * * *", "0 0 3 * * *", "0 */15 * * * *", "0 0 2 * * *"),
                 new CtipProperties.Normalization(false),
                 new CtipProperties.Api(50),
                 new CtipProperties.DataQuality(java.util.List.of()),

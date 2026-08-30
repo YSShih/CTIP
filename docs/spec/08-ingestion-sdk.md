@@ -318,6 +318,21 @@ SourceStatus: ACTIVE | DEGRADED | FAILED | DISABLED
 > 那兩項的保留天數變數（`DELIVERY_RETENTION_DAYS`、`INDICATOR_RETENTION_DAYS`）早就存在於
 > compose 與 `application.yml`，只是**沒有任何任務會去讀**。本次補上對應的排程列與 cron 變數。
 
+> **實作回饋修訂（2026-08-30，Phase 23；[ADR 0042](../architecture/decisions/0042-m2-gaps-token-cleanup-and-settings.md)）**
+>
+> 「過期 token 清理」（標 **M2**）自 Phase 13 起就在本表，但**從未實作**，也不在任何 phase 執行單的
+> 交付物清單裡——連續回報三次後於本 phase 補上（`ExpiredTokenCleanupService` + `IdentitySchedulers`）。
+> 兩點語意在此定調：
+>
+> 1. **標記，不刪除**：把 `expires_at` 已過而 `revoked_at IS NULL` 的列標為
+>    `EXPIRED_CLEANUP`（[04](04-data-dictionary.md) 表 15 早就為它保留了那個 `revoked_reason`
+>    與名為 `ix_rt_gc` 的索引）。列本身留著——`ip` / `user_agent` 是個資，移除它們屬
+>    [13 §13.4](13-platform-ops.md#134-隱私與資料保留) 的資料主體刪除，而 §13.4 的六項保留政策**不含**
+>    `refresh_tokens`；清理任務去刪列等於偷偷新增第七項保留政策。
+> 2. **這不是安全邊界，是衛生**：過期 token 本來就通不過認證（不變量 U6 的 `isUsable` 已檢查 expiry）。
+>    這個任務的價值是讓「`revoked_at IS NULL`」真的只代表「還能用」，且 `revoked_reason`
+>    答得出「這一枚是怎麼結束的」。
+
 > ¹ 2026-08-25 釐清（ADR 0004）：`SOURCE_SYNC_CRON`（預設每 5 分鐘）是**掃描節奏**；
 > 每次掃描對 enabled 且 syncable 的來源逐一判斷是否已依自身 `recommendedInterval` 到期
 > （`Source.isDueForSync`），到期者才同步。

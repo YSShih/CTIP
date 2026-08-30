@@ -53,6 +53,18 @@ describe('routes', () => {
     expect(await screen.findByRole('heading', { name: '建立帳號' })).toBeInTheDocument();
   });
 
+  /** /settings 只掛 RequireAuth(不需額外權限):匿名仍必須被擋下並看到明確提示。 */
+  it('blocks /settings for anonymous visitors', async () => {
+    renderRoute({ routes, initialEntry: '/settings' });
+    expect(await screen.findByText('需要登入')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '設定' })).not.toBeInTheDocument();
+  });
+
+  it('renders SettingsPage at /settings for any authenticated user', async () => {
+    renderRoute({ routes, initialEntry: '/settings', store: storeWith([]) });
+    expect(await screen.findByRole('heading', { name: '設定' })).toBeInTheDocument();
+  });
+
   /** RequireAuth 已掛載:匿名不得看到 API key 頁,且必須是明確提示而非空白(§12.6 #4)。 */
   it('blocks /settings/api-keys for anonymous visitors', async () => {
     renderRoute({ routes, initialEntry: '/settings/api-keys' });

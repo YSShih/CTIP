@@ -9,6 +9,7 @@ import {
   Moon,
   Radar,
   ScrollText,
+  Settings,
   ShieldCheck,
   Sun,
   Upload,
@@ -166,6 +167,10 @@ export function AppLayout() {
                     API Key
                   </NavLink>
                 ) : null}
+                <NavLink to="/settings" end className={secondaryLinkClass}>
+                  <Settings aria-hidden className="size-4" />
+                  設定
+                </NavLink>
                 <span className="hidden max-w-[12rem] truncate font-mono text-xs text-muted-foreground md:inline">
                   {user?.name}
                 </span>
