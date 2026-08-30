@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0 # 需要 base ref / HEAD~1 取得前一版 openapi.json
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
