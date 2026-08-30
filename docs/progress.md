@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
 | M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
-| M3 — Production | 20–23 | 進行中:Phase 22 完成,下一步 Phase 23 |
+| M3 — Production | 20–23 | **四個 phase 全部完成**;`dod.sh full`(25 項)待獨立 session 執行 |
 
 ---
 
@@ -1832,5 +1832,80 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     用 `LoggingFormats.encodeAsJson`,驗實際生效的 appender 用 `encodeWithConfiguredAppender`
   - **仍未做而回報的事**(沿用 Phase 21):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)無實作;
     12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點仍無前端入口
+
+---
+
+## Phase 23 — CI/CD 完整化 · 安全掃描 · 文件 `[M3]`
+
+- **狀態**:done(2026-08-30)
+- **執行單**:`docs/spec/phases/phase-23.md`
+- **Commit**:`40d999b`(`Phase 23: CI/CD 完整化、安全掃描、文件`)
+- **完成判準結果**:
+  - `clean verify -Ptest-integration` 無過濾 ✅ **1,120 tests**
+    (sdk 24 + core 459 + adapters 33 + app 604;Spotless / Checkstyle / JaCoCo 全過,5:18 min)
+  - frontend `lint` / `format:check` / `tsc --noEmit` / `test`(**178**)/ `build` / `api:check` ✅
+  - 四種環境 `docker compose config -q` ✅
+  - `dod.sh full` 逐項(可在本機執行者):**M3-13 / M3-17 / M3-20 / M3-21 / M3-22 / M3-23 / M3-24 全 PASS**
+  - ⚠️ **`dod.sh full` 整輪未執行**:依 CLAUDE.md,里程碑閘門由**獨立 session** 執行;
+    且 **M3-19 在本機必然 FAIL**(見下方「未完成」)。M3-02~M3-16、M3-18 的判準都是
+    同一份 `-Ptest-integration` 套件的 `-Dtest=` 子集,已隨上面那輪全綠
+  - `.github/**` 的 12 份 YAML 全部通過解析驗證(js-yaml)
+- **交付物**:
+  - **workflow 11 支**(13 §13.8):新增 `backend-test`、`backend-lint`、`frontend-test`、
+    `build`、`docker-build`、`security`、`heavy-test`、`deploy-staging`、`deploy-prod`;
+    既有 `compose-validate`、`openapi-check` 不動
+  - `.github/dependabot.yml`:maven / npm / github-actions / docker 四個 ecosystem,
+    major 不自動開 PR(06 §6.1.2:**不得自行合併版本升級 PR**)
+  - 安全掃描:Gitleaks(`fetch-depth: 0`,掃整段歷史)、Trivy fs(相依弱點,`exit-code: 1` +
+    `ignore-unfixed`)、Trivy image(兩個 production 映像);**兩個 action 釘 commit SHA**
+  - SBOM:parent pom 接上 `cyclonedx-maven-plugin`(`makeAggregateBom` 綁 `package`、
+    `includeTestScope=false`);frontend 新增 `npm run sbom`。兩者皆**建置產物不進版控**
+  - `ctip-sdk`:`example/ExampleThreatSourceAdapter` + `ExampleAdapterTest`(11 測試)
+  - 前端:`/stix/:id` STIX Viewer(`features/stix/graph.ts` 純函式 + `StixGraph`(Cytoscape.js)
+    + `useStixGraph` + `StixViewerPage`;10 + 6 測試),cytoscape **3.34.2**,
+    **唯一 code-split 的路由**;IOC / 威脅詳情的 STIX 面板加「在 STIX Viewer 開啟」入口
+  - `dod.sh`:`dod_ci_green()`(M3-19)、需人工確認清單新增 **P-07**
+  - 文件:`docs/architecture/overview.md`、`docs/architecture/security.md`、
+    `docs/development/getting-started.md`、`docs/development/plugin-sdk.md`
+    (M3-23 的 12 份齊備);`SECURITY.md` / `CONTRIBUTING.md` 擴充
+  - ADR **0033–0040**(八則跨 phase 架構決策)+ **0041**(本 phase 決策)
+- **偏離事項 / ADR**:9 節見 `docs/architecture/decisions/0041-phase23-cicd-security-docs.md`;
+  規格回寫 `00 §0.30`(06 §6.2.3/§6.2.3b、12 §12.6、13 §13.8、15 §15.3/§15.5)
+- **本 phase 抓到的實質問題(值得記住)**:
+  1. **範例 adapter 的 `SourceType` 無處可放**:四個成員都被真實 adapter 佔用,
+     新增 `EXAMPLE` 會留下永不可達的列舉值(規則 16)。解法是放 **SDK 的測試原始碼**並沿用既有成員
+     ——CI 照樣編譯與執行(M3-22 要的就是這個),但永不成為 bean
+  2. **`deploy-prod` 的人工核准有一半版控檔案表達不了**:required reviewers 存在 GitHub repo 設定,
+     綁了 `production` environment 但規則是空的,workflow 照跑——典型的「看起來有、實際沒有」。
+     處置:M3-19 至少驗 environment 綁定,其餘列為需人工確認 P-07
+  3. **Dependabot alerts 不會擋 PR**:它是 repo 面板。照 §6.2.3b 字面二擇一,CI 上等於沒有
+     相依弱點這一道 → 另加 Trivy fs 掃描提供會失敗的訊號
+  4. **`text` 欄位不能用 `strip()` 切**:範例 adapter 解析 TAB 分隔的行時,
+     `line.strip()` 會把**末欄的分隔 TAB 一起吃掉**,空的最後一欄因此消失(5 欄而非 6 欄)。
+     只去 `\r` 才對
+  5. **`prettier --check .` 會掃到 `npm sbom` 的產物** → `frontend/.prettierignore` 補 `sbom.json`
+  6. **`${{ inputs.* }}` 不得直接內插進 `run:`**(GitHub Actions 的 script injection 面)
+     → 經 `env:` 傳入再用 `"$VAR"`
+  7. **cytoscape 自帶型別宣告**(`types: index.d.ts`),不需要 `@types/cytoscape`;
+     但它約 370 kB,因此 `/stix/:id` 是唯一 `React.lazy` 的路由(主 bundle 896 kB / STIX 頁 445 kB)
+  8. **CycloneDX 在多 module 下會產生 5 份 BOM**:聚合的在 reactor 根 `backend/target/bom.json`,
+     各 module 另有自己的一份並嵌入 jar 的 `META-INF/sbom/`。判準指的是聚合那一份
+- **未完成 / 需要人接手(依規則 17 回報)**:
+  1. ⚠️ **M3-19 在本機無法通過**:`gh` 未安裝,且 `git remote`(`ctip`)的 host key 未驗證
+     (`git ls-remote` 直接 `Host key verification failed`)——本 repo **從未推上 GitHub,CI 從未跑過**。
+     這是 15 §15.3 註明、ADR 0022 明列「沒有歸位」的操作者前置
+  2. **首次啟用 CI 時的兩件 GitHub 設定**:建立 `production` environment 並加 required reviewers
+     (P-07)、啟用 Dependabot alerts。步驟寫在 getting-started §6
+  3. **`TOKEN_CLEANUP_CRON`**(08 §8.7,標 M2)至今無實作——**第三次回報**
+  4. **12 §12.5 的 Settings 頁(`/settings`,標 M2)不存在**,`POST /auth/change-password`
+     仍無前端入口——**第三次回報**。第 3、4 項屬 M2 遺漏且不在 phase-23 交付物內,故未實作
+- **給下一 session 的注意事項(下一步 = M3 閘門 `dod.sh full`)**:
+  - **`environment/.env.prod` 已於本機由樣板產生**(M3-17 需要它;隨機佔位值、`chmod 600`、
+    在 .gitignore 內未進版控)。**它不是任何真實環境的憑證**,上線前必須重新產生
+  - `dod.sh full` 的三項本機前置:M3-17 的 `.env.prod`(已備)、M3-19 的 `gh` + 已推上 GitHub
+    (**未備**)、M3-20 的「先跑過一次建置」(BOM 與 sbom.json 目前都在)
+  - gate **不得並行**,執行期間**不得在 host 端跑任何 Maven**;判斷結束一律看行程退出碼
+  - 新增 workflow 時記得同步 `dod_ci_green()` 的 11 支清單與 13 §13.8 的表
+  - 本輪 `verify` 只花 5:18 min(Phase 22 是 25 min)——差別在 Testcontainers 的映像已在本機快取
 
 ---
