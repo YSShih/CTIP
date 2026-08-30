@@ -387,6 +387,16 @@ Actuator 端點在 prod 僅暴露 `health`、`info`、`prometheus`（`ACTUATOR_E
 
 必須有一組測試驗證 log 中不出現敏感欄位（見 [14-testing.md](14-testing.md)）。
 
+> **實作回饋修訂（2026-08-30，M3 閘門實跑；[ADR 0043](../architecture/decisions/0043-gate-run-findings.md) §2）**
+>
+> 上面的必含欄位清單規範的是 **staging/prod 的 JSON 格式**。mvp/dev 的 plain pattern 在 Phase 22
+> 被換成自訂格式時**掉了 `%thread`**（Spring Boot 預設 console pattern 有 `[%15.15t]`），
+> 造成兩個後果:① DoD **M1-37** 要找的 `restartedMain` 是執行緒名，在日誌裡永遠不會出現，該項因此持續失敗;
+> ② 併發問題失去主要線索——Phase 22 自己那個 Lettuce／exemplar 啟動死鎖就是靠執行緒名定位的。
+> plain pattern 已加回 `[%15.15t]`;**JSON 的九個必含欄位不變**。
+>
+> 通則:換掉框架的預設日誌格式時，要一併問「預設格式裡有而我沒帶的欄位，是誰在用?」
+
 ### 追蹤
 
 OpenTelemetry。追蹤鏈：

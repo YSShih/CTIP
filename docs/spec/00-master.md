@@ -865,4 +865,40 @@ STIX Viewer 是唯一 code-split 的路由（Cytoscape.js 約 370 kB）。
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.30）。*
+## 0.31 實作回饋修訂（2026-08-30，M3 閘門 `dod.sh full` 實跑後回寫）
+
+首次實跑 `./environment/scripts/dod.sh full` 得 **23/25**，失敗 **M3-01** 與 **M3-19**。
+兩項往下追共發現三件事；完整記錄見
+`docs/architecture/decisions/0043-gate-run-findings.md`。
+
+### 真缺陷（2 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | **`openapi-check` 自 2026-08-27 上線起 29 次 run、0 次成功**——它用 `verify -Dtest=<類名>`，而 `verify` 綁 JaCoCo `check`，只跑一個測試類時 `ctip-app` 覆蓋率 0.18 遠低於門檻 0.60。這正是 [15 §15.0](15-dod-gates.md#150-執行方式) ADR 0017 規則 2 說的「兩處原本不一致」，當時只改了 `dod.sh`、workflow 沒跟著改 | workflow 改用 `test`；其餘三個步驟（此前從未被執行過）一併在本機逐步驗證 | `.github/workflows/openapi-check.yml` |
+| 2 | **M1-37（後端 reload）迴歸**:Phase 22 換掉 mvp/dev 的 plain log pattern 時**沒有帶 `%thread`**（Spring Boot 預設有 `[%15.15t]`），使判準要找的 `restartedMain`（執行緒名）永遠不會出現；退而求其次的 `Started … in … seconds` 又要 12.3 秒、超過 10 秒視窗 | plain pattern 加回 `[%15.15t]`。JSON 格式的九個必含欄位不受影響 | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) |
+
+### 掃描器正常運作，但需要人決定（1 項）
+
+**`security` workflow 沒有壞**——三個 Trivy job 全紅是因為**真的掃到四組 HIGH 且上游已有修補**
+（`ignore-unfixed` 已濾掉沒有修補的）：`org.postgresql:postgresql` 42.7.11、
+`httpcore5`/`httpcore5-h2` 5.4.2（三者皆為 **Spring Boot BOM 納管**的傳遞相依）、
+`eclipse-temurin` 基底映像內 `pebble` 的 Go stdlib、`nginx:1.30-alpine` 的 OpenSSL。
+
+四組**全部**都要動版本，而 [§0.4 規則 6](#04-coding-llm-執行規則) 與
+[06 §6.1.2](06-tech-stack.md#612-凍結與浮動強制) 明文禁止 Coding LLM 自行升版，
+**因此不修、也不放寬門檻**（先關警報是最糟的一種「修好了」），依規則 17 回報。
+
+> ⚠️ 但有一個結構性問題必須指出：基底映像的那兩組**這個 repo 沒有任何動作可做**，
+> 卻會擋住每一個 PR。若要處理，合理方向是把「應用相依」與「基底映像」分成會擋與不會擋的兩道——
+> 那是政策決定，應由人決定後寫進 [13 §13.8](13-platform-ops.md#138-cicd-phase-23--m3基本流程自-m1-就要有)。
+
+### 驗證方法本身的教訓（值得記住）
+
+重現 `openapi-check` 的失敗時，**第一次沒有 `clean`，因而複製不出 CI 的失敗**——
+JaCoCo 的 `jacoco.exec` 預設 **append**，前一輪完整 `verify` 的覆蓋資料還留在 `target/` 裡把門檻墊過去。
+CI 是全新 checkout。**要重現 CI 的覆蓋率失敗，本機必須先 `clean`**；少了它會得到一個看起來像「修好了」的假綠。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.31）。*

@@ -42,7 +42,11 @@
   <springProfile name="!staging &amp; !prod">
     <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
       <encoder>
-        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [${ctipService},%X{traceId:-},%X{spanId:-}] %-40.40logger{39} : %mask(%m%n%wEx)</pattern>
+        <!-- %15.15t(執行緒名)沿用 Spring Boot 預設 console pattern 的欄位。少了它:
+             ① DevTools 的 restartedMain 在日誌裡沒有任何痕跡,M1-37 因此永遠對不到(2026-08-30 實測);
+             ② 併發問題查不動——Phase 22 的 Lettuce／exemplar 啟動死鎖就是靠執行緒名才定位出來的。
+             JSON 格式(staging/prod)的必含欄位由 13 §13.6 規定,不受此處影響。 -->
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [${ctipService},%X{traceId:-},%X{spanId:-}] [%15.15t] %-40.40logger{39} : %mask(%m%n%wEx)</pattern>
         <charset>UTF-8</charset>
       </encoder>
     </appender>

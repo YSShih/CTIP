@@ -1966,3 +1966,61 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
     ——`ConfigSymmetryTest` 三缺一就紅
 
 ---
+
+## M3 閘門 — `dod.sh full` 首次實跑(23/25)
+
+- **日期**:2026-08-30
+- **結果**:`=== 結果(full):23/25 通過 ===`,失敗 **M3-01**、**M3-19**
+- **完整記錄**:`docs/architecture/decisions/0043-gate-run-findings.md`;規格回寫 `00 §0.31`、`13 §13.6`
+
+### M3-01(已修,待完整重跑)
+
+巢狀的 `dod.sh mvp` 是 **37/38**,掛在 **M1-37**(後端 reload);因為 `mvp` 沒全綠,
+`&&` 短路使 `dod.sh phase2` **根本沒執行**,M2 那 27 項這輪沒驗到。
+
+**重跑仍失敗,不是 flake。**追下去發現是 **Phase 22 的日誌格式迴歸**:
+
+- M1-37 找 `restartedMain`(**執行緒名**)或 `Started … in … seconds`
+- Phase 22 換掉 mvp/dev 的 plain pattern 時**沒帶 `%thread`**(Boot 預設有 `[%15.15t]`)
+  → `restartedMain` 永遠不會出現在日誌裡
+- 只剩第二條路,而重啟實測要 **12.3 秒** > 10 秒視窗
+
+修法:plain pattern 加回 `[%15.15t]`。M1-37 立刻轉綠;
+`SensitiveLogTest`／`CtipJsonEncoderTest`／`SensitiveMasksTest`(20)全過,
+完整 `clean verify -Ptest-integration` **1,128 tests 全綠**。
+
+### M3-19(一項已修,兩項待人決定)
+
+裝 `gh` 到 VM 之後才看得到 CI 實況(host 沒有 gh、log API 匿名一律 403):
+
+1. **`openapi-check` 自 2026-08-27 上線起 29 次 run、0 次成功** —— 用了
+   `verify -Dtest=<類名>`,`verify` 綁 JaCoCo `check`,只跑一個測試類時
+   `ctip-app` 覆蓋率 **0.18** < 門檻 0.60。這正是 ADR 0017 規則 2 說的
+   「兩處原本不一致」(`dod.sh` 用 `test`,只有 workflow 用 `verify`)。**已改用 `test`**,
+   而且此前從未被執行過的另外三個步驟也在本機逐步驗過(產出一致 ✅、無破壞性變更 ✅)
+2. **`security` 沒有壞** —— Trivy 真的掃到四組 HIGH 且上游已有修補:
+   `org.postgresql:postgresql` 42.7.11→42.7.12、`httpcore5`/`httpcore5-h2` 5.4.2→5.4.3
+   (三者皆 **Boot BOM 納管**)、`eclipse-temurin` 內 `pebble` 的 Go stdlib(8 項)、
+   `nginx:1.30-alpine` 的 OpenSSL。**四組全部要動版本**,依 §0.4 規則 6 / 06 §6.1.2
+   不得由 AI 自行升版 → **不修、也不放寬門檻**,回報並交回人決定
+3. host 端仍未安裝 `gh`(`dod.sh` 是在 host 上呼叫它;VM 那份看不到)
+
+### 本輪最值得記住的一件事
+
+重現 `openapi-check` 的失敗時,**第一次沒有 `clean`,因而複製不出 CI 的失敗**——
+JaCoCo 的 `jacoco.exec` 預設 **append**,前一輪完整 `verify` 的覆蓋資料還留在 `target/` 裡把門檻墊過去,
+於是「舊指令」在本機是 BUILD SUCCESS。CI 是全新 checkout。
+**要重現 CI 的覆蓋率失敗,本機必須先 `clean`** —— 少了它會得到一個看起來像「修好了」的假綠。
+
+### 給下一輪的注意事項
+
+- **M3-01 需要完整重跑**(mvp 38 + phase2 27),本輪只單獨驗過 M1-37
+- **M3-19 需要三件事**:`security` 的四組弱點被處理(人決定是否合併 Dependabot PR)、
+  修好的 workflow 推上去重跑一次 CI、host 安裝 `gh`
+- Dependabot 目前有 **14 個開啟中的 PR**(其中 #12 spring-boot-starter-parent 同時解掉
+  postgresql 與 httpcore5 兩組);**AI 不得自行合併**(06 §6.1.2)
+- **git 操作走 VM**(`/Users/yusen/workspace/vagrantBox/ubuntu_20_lts`,專案在
+  `/home/vagrant/java/TIP/CTIP`);host 的 SSH known_hosts 未設定,`git ls-remote` 會失敗。
+  VM 裡已裝 `gh 2.98.0` 並完成 `gh auth login`
+
+---

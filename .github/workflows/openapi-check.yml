@@ -21,8 +21,12 @@ jobs:
           java-version: "25"
           cache: maven
 
+      # ⚠️ 用 `test` 不是 `verify`(15 §15.0 的 ADR 0017 規則 2):`verify` 會綁上 JaCoCo `check`,
+      # 而只跑一個測試類時 ctip-core 跑 0 個測試、覆蓋率 0%,必然達不到它的 PACKAGE 門檻
+      # (domain 0.85 / application 0.75)。這支 workflow 自 2026-08-27 引入後
+      # **29 次 run、0 次成功**,原因就是這一行——`dod.sh` 一直用的是 `test`,只有這裡不同。
       - name: 產生 openapi.json(OpenApiCompletenessTest 同時做逐端點完整性檢查)
-        run: ./backend/mvnw -f backend/pom.xml verify -Ptest-integration -Dtest=OpenApiCompletenessTest
+        run: ./backend/mvnw -f backend/pom.xml -B test -Ptest-integration -Dsurefire.failIfNoSpecifiedTests=false -Dtest=OpenApiCompletenessTest
 
       - name: 產出必須與 committed 版本一致(不得手改、不得漏 commit)
         run: git diff --exit-code docs/api/openapi.json
