@@ -36,9 +36,13 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
-      # 同 maven 區塊:06 §6.2.3 把 ESLint pin 在 10.8.x、TanStack Query 在 5.101.x,
-      # 且 package.json 用 `~` 本來就鎖 minor。實測 Dependabot 會反覆重開(#8 關掉後
-      # 換 5.102.7 重開為 #15),因此以 ignore 表達版本表的 pin(ADR 0049)。patch 仍會提出。
+      # 同 maven 區塊:06 §6.2.3 把這兩項 pin 在 minor 層級(ESLint 10.8.x、
+      # TanStack Query **5.102.x**),且 package.json 用 `~` 本來就鎖 minor。
+      # 以 ignore 表達版本表的 pin(ADR 0049);patch 仍會提出。
+      #
+      # ⚠️ TanStack Query 的 pin 於 2026-08-30 由 5.101.x 改為 **5.102.x**(ADR 0050):
+      # PR #15 先被合併,版本表事後才追認。這條 ignore 擋的是「跨出當前 pin」的 minor,
+      # 因此**版本表一改,這裡要跟著改** —— 兩者是同一件事的兩種表達,不同步就會擋掉 pin 內的正常更新。
       - dependency-name: "eslint"
         update-types: [version-update:semver-minor]
       - dependency-name: "@tanstack/react-query"

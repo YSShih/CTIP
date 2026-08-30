@@ -2369,3 +2369,56 @@ dependabot YAML 經 `yq` 驗證,四個 ecosystem 皆有 ignore。
 - 剩 4 支 PR 的合併由使用者決定;`typescript-eslint` 建議順手補進 `06 §6.2.3` 版本表
 
 ---
+
+## 版本表追認四支已合併的相依升版(2026-08-30)
+
+- **完整記錄**:[ADR 0050](architecture/decisions/0050-version-table-catchup.md);規格回寫 `06 §6.2.2`／`§6.2.3`
+- **背景**:使用者在遠端 web 合併了剩下的四支 Dependabot PR(#15 #14 #11 #3),
+  其中 **#15 正是 ADR 0049 以「跨出版本表 pin」為由關閉過的那一支**(前身 #8)。
+  既成事實與規格因此不一致 → 本輪追認並補齊規格
+
+### 四支各自修了什麼弱點(逐一查證,不推測)
+
+**查證結果與直覺相反:四支裡只有一支與安全性相關。**
+
+| PR | 升版 | 弱點 |
+|---|---|---|
+| **#14** `json-schema-validator` 1.5.6 → **1.5.9** | ✅ **有**:上游 changelog 明載「Bump jackson to 3.1.4 to fix **CVE-2026-54512** and **CVE-2026-54513**」,1.5.9 再升至 3.2.1 解另一個弱點 | ⚠️ **但僅影響測試**:本項是 **test scope**、不進 runtime classpath,那個 Jackson 不在出貨的 artifact 裡(runtime 的 Jackson 由 Boot BOM 納管) |
+| #15 TanStack Query 5.101.4 → 5.102.7 | ❌ 無 CVE | 例行更新 |
+| #11 typescript-eslint 8.67.0 → 8.68.0 | ❌ 無 CVE | 例行更新 |
+| #3 @types/react-dom 19.2.4 → 19.2.5 | ❌ 無 CVE | 型別定義 |
+
+> ⚠️ **「PR 內文出現 security 字樣」不等於「這是安全性更新」。**
+> 四支的 body 都命中關鍵字,但其中三支命中的是 Dependabot 的**相容性評分徽章連結**
+> (網址含 `managing-security-vulnerabilities`)。以 `CVE-[0-9]{4}-[0-9]+` 逐一掃過才確認只有 #14 有。
+
+### 版本表變更
+
+TanStack Query 5.101.x → **5.102.x**;json-schema-validator 1.5.x → **1.5.9+**;
+**新增 `typescript-eslint` 8.68.x 一列** —— 本表原本列了 ESLint 與 `eslint-plugin-import`
+卻漏了它,而 TS 的規則與 parser 實際由它提供。缺列的後果在 #11 出現時就看到了:
+ADR 0049 當時只能寫「版本表未列此項」,**沒有任何依據可以判斷它該不該升**。
+
+`.github/dependabot.yml` 的 TanStack Query ignore 註解同步為 5.102.x ——
+**版本表與 dependabot 的 ignore 是同一件事的兩種表達**,不同步的話下一個讀 yml 的人
+會以為 pin 還在 5.101.x,而且會擋掉 pin 內的正常更新。
+
+### 驗證
+
+那四支相依與 ADR 0049 的 Dockerfile 改動是**第一次放在一起**
+(四支各自的 CI 當時是紅的——`backend-test` 0/19)。rebase 後重跑:
+前端 `npm ci`/lint/format/build/**186 tests**/api:check 全綠;
+後端 `clean verify -Ptest-integration` **1,131 tests 全綠**。
+
+### 依規則 17 回報:Dependabot alerts 是關閉的
+
+`gh api repos/YSShih/CTIP/dependabot/alerts` → `403 Dependabot alerts are disabled`。
+而 `06 §6.2.3b` 明載本專案在二擇一中**選了 Dependabot alerts**,
+`getting-started.md`「首次啟用 CI 必做的兩件事」第 2 條就是啟用它。
+
+**規格宣告的相依弱點偵測機制目前沒有在運作** —— 與 ADR 0045 抓到的
+「§3.3 ERD 標了自動驗證但驗證不存在」同一類缺口。目前擋 PR 的訊號只剩 Trivy fs(綠)。
+⚠️ 這是 **GitHub repo 設定**(Settings → Code security),版控檔案表達不了、AI 改不到,
+性質同 `15 §15.5` 的 P-07,必須由人操作。
+
+---

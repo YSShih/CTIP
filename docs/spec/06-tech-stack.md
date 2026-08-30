@@ -58,7 +58,7 @@
 >
 > **查證狀態（誠實標示）**：以下 19 項已於 2026-08-21 對 Maven Central / npm registry / 上游官方來源逐一查證 —
 > Java 25、Node 24、Spring Boot 4.1.0（現為 4.1.1，見下表）、springdoc 3.1.0、MapStruct 1.6.3、React 19.2.8、Vite 8.2.2、TypeScript 7.0.2、
-> React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.101.4、Zod 4.4.3、
+> React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.102.7、Zod 4.4.3、
 > PostgreSQL 18.6、Redis 8.10、Valkey 9.0.4、Kafka 4.2.1、Elasticsearch 9.5.1、nginx 1.30.4。
 >
 > 其餘項目（Resilience4j、Bucket4j、ArchUnit、Spotless、Checkstyle、JaCoCo、`@vitejs/plugin-react`、
@@ -101,7 +101,7 @@
 | JaCoCo | 0.8.x | ~ | 覆蓋率門檻 |
 | JWT（Nimbus JOSE+JWT） | 隨 Spring Security | 隨 Boot | `spring-security-oauth2-jose`，由 BOM 決定；HS256 簽發／驗證（[10 §10.4](10-identity-plans.md#104-jwt-phase-13--m2)）。**不新增獨立 JWT 函式庫** |
 | Flyway Maven Plugin | 隨 Boot BOM（`${flyway.version}`） | 隨 Boot | 只供 `migrate.sh` 的「不啟動應用、只跑 migration」場景；宣告在 parent、無 `<executions>`，不綁 lifecycle |
-| networknt json-schema-validator | 1.5.x（**test scope**） | ~ | 以 vendored OASIS STIX 2.1 JSON Schema 離線驗證產出（[ADR 0005](../architecture/decisions/0005-phase8-stix-projection-decisions.md)）。**不進 runtime classpath** |
+| networknt json-schema-validator | **1.5.9+**（**test scope**） | ~ | 以 vendored OASIS STIX 2.1 JSON Schema 離線驗證產出（[ADR 0005](../architecture/decisions/0005-phase8-stix-projection-decisions.md)）。**不進 runtime classpath**。⚠️ **2026-08-30 由 1.5.6 升至 1.5.9**（PR #14，[ADR 0050](../architecture/decisions/0050-version-table-catchup.md)）——**四支合併的相依中唯一與安全性相關的一支**:它把傳遞相依的 Jackson 升到 3.1.4 以修 **CVE-2026-54512／CVE-2026-54513**，1.5.9 再升至 3.2.1 解另一個弱點。但**影響範圍僅測試**:本項為 test scope，那個 Jackson 不在出貨的 artifact 裡（runtime 的 Jackson 由 Boot BOM 納管） |
 | **[P15/16]** Bloom 位元實作 | **自行實作** | — | §11.4 的 layout(LSB-first + SHA-256 fingerprint 的 Kirsch-Mitzenmacher 雙雜湊)排除所有現成函式庫——Guava `BloomFilter` 用 murmur3_128 與自有 layout,產不出該格式。**不得引入 Bloom 函式庫** |
 | **[P15/16]** ZSTD 壓縮 | `com.github.luben:zstd-jni` **1.5.7-15** ✅ | ~ | Bloom artifact 的預設壓縮(§11.4、04 表 23)。**Boot BOM 未納管**,版本於 parent pom `<properties>` 定義。JDK 只內建 GZIP/Deflate |
 | **[P17]** Spring Data Redis | 隨 Boot BOM | 隨 Boot | 模組 `spring-boot-data-redis`(見 6.3.6 第 1 條);client 為 Lettuce,亦由 BOM 納管 |
@@ -127,7 +127,7 @@
 | TypeScript | **7.0.x** | ~ | Go 重寫的編譯器。⚠️ 見 6.3.2 |
 | `@vitejs/plugin-react` | 6.x | ~ | 複查日確認相容 Vite 8 的版本 |
 | React Router | **8.3.x** | ~ | |
-| TanStack Query | **5.101.x** | ~ | server state |
+| TanStack Query | **5.102.x** | ~ | server state。⚠️ **2026-08-30 由 5.101.x 升至 5.102.x**（PR #15，[ADR 0050](../architecture/decisions/0050-version-table-catchup.md)）——**例行版本更新，未修補任何弱點**（changelog 無 CVE） |
 | TanStack Virtual | 3.x | ~ | 大量 IOC 虛擬化表格 |
 | Redux Toolkit | 2.x | ~ | client state |
 | Tailwind CSS | **4.3.x** | ~ | ⚠️ **不要用 npm 的 `v3-lts` tag**，見 6.3.3 |
@@ -143,6 +143,7 @@
 | `@testing-library/react` | 16.x | ~ | |
 | Playwright | 1.x | ~ | E2E（M2 起） |
 | ESLint | **10.8.x** | ~ | flat config |
+| `typescript-eslint` | **8.68.x** | ~ | TS 的 ESLint 規則與 parser。**2026-08-30 補列**（[ADR 0050](../architecture/decisions/0050-version-table-catchup.md)）——本表原本沒有這一項，`eslint-plugin-import` 之外的 TS 規則實際由它提供，缺列使升版時沒有判斷依據 |
 | Prettier | 3.x | ~ | 格式化 |
 | `eslint-plugin-import` | 2.x | ~ | `no-restricted-paths`（feature 依賴規則） |
 | openapi-typescript | 7.x | ~ | 型別產生 |
