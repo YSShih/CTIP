@@ -34,6 +34,7 @@ import com.ctip.testing.InMemorySearchIndex;
 import com.ctip.testing.InMemorySourceRepository;
 import com.ctip.testing.InMemoryStixObjects;
 import com.ctip.testing.RecordingEventPublisher;
+import com.ctip.testing.TestMetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -156,11 +157,14 @@ class SourceHealthTest {
     private SourceSyncService syncService(Map<SourceType, ThreatSourceAdapter> adapters) {
         AdapterRegistryPort registry = type -> Optional.ofNullable(adapters.get(type));
         IngestionBatchProcessor processor = new IngestionBatchProcessor(
-                new IngestionPipeline(List.of()), r -> {}, new IngestionSettings(true, 500));
+                new IngestionPipeline(List.of(), TestMetrics.ingestionMetrics()),
+                r -> {},
+                new IngestionSettings(true, 500));
         IngestionBatchExecutor executor = new IngestionBatchExecutor(
                 processor,
                 new StixProjectionWriter(new InMemoryStixObjects()),
-                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()));
+                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()),
+                TestMetrics.ingestionMetrics());
         SourceSyncRecorder recorder = new SourceSyncRecorder(new NoopSyncLog(), healthService, events, clock);
         return new SourceSyncService(sources, registry, executor, recorder, clock);
     }

@@ -58,7 +58,10 @@ class ArchitectureTest {
                         "io.lettuce..",
                         "redis.clients..",
                         "org.elasticsearch..",
-                        "co.elastic.clients..")
+                        "co.elastic.clients..",
+                        // Phase 22 起 application 層可用 micrometer 當指標門面(ADR 0032);
+                        // domain 仍然不得依賴它——指標是基礎設施關注,不是不變量的一部分
+                        "io.micrometer..")
                 .check(classes);
     }
 

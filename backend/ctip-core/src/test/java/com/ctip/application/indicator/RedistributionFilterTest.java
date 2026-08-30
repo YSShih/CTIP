@@ -16,6 +16,7 @@ import com.ctip.domain.tenant.TenantId;
 import com.ctip.sdk.RedistributionPolicy;
 import com.ctip.sdk.Tlp;
 import com.ctip.testing.IndicatorTestBuilder;
+import com.ctip.testing.TestMetrics;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
 @Tag("unit")
 class RedistributionFilterTest {
 
-    private final RedistributionFilter filter = new RedistributionFilter();
+    private final RedistributionFilter filter = new RedistributionFilter(TestMetrics.redistributionMetrics());
 
     @Test
     void ownerSeesAllSourceRecordsRegardlessOfPolicy() {

@@ -1,6 +1,7 @@
 package com.ctip.config;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.InitializingBean;
@@ -22,6 +23,10 @@ public class StartupValidator implements InitializingBean {
     /** WEBHOOK_SECRET_KEK 的最小長度。它是 AES-256 金鑰的來源(SHA-256 導出),熵不足等於形同無加密。 */
     private static final int KEK_MIN_BYTES = 32;
 
+    /** 13 §13.6:prod 的 actuator 暴露白名單。 */
+    static final java.util.Set<String> PROD_ALLOWED_ACTUATOR_ENDPOINTS =
+            java.util.Set.of("health", "info", "prometheus");
+
     private static final Logger log = LoggerFactory.getLogger(StartupValidator.class);
 
     private final CtipProperties properties;
@@ -42,6 +47,7 @@ public class StartupValidator implements InitializingBean {
             requireRealJwtSecret();
             requireRealWebhookKek();
             requireRestrictedCors();
+            requireSafeActuatorExposure();
             warnIfSwaggerEnabled();
         }
         if (properties.environment() != CtipProperties.Environment.MVP) {
@@ -78,6 +84,30 @@ public class StartupValidator implements InitializingBean {
     private void requireRestrictedCors() {
         if (properties.cors().allowedOrigins().contains("*")) {
             throw new IllegalStateException("ENVIRONMENT=prod 但 CORS_ALLOWED_ORIGINS 含 *;prod 必須列舉明確的 origin");
+        }
+    }
+
+    /**
+     * 13 §13.6:prod 只得暴露 {@code health}、{@code info}、{@code prometheus}。
+     * {@code env} / {@code beans} / {@code configprops} / {@code heapdump} 會直接吐出設定值
+     * (含 secret 的欄位名與來源)與堆積內容,而 actuator 端點沒有任何方法層授權宣告可掛
+     * ({@code SecurityConfig} 是 {@code anyRequest().permitAll()})——一旦被打開就是全開。
+     * 這裡拒絕啟動,而不是記 WARN。
+     */
+    private void requireSafeActuatorExposure() {
+        String exposed = springEnvironment.getProperty("management.endpoints.web.exposure.include", "");
+        java.util.List<String> unexpected = java.util.Arrays.stream(exposed.split(","))
+                .map(String::trim)
+                .filter(endpoint -> !endpoint.isEmpty())
+                .filter(endpoint -> !PROD_ALLOWED_ACTUATOR_ENDPOINTS.contains(endpoint.toLowerCase(Locale.ROOT)))
+                .toList();
+        if (!unexpected.isEmpty()) {
+            throw new IllegalStateException("ENVIRONMENT=prod 但 ACTUATOR_EXPOSED_ENDPOINTS 含 " + unexpected
+                    + ";prod 僅得暴露 " + PROD_ALLOWED_ACTUATOR_ENDPOINTS + "(docs/spec/13-platform-ops.md §13.6)");
+        }
+        if (exposed.contains("prometheus")
+                && properties.observability().prometheusAllowedCidrs().isEmpty()) {
+            log.warn("ENVIRONMENT=prod 且暴露 prometheus,但 PROMETHEUS_ALLOWED_IPS 為空;所有抓取都會被拒絕");
         }
     }
 

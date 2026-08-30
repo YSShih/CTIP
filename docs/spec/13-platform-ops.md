@@ -336,11 +336,52 @@ ctip.redistribution.filtered{policy}   被再散布政策過濾掉的筆數
 
 Actuator 端點在 prod 僅暴露 `health`、`info`、`prometheus`（`ACTUATOR_EXPOSED_ENDPOINTS`），且 `prometheus` 需限制來源 IP。
 
+> **實作回饋修訂（2026-08-30，Phase 22 實測；[ADR 0032](../architecture/decisions/0032-phase22-observability.md)）**
+>
+> 1. **指標在啟動時就註冊**，不等第一次命中：stage 清單、`result` 的三個值、Bloom 的兩個 scope、
+>    限流的六個維度全部預先註冊。Prometheus 的「序列不存在」與「值為 0」在告警規則上是兩件事。
+> 2. **`ctip.source.sync.lag` 是 gauge**（距上次**成功**同步的秒數），不是同步耗時——後者已由
+>    `source_sync` 表記錄。從未成功過的來源回 `NaN` 而不是 0。
+> 3. **`ctip.ratelimit.rejected` 的 `dimension` 是 §10.7 的維度**（`key`／`user`／`tenant`／`ip`／
+>    `submit`／`endpoint-class`），不是限流鍵：鍵含 subject（API key id／IP／租戶 id），
+>    放進 tag 會讓序列數隨呼叫者數量成長。
+> 4. **`kafka.consumer.lag` 是彙總視角**：Micrometer 綁 Kafka client 產生的名稱是
+>    `kafka.consumer.fetch.manager.records.lag`（每個 topic-partition 一條），本專案註冊的
+>    `kafka.consumer.lag` 是那組序列的最大值（「最落後的分割落後多少」）。
+> 5. **`lettuce.*` 與 `elasticsearch.cluster.health` 沒有 autoconfig**：Boot 4 的
+>    `spring-boot-data-redis` 與 `spring-boot-elasticsearch` 都不含 metrics 自動組態。
+>    前者以 `ClientResourcesBuilderCustomizer` 掛 `MicrometerCommandLatencyRecorder`，
+>    後者自寫 `MeterBinder`；ES 查詢失敗回 `NaN` 且只記 debug（§13.7 明令 ES 不可用不得影響應用）。
+> 6. **來源 IP 限制只能是 filter**：`SecurityConfig` 是 `anyRequest().permitAll()`（授權一律在方法層），
+>    actuator 端點沒有方法層宣告可掛。`PROMETHEUS_ALLOWED_IPS` **空清單 = 拒絕所有來源**——
+>    指標端點會洩漏租戶數、來源清單與流量樣態，「沒設定就全開」是錯的預設方向。
+>    另補啟動守衛:prod 暴露 `health`／`info`／`prometheus` 以外的端點一律**拒絕啟動**。
+> 7. ⚠️ **Prometheus 的 exemplar 必須關閉**(`management.tracing.exemplars.include: none`):
+>    它會在記錄指標的那條執行緒上向 bean factory 要 `Tracer`,而 Lettuce 的命令延遲是在 netty
+>    event loop 上記錄的——啟動時主執行緒握著 singleton 建立鎖等 Redis 連線,那條連線又只能由
+>    同一個 event loop 完成,兩邊互等。`RATE_LIMIT_BACKEND=redis` 的環境會**卡在啟動且沒有任何錯誤訊息**。
+>    一般化的規則:**在非主執行緒記錄的指標,不得在記錄路徑上向 Spring 要 bean**。
+> 8. **staging 也必須暴露 `prometheus`**：本 phase 的判準是 `up.sh staging` 之後
+>    `curl /actuator/prometheus`，而 [05 §5.5](05-environment.md#55-四種-profile-差異表) 原本把 staging 列為
+>    `health,info`——照字面設定判準必然 404。已同步修正該表。
+
 ### 日誌
 
 結構化 JSON 日誌（`logstash-logback-encoder`）。
 
 必含欄位：`timestamp`、`level`、`service`、`environment`、`traceId`、`spanId`、`requestId`、`tenantId`、`userId`。
+
+> **實作回饋修訂（2026-08-30，Phase 22；[ADR 0032](../architecture/decisions/0032-phase22-observability.md) §9–§11）**
+>
+> - **格式由 profile 決定**：mvp／dev 為人看的單行格式，staging／prod 為 JSON。
+>   logback 的條件式 `<if>` 需要 Janino（版本表沒有），而「用變數當 appender 名稱」在打錯字時
+>   會安靜地不輸出任何日誌——那是最糟的失敗模式。
+> - **五個 MDC 關聯欄位一律輸出**（沒有值就是空字串）：缺欄位與空值在下游查詢是兩件事。
+>   `traceId`／`spanId` 由追蹤橋接寫入，`requestId` 由 `TraceIdFilter`，
+>   `tenantId`／`userId` 由認證之後的 `LoggingContextFilter`。
+> - **遮罩是第二道防線**，JSON 與純文字共用同一份規則。**刻意不遮罩十六進位摘要**——
+>   指紋與 traceId 是查問題的主線索；判別方式是「同時含大小寫字母的 40 碼以上 base62 串」，
+>   refresh token（48）與 webhook 密鑰（40）符合，SHA-256 摘要與 UUID 不符合。
 
 **絕不記錄**：密碼、JWT secret、API key 原文、refresh token 原文、任何憑證、完整的 `Authorization` 標頭、`X-API-Key` 標頭值。
 
@@ -355,6 +396,22 @@ API request → application service → DB / Redis / Kafka / Elasticsearch
 ```
 
 `traceId` 必須**同時**出現在錯誤回應（[09-api.md](09-api.md#94-統一錯誤回應)）與日誌中——這是使用者回報問題時唯一的關聯線索。
+
+> **⚠️ 實作回饋修訂（2026-08-30，Phase 22 實測；[ADR 0032](../architecture/decisions/0032-phase22-observability.md) §6–§8）**
+>
+> 1. **關掉 `management.tracing.export.enabled` 會連「接收 `traceparent`」一起關掉**：
+>    Boot 的 `TextMapPropagator` bean 也掛在 `@ConditionalOnEnabledTracingExport` 上。
+>    設成 `false` 之後傳入的 `traceparent` 被忽略、server span 變成全新的 trace（實測轉紅）。
+>    全域開關必須維持 `true`；要控制的是 `management.tracing.export.otlp.enabled`
+>    （`TRACING_EXPORT_ENABLED`，預設 false：沒有 collector 時不送出 span，但 traceId 與傳遞照常）。
+> 2. **traceId 以 span 為準**：`TraceIdFilter` 排在 Boot 的 `ServerHttpObservationFilter`
+>    （`HIGHEST_PRECEDENCE + 1`）**之後**，直接取當前 span 的 traceId。自行產生亂數會使
+>    錯誤回應與 OTel 送出的 trace 是兩個值，本節要求的關聯線索等於不存在。
+>    例外往上拋時觀測 scope 已關閉、MDC 已被清掉，錯誤網要**重新放回** traceId。
+> 3. **追蹤鏈以一個切面建立 span**（application service、persistence adapter、Redis、ES adapter、
+>    Kafka 轉發／消費）。切入點**只點名 adapter 與具名類別**，不能用整個套件——
+>    套件內的 `final` 類別（`IndicatorSearchIndex`、`KafkaTopics`）被切到時 CGLIB 建不出代理，
+>    整個 context 起不來。
 
 ---
 

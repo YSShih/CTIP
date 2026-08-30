@@ -102,6 +102,13 @@ services:
       PAYLOAD_CLEANUP_CRON:           ${PAYLOAD_CLEANUP_CRON:-0 30 1 * * *}
       REJECTION_CLEANUP_CRON:         ${REJECTION_CLEANUP_CRON:-0 40 1 * * *}
       BLOOM_ARTIFACT_CLEANUP_CRON:    ${BLOOM_ARTIFACT_CLEANUP_CRON:-0 50 1 * * *}
+      # 監控與追蹤(13 §13.6)。PROMETHEUS_ALLOWED_IPS 是 /actuator/prometheus 的來源白名單——
+      # 預設涵蓋 compose 網段(Prometheus 容器)與 loopback,對外一律拒絕。
+      PROMETHEUS_ALLOWED_IPS:         ${PROMETHEUS_ALLOWED_IPS:-127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      TRACING_SAMPLE_RATE:            ${TRACING_SAMPLE_RATE:-1.0}
+      # 沒有 OTLP collector 時保持關閉(仍有 traceId 與 W3C 傳遞,只是不送出 span)
+      TRACING_EXPORT_ENABLED:         ${TRACING_EXPORT_ENABLED:-false}
+      TRACING_OTLP_ENDPOINT:          ${TRACING_OTLP_ENDPOINT:-http://localhost:4318/v1/traces}
     volumes:
       # Bloom artifact 是檔案(04 表 23 的 storage_kind=FILESYSTEM、storage_path NOT NULL);
       # 沒有這個 volume 時,每次容器重建就全部消失(ADR 0019)

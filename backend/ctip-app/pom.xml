@@ -62,6 +62,45 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!--
+      Prometheus 抓取端點(docs/spec/13-platform-ops.md §13.6、06 §6.2.2 的 [P22] 第一列)。
+      Boot 4 模組化:端點的 autoconfig 在 spring-boot-micrometer-metrics(actuator starter 已帶入),
+      但缺這個 registry 時 /actuator/prometheus 根本不存在(同 06 §6.3.6 第 1 條的型態)。
+    -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+    <!--
+      OpenTelemetry 追蹤(§13.6、06 §6.2.2 的 [P22] 第二列):SDK 模式,不使用 java agent。
+      autoconfig 在 spring-boot-micrometer-tracing-opentelemetry;bridge 與 OTLP exporter 依版本表逐字指名。
+      不使用 spring-boot-starter-opentelemetry——它會一併帶入 micrometer-registry-otlp,
+      多出一個每 60 秒往 localhost:4318 推送的 meter registry(本專案的匯出面是 Prometheus 抓取)。
+    -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-micrometer-tracing-opentelemetry</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-tracing-bridge-otel</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.opentelemetry</groupId>
+      <artifactId>opentelemetry-exporter-otlp</artifactId>
+    </dependency>
+    <!-- 追蹤 span 的建立點(TracingAspect):API → application service → DB / Redis / Kafka / ES。
+         Boot 4 的 AOP starter 更名為 spring-boot-starter-aspectj(舊名 spring-boot-starter-aop 已不存在) -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aspectj</artifactId>
+    </dependency>
+    <!-- 結構化 JSON 日誌(§13.6 明文指名;06 §6.2.2 的 [P22] 第三列,版本見 parent properties) -->
+    <dependency>
+      <groupId>net.logstash.logback</groupId>
+      <artifactId>logstash-logback-encoder</artifactId>
+      <version>${logstash-logback-encoder.version}</version>
+    </dependency>
     <!-- Boot 4 模組化:Flyway 的 auto-configuration 在獨立模組,缺少它 Flyway 不會執行 -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

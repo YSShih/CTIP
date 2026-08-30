@@ -10,7 +10,9 @@ import com.ctip.domain.plan.Plan;
 import com.ctip.domain.plan.PlanCode;
 import com.ctip.domain.plan.PlanId;
 import com.ctip.domain.plan.QuotaLimit;
+import com.ctip.infrastructure.observability.RateLimitMetrics;
 import com.ctip.infrastructure.web.FilterErrorWriter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -75,7 +77,8 @@ class RateLimitFilterTest {
     }
 
     private static RateLimitResponder responder() {
-        return new RateLimitResponder(CLOCK, new FilterErrorWriter(CLOCK));
+        return new RateLimitResponder(
+                CLOCK, new FilterErrorWriter(CLOCK), new RateLimitMetrics(new SimpleMeterRegistry()));
     }
 
     @Test

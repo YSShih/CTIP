@@ -19,6 +19,7 @@ import com.ctip.testing.InMemoryStixObjects;
 import com.ctip.testing.InMemoryStixRelationships;
 import com.ctip.testing.InMemoryThreatRepository;
 import com.ctip.testing.IndicatorTestBuilder;
+import com.ctip.testing.TestMetrics;
 import com.ctip.testing.ThreatTestBuilder;
 import java.time.Instant;
 import java.util.Map;
@@ -38,8 +39,12 @@ class StixQueryServiceTest {
     private final InMemoryThreatRepository threats = new InMemoryThreatRepository();
     private final InMemoryStixObjects stixObjects = new InMemoryStixObjects();
     private final InMemoryStixRelationships stixRelationships = new InMemoryStixRelationships();
-    private final StixQueryService service =
-            new StixQueryService(indicators, threats, stixObjects, stixRelationships, new RedistributionFilter());
+    private final StixQueryService service = new StixQueryService(
+            indicators,
+            threats,
+            stixObjects,
+            stixRelationships,
+            new RedistributionFilter(TestMetrics.redistributionMetrics()));
 
     @Test
     void markingIsServedFromConstants() {

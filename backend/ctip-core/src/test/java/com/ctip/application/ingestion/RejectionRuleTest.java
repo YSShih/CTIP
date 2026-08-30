@@ -19,6 +19,7 @@ import com.ctip.sdk.Tlp;
 import com.ctip.testing.FixedClockPort;
 import com.ctip.testing.InMemoryIndicatorRepository;
 import com.ctip.testing.InMemorySourceRepository;
+import com.ctip.testing.TestMetrics;
 import java.time.InstantSource;
 import java.util.ArrayList;
 import java.util.List;
@@ -180,7 +181,9 @@ class RejectionRuleTest {
             }
         };
         IngestionBatchProcessor exploding = new IngestionBatchProcessor(
-                new IngestionPipeline(List.of(bomb)), rejections::add, new IngestionSettings(true, 500));
+                new IngestionPipeline(List.of(bomb), TestMetrics.ingestionMetrics()),
+                rejections::add,
+                new IngestionSettings(true, 500));
         BatchOutcome outcome =
                 exploding.process(sourceContext(), RUN, List.of(record("ok.example.com", IocType.DOMAIN)));
         assertThat(outcome.rejected()).isEqualTo(1);
@@ -222,16 +225,20 @@ class RejectionRuleTest {
         AtomicLong sequence = new AtomicLong(1);
         EventPublisherPort noopEvents = (DomainEvent event) -> {};
         InstantSource clock = InstantSource.fixed(FixedClockPort.DEFAULT_NOW);
-        return new IngestionPipeline(List.of(
-                new ParseStage(normalizers),
-                new ValidateStage(),
-                new NormalizeStage(normalizers, allowlist),
-                new FingerprintStage(fingerprint),
-                new DeduplicateStage(indicators),
-                new MergeStage(
-                        () -> new UUID(0, sequence.getAndIncrement()), fingerprint, new InMemorySourceRepository()),
-                new ScoreStage(new RuleBasedThreatScorer(clock)),
-                new PersistStage(indicators),
-                new EventPublishStage(noopEvents)));
+        return new IngestionPipeline(
+                List.of(
+                        new ParseStage(normalizers),
+                        new ValidateStage(),
+                        new NormalizeStage(normalizers, allowlist),
+                        new FingerprintStage(fingerprint),
+                        new DeduplicateStage(indicators),
+                        new MergeStage(
+                                () -> new UUID(0, sequence.getAndIncrement()),
+                                fingerprint,
+                                new InMemorySourceRepository()),
+                        new ScoreStage(new RuleBasedThreatScorer(clock)),
+                        new PersistStage(indicators),
+                        new EventPublishStage(noopEvents)),
+                TestMetrics.ingestionMetrics());
     }
 }

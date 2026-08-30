@@ -63,11 +63,39 @@ management:
   endpoints:
     web:
       exposure:
+        # 13 §13.6:prod 只暴露 health / info / prometheus,且 prometheus 另受來源 IP 限制
+        # (PROMETHEUS_ALLOWED_IPS → PrometheusAccessFilter)。StartupValidator 在 prod 另有守衛。
         include: ${ACTUATOR_EXPOSED_ENDPOINTS:health,info}
   endpoint:
     health:
       probes:
         enabled: true
+  tracing:
+    exemplars:
+      # ⚠️ 一定要關(Phase 22 實測的死鎖):Prometheus 的 exemplar 取樣器會在**記錄指標的那條執行緒上**
+      # 向 bean factory 要 Tracer(Boot 的 LazyTracingSpanContext)。Lettuce 的命令延遲是在 netty
+      # event loop 上記錄的,而啟動時主執行緒正握著 singleton 建立鎖、在 RedisConfig 裡等 Redis 連線
+      # 完成——那條連線只能由同一個 event loop 完成。兩邊互等,RATE_LIMIT_BACKEND=redis 的環境
+      # (dev / staging / prod)會直接卡在啟動。exemplar 不是 13 §13.6 的要求項。
+      include: none
+    sampling:
+      # 未取樣的 span 仍有 traceId(關聯線索不受影響),取樣率只決定送出多少
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+    export:
+      # ⚠️ 全域 export 開關必須維持 true:Boot 的 TextMapPropagator bean 也掛在
+      # @ConditionalOnEnabledTracingExport 上,關掉它連 W3C traceparent 的「接收」都會停掉
+      # (實測:傳入的 traceparent 被忽略,server span 變成新的 trace)。
+      # 真正要控制的是下面那個 otlp 專屬開關。
+      enabled: true
+      otlp:
+        # 預設不送:compose 沒有 OTLP collector,開著只會每 N 秒對 localhost:4318 失敗一次。
+        # 有 collector 的部署設 TRACING_EXPORT_ENABLED=true 並指定端點。
+        enabled: ${TRACING_EXPORT_ENABLED:false}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${TRACING_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 springdoc:
   api-docs:
@@ -167,7 +195,17 @@ ctip:
       delivery: "${DELIVERY_CLEANUP_CRON:0 10 2 * * *}"
       indicator: "${INDICATOR_CLEANUP_CRON:0 20 2 * * *}"
 
-# traceId 進日誌(09 §9.4:錯誤回應的 traceId 必須與日誌可對應;TraceIdFilter 設定 MDC)
+  # 監控(13 §13.6)
+  observability:
+    # /actuator/prometheus 的來源 IP 白名單。預設涵蓋 loopback 與 compose 網段
+    # (Prometheus 容器抓的是 backend:8080),對外一律拒絕。
+    prometheus-allowed-cidrs: ${PROMETHEUS_ALLOWED_IPS:127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+    # ctip.source.sync.lag 的「有哪些來源」重整間隔(值本身每次抓取都重算)。
+    # 刻意不開成環境變數:它是內部的重整節奏,不是部署差異(§5.4 的變數清單是有代價的契約)
+    source-lag-refresh-ms: 60000
+
+# traceId 進日誌(09 §9.4:錯誤回應的 traceId 必須與日誌可對應;TraceIdFilter 設定 MDC)。
+# 版面與 JSON 格式在 logback-spring.xml;LOG_FORMAT=json|plain(13 §13.6)。
 logging:
   pattern:
     correlation: "[%X{traceId:-}] "

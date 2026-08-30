@@ -76,14 +76,14 @@ public class IdentityRateLimitFilter extends OncePerRequestFilter {
             RateLimitResult minute = limiter.tryConsume(key, 1, minuteLimit);
             responder.record(request, response, minute);
             if (!minute.allowed()) {
-                responder.reject(request, response, minute);
+                responder.reject(request, response, minute, key);
                 return;
             }
             RateLimitKey dayKey = key.inWindow(RateLimitKey.Window.DAY);
             RateLimitResult day = limiter.tryConsume(dayKey, 1, limitFor(plan, dayKey, RateLimitKey.Window.DAY));
             responder.record(request, response, day);
             if (!day.allowed()) {
-                responder.reject(request, response, day);
+                responder.reject(request, response, day, dayKey);
                 return;
             }
         }

@@ -10,7 +10,11 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
+import io.lettuce.core.metrics.MicrometerCommandLatencyRecorder;
+import io.lettuce.core.metrics.MicrometerOptions;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.data.redis.autoconfigure.ClientResourcesBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -54,5 +58,17 @@ public class RedisConfig {
     @Bean
     CachePort cachePort(StringRedisTemplate redis) {
         return new RedisCacheAdapter(redis);
+    }
+
+    /**
+     * {@code lettuce.*} 指標(13 §13.6)。Boot 4 的 {@code spring-boot-data-redis} 沒有
+     * metrics autoconfig,要在 Lettuce 自己的 {@code ClientResources} 上掛延遲記錄器;
+     * 而本專案的原生連線是向 Boot 建好的 {@code LettuceConnectionFactory} 借的,
+     * 因此只能在 Boot 建立 {@code ClientResources} 的當下就掛上去。
+     */
+    @Bean
+    ClientResourcesBuilderCustomizer lettuceMetricsCustomizer(MeterRegistry registry) {
+        return builder -> builder.commandLatencyRecorder(
+                new MicrometerCommandLatencyRecorder(registry, MicrometerOptions.create()));
     }
 }

@@ -261,7 +261,7 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 
 | # | 規則 |
 |---|---|
-| 1 | `com.ctip.domain..` 不得依賴 Spring、JPA、Hibernate、Jackson、Kafka、Redis、Elasticsearch |
+| 1 | `com.ctip.domain..` 不得依賴 Spring、JPA、Hibernate、Jackson、Kafka、Redis、Elasticsearch、**Micrometer** |
 | 2 | `com.ctip.sdk..` 不得出現 `org.springframework..` 或 `jakarta.persistence..` |
 | 3 | `com.ctip.interfaces..` 不得 import `com.ctip.infrastructure.persistence..` |
 | 4 | `..interfaces.rest..` 的類別不得直接依賴 `..application.port..Repository` |
@@ -290,6 +290,12 @@ infrastructure/persistence/IndicatorJpaRepository        package-private
 > 與上述是同一條規則的另一個實例，因此**擴充規則 11 的套件清單而非新增規則 12**——
 > 本節與 [00 §0.3](00-master.md#03-強制契約coding-llm-不得自行變更) 的「11 條」契約維持不變。
 > 一併擋 Resilience4j：§13.7 的降級屬於 `FallbackSearchAdapter`，斷路器的型別不該出現在 port 上。
+>
+> **規則 1 擴充（2026-08-30，Phase 22；[ADR 0032](../architecture/decisions/0032-phase22-observability.md) §1）**：
+> 禁止清單加入 `io.micrometer..`。[13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) 的六個
+> `ctip.*` 指標，產生點都在 **application 層**（攝取、Bloom、再散布），因此 `ctip-core` 直接依賴
+> `micrometer-core`——它與 `slf4j-api` 同性質，是門面而非基礎設施 client，不入規則 11 的清單。
+> 代價是 domain 多了一條可能被誤用的路，故在規則 1 明確擋掉：**指標是基礎設施關注，不是不變量的一部分**。
 
 ---
 

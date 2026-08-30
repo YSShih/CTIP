@@ -1,5 +1,6 @@
 package com.ctip.application.bloom;
 
+import com.ctip.application.observability.BloomMetrics;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,21 +21,39 @@ public class BloomGenerationService {
     private final BloomSnapshotService snapshots;
     private final BloomDeltaService deltas;
     private final BloomRetentionService retention;
+    private final BloomMetrics metrics;
 
     public BloomGenerationService(
             BloomScopePlanner planner,
             BloomSnapshotService snapshots,
             BloomDeltaService deltas,
-            BloomRetentionService retention) {
+            BloomRetentionService retention,
+            BloomMetrics metrics) {
         this.planner = planner;
         this.snapshots = snapshots;
         this.deltas = deltas;
         this.retention = retention;
+        this.metrics = metrics;
     }
 
-    /** 每日 full snapshot:重建全部 scope,再依保留份數清掉舊 artifact。 */
+    /**
+     * 每日 full snapshot:重建全部 scope,再依保留份數清掉舊 artifact。
+     * 逐一 scope 的迴圈在這裡而不在 {@link BloomSnapshotService}——
+     * {@code ctip.bloom.generation.duration{scope}}(13 §13.6)要的是每個 scope 各自的耗時,
+     * 而失敗隔離的粒度本來就是 scope(與 {@link #runDeltas()} 同一個形狀)。
+     */
     public void runFullSnapshots() {
-        snapshots.generateAll();
+        for (BloomTarget target : planner.targets()) {
+            try {
+                metrics.time(target.scope(), () -> snapshots.generate(target));
+            } catch (RuntimeException e) {
+                log.error(
+                        "Bloom full snapshot 生成失敗:{} / {}",
+                        target.scope(),
+                        target.tenantId().value(),
+                        e);
+            }
+        }
         retention.purgeAll();
     }
 
@@ -55,14 +74,14 @@ public class BloomGenerationService {
     }
 
     private void runDelta(BloomTarget target) {
-        DeltaOutcome outcome = deltas.generate(target);
+        DeltaOutcome outcome = metrics.time(target.scope(), () -> deltas.generate(target));
         if (outcome.needsFullSnapshot()) {
             log.info(
                     "Bloom {}/{} 改以 full snapshot 生成({})",
                     target.scope(),
                     target.tenantId().value(),
                     outcome.status());
-            snapshots.generate(target);
+            metrics.time(target.scope(), () -> snapshots.generate(target));
         }
     }
 }

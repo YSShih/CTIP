@@ -9,10 +9,13 @@ import com.ctip.application.search.SearchReconciliationService;
 import com.ctip.infrastructure.elasticsearch.ElasticsearchIndexAdapter;
 import com.ctip.infrastructure.elasticsearch.ElasticsearchSearchAdapter;
 import com.ctip.infrastructure.elasticsearch.IndicatorSearchIndex;
+import com.ctip.infrastructure.observability.ElasticsearchClusterHealthBinder;
 import com.ctip.infrastructure.scheduling.SearchSchedulers;
 import com.ctip.infrastructure.search.FallbackSearchAdapter;
 import com.ctip.infrastructure.search.NoopSearchIndexAdapter;
 import com.ctip.infrastructure.search.SearchIndexBootstrap;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -75,6 +78,21 @@ class SearchConfig {
         SearchIndexBootstrap searchIndexBootstrap(
                 SearchIndexPort index, SearchDocumentPort documents, SearchReconciliationService reconciliation) {
             return new SearchIndexBootstrap(index, documents, reconciliation);
+        }
+
+        /**
+         * {@code elasticsearch.cluster.health}(13 §13.6)。{@code spring-boot-elasticsearch}
+         * 沒有 metrics autoconfig,而 ES 只在此 profile 存在——binder 因此跟著 ES 的裝配走。
+         */
+        @Bean
+        ElasticsearchClusterHealthBinder elasticsearchClusterHealthBinder(ElasticsearchClient client) {
+            return new ElasticsearchClusterHealthBinder(() -> {
+                try {
+                    return client.cluster().health().status().jsonValue();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
         }
 
         /** 對帳排程只在 ES 後端且排程總開關開啟時註冊(§13.7 每日 05:00)。 */

@@ -54,7 +54,7 @@ public final class BloomTestHarness {
     public final QuotaService quotas = new QuotaService(plans, subscriptions, new CountingRateLimiter(clock), clock);
     public final BloomScopePlanner planner = new BloomScopePlanner(quotas, subscriptions, members, settings);
     public final BloomArrayLoader loader = new BloomArrayLoader(storage);
-    public final BloomSnapshotService snapshots = new BloomSnapshotService(ports, settings, planner, events, changes);
+    public final BloomSnapshotService snapshots = new BloomSnapshotService(ports, settings, events, changes);
     public final BloomDeltaService deltas = new BloomDeltaService(ports, settings, loader, changes);
     public final BloomRetentionService retention = new BloomRetentionService(ports, settings, planner);
 

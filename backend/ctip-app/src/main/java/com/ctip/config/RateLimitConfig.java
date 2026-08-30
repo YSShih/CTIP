@@ -7,6 +7,7 @@ import com.ctip.application.port.RateLimiterPort;
 import com.ctip.application.port.SyncThrottlePort;
 import com.ctip.domain.plan.PlanCode;
 import com.ctip.infrastructure.cache.InMemoryCache;
+import com.ctip.infrastructure.observability.RateLimitMetrics;
 import com.ctip.infrastructure.ratelimit.CacheBackedSyncThrottle;
 import com.ctip.infrastructure.ratelimit.IdentityRateLimitFilter;
 import com.ctip.infrastructure.ratelimit.InMemoryRateLimiter;
@@ -52,8 +53,9 @@ public class RateLimitConfig {
     }
 
     @Bean
-    RateLimitResponder rateLimitResponder(ClockPort clock, FilterErrorWriter errorWriter) {
-        return new RateLimitResponder(clock, errorWriter);
+    RateLimitResponder rateLimitResponder(
+            ClockPort clock, FilterErrorWriter errorWriter, RateLimitMetrics rateLimitMetrics) {
+        return new RateLimitResponder(clock, errorWriter, rateLimitMetrics);
     }
 
     /**

@@ -67,22 +67,25 @@ public final class ManualIngestionHarness {
         IocNormalizers normalizers = new IocNormalizers(false);
         Sha256FingerprintStrategy fingerprint = new Sha256FingerprintStrategy();
         InstantSource clock = InstantSource.fixed(FixedClockPort.DEFAULT_NOW);
-        IngestionPipeline pipeline = new IngestionPipeline(List.of(
-                new ParseStage(normalizers),
-                new ValidateStage(),
-                new NormalizeStage(normalizers, Set.of()),
-                new FingerprintStage(fingerprint),
-                new DeduplicateStage(indicators),
-                new MergeStage(ids, fingerprint, sources),
-                new ScoreStage(new RuleBasedThreatScorer(clock)),
-                new StixProjectionStage(
-                        new StixProjectionFactory(sources, stixObjects, FixedClockPort.at(FixedClockPort.DEFAULT_NOW))),
-                new PersistStage(indicators),
-                new EventPublishStage(events::add)));
+        IngestionPipeline pipeline = new IngestionPipeline(
+                List.of(
+                        new ParseStage(normalizers),
+                        new ValidateStage(),
+                        new NormalizeStage(normalizers, Set.of()),
+                        new FingerprintStage(fingerprint),
+                        new DeduplicateStage(indicators),
+                        new MergeStage(ids, fingerprint, sources),
+                        new ScoreStage(new RuleBasedThreatScorer(clock)),
+                        new StixProjectionStage(new StixProjectionFactory(
+                                sources, stixObjects, FixedClockPort.at(FixedClockPort.DEFAULT_NOW))),
+                        new PersistStage(indicators),
+                        new EventPublishStage(events::add)),
+                TestMetrics.ingestionMetrics());
         this.executor = new IngestionBatchExecutor(
                 new IngestionBatchProcessor(pipeline, rejections::add, new IngestionSettings(true, 500)),
                 new StixProjectionWriter(stixObjects),
-                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()));
+                new SearchIndexWriter(new InMemorySearchDocuments(), new InMemorySearchIndex()),
+                TestMetrics.ingestionMetrics());
     }
 
     public IngestionBatchExecutor executor() {

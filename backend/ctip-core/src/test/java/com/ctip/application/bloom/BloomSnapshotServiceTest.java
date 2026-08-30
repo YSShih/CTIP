@@ -60,7 +60,7 @@ class BloomSnapshotServiceTest {
         harness.members.add(BloomScope.PUBLIC, TenantId.PUBLIC, "a.example.net", BloomTestHarness.NOW);
         harness.members.add(BloomScope.TENANT, BloomTestHarness.TENANT, "private.example.net", BloomTestHarness.NOW);
 
-        harness.snapshots.generateAll();
+        harness.planner.targets().forEach(harness.snapshots::generate);
 
         assertThat(harness.versions.findLatestFullSnapshot(BloomScope.PUBLIC, TenantId.PUBLIC))
                 .isPresent();
@@ -78,7 +78,7 @@ class BloomSnapshotServiceTest {
         harness.subscribe(BloomTestHarness.TENANT, PlanCode.PREMIUM);
         harness.members.add(BloomScope.PUBLIC, TenantId.PUBLIC, "a.example.net", BloomTestHarness.NOW);
 
-        harness.snapshots.generateAll();
+        harness.planner.targets().forEach(harness.snapshots::generate);
 
         assertThat(harness.versions.findLatestFullSnapshot(BloomScope.PUBLIC, TenantId.PUBLIC))
                 .isPresent();

@@ -1,7 +1,9 @@
 package com.ctip.infrastructure.ratelimit;
 
 import com.ctip.application.port.ClockPort;
+import com.ctip.application.port.RateLimitKey;
 import com.ctip.application.port.RateLimitResult;
+import com.ctip.infrastructure.observability.RateLimitMetrics;
 import com.ctip.infrastructure.web.FilterErrorWriter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,10 +24,12 @@ public class RateLimitResponder {
 
     private final ClockPort clock;
     private final FilterErrorWriter errorWriter;
+    private final RateLimitMetrics metrics;
 
-    public RateLimitResponder(ClockPort clock, FilterErrorWriter errorWriter) {
+    public RateLimitResponder(ClockPort clock, FilterErrorWriter errorWriter, RateLimitMetrics metrics) {
         this.clock = clock;
         this.errorWriter = errorWriter;
+        this.metrics = metrics;
     }
 
     /** 記錄一個維度的判定;比目前最緊的還緊才改寫標頭。 */
@@ -51,8 +55,14 @@ public class RateLimitResponder {
         request.removeAttribute(TIGHTEST);
     }
 
-    public void reject(HttpServletRequest request, HttpServletResponse response, RateLimitResult rejecting)
+    /**
+     * 429 的唯一出口,因此也是 {@code ctip.ratelimit.rejected{dimension}}(13 §13.6)的唯一計數點——
+     * 兩個檢查點各自計數會漏掉將來新增的第三個。
+     */
+    public void reject(
+            HttpServletRequest request, HttpServletResponse response, RateLimitResult rejecting, RateLimitKey key)
             throws IOException {
+        metrics.rejected(key);
         long retryAfter =
                 Math.max(1, Duration.between(clock.now(), rejecting.resetAt()).getSeconds());
         response.setHeader("Retry-After", Long.toString(retryAfter));

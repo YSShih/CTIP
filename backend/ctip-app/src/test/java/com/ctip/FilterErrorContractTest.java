@@ -4,6 +4,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.ctip.infrastructure.observability.TraceIdFilter;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -18,7 +19,6 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.Ordered;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
@@ -69,7 +69,7 @@ class FilterErrorContractTest extends AbstractPostgresIntegrationTest {
         @Bean
         FilterRegistrationBean<Filter> explodingFilter() {
             FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>(new ExplodingFilter());
-            registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+            registration.setOrder(TraceIdFilter.ORDER + 2);
             return registration;
         }
     }

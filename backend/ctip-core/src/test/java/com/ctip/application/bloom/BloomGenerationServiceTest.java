@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ctip.domain.bloom.BloomScope;
 import com.ctip.domain.tenant.TenantId;
+import com.ctip.testing.TestMetrics;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -13,8 +14,8 @@ class BloomGenerationServiceTest {
 
     private final BloomTestHarness harness = new BloomTestHarness();
 
-    private final BloomGenerationService generation =
-            new BloomGenerationService(harness.planner, harness.snapshots, harness.deltas, harness.retention);
+    private final BloomGenerationService generation = new BloomGenerationService(
+            harness.planner, harness.snapshots, harness.deltas, harness.retention, TestMetrics.bloomMetrics());
 
     @Test
     void theDailyRunRebuildsEveryScopeAndAppliesRetention() {

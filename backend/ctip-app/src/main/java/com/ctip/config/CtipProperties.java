@@ -35,7 +35,8 @@ public record CtipProperties(
         @NotNull @Valid Search search,
         @NotNull @Valid Notification notification,
         @NotNull @Valid Audit audit,
-        @NotNull @Valid Retention retention) {
+        @NotNull @Valid Retention retention,
+        @NotNull @Valid Observability observability) {
 
     /** 執行環境,對應環境變數 ENVIRONMENT(mvp | dev | staging | prod)。 */
     public enum Environment {
@@ -211,6 +212,19 @@ public record CtipProperties(
             @NotBlank String username,
             String password,
             @NotNull @Valid RetentionCrons crons) {}
+
+    /**
+     * 監控(docs/spec/13-platform-ops.md §13.6)。
+     *
+     * @param prometheusAllowedCidrs {@code /actuator/prometheus} 的來源 IP 白名單
+     *     ({@code PROMETHEUS_ALLOWED_IPS};§13.6「prometheus 需限制來源 IP」)。
+     *     空清單 = 拒絕所有來源——指標端點會洩漏租戶名稱、來源清單與流量樣態,
+     *     「沒設定就全開」對安全優先的預設值是錯的方向
+     * @param sourceLagRefreshMs {@code ctip.source.sync.lag} 的來源清單重整間隔
+     */
+    public record Observability(
+            @NotNull java.util.List<String> prometheusAllowedCidrs,
+            @Positive long sourceLagRefreshMs) {}
 
     /** 六個保留清理任務的排程(08 §8.7)。 */
     public record RetentionCrons(

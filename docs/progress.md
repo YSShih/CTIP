@@ -9,7 +9,7 @@
 |---|---|---|
 | M1 — MVP | 1–12 | **完成(dod.sh mvp 38/38)** |
 | M2 — Platform | 13–19 | **完成(dod.sh phase2 27/27)** |
-| M3 — Production | 20–23 | 進行中:Phase 21 完成,下一步 Phase 22 |
+| M3 — Production | 20–23 | 進行中:Phase 22 完成,下一步 Phase 23 |
 
 ---
 
@@ -1729,5 +1729,108 @@ Phase 6/8/9 各加幾個變數卻沒人重驗對稱性;Phase 1 就該做的 Arch
   - **回報三件未做的事**(見 ADR 0031 末段):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)至今無實作;
     12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點因此還沒有前端入口。
     兩者都屬 M2 的遺漏,建議指派給 Phase 23
+
+---
+
+## Phase 22 — 監控 · 日誌 · 追蹤 `[M3]`
+
+- **狀態**:done(2026-08-30)
+- **執行單**:`docs/spec/phases/phase-22.md`
+- **Commit**:`__COMMIT__`(`Phase 22: monitoring, structured logging and tracing`)
+- **完成判準結果**:全綠 —
+  - `test -Ptest-all -Dtest='MetricsCompletenessTest,SensitiveLogTest,TracePropagationTest'`(逐字)✅ **23/23**
+  - `clean verify -Ptest-integration` 無過濾 ✅ **1,109 tests**
+    (sdk 13 + core 459 + adapters 33 + app 604;Spotless / Checkstyle / JaCoCo 全過)
+  - frontend `tsc` / `eslint --max-warnings 0` / `prettier --check` / `api:check` / `vitest`(162)/ `build` ✅
+  - `dod.sh full --only M3-24`(規格交叉引用)✅、`--only M3-13`(Grafana provisioning JSON)✅
+  - 四種環境的 `docker compose config -q` ✅
+  - **staging 實機驗證**(`up.sh staging`,八個服務全 healthy):
+    - `curl /actuator/prometheus | grep ctip_ingestion_stage_duration` ✅ **40 行**(判準逐字)
+    - 六個 `ctip.*` 指標全部有序列;**`lettuce.*`(76 行)、`kafka_consumer_lag`、
+      `elasticsearch_cluster_health` 三個在 mvp 測試 context 驗不到的指標,在這裡實測存在**
+    - `ctip_source_sync_lag{source="MOCK_OPENPHISH"} 8418.0`、其餘三個來源 `NaN`
+      ——語意如設計(從未成功 ≠ 剛剛同步過);`elasticsearch_cluster_health 1.0`(單節點 yellow)
+    - `/actuator/{env,beans,configprops,heapdump,metrics}` 全部 **404**
+    - 帶 `traceparent` 的請求:錯誤回應的 `traceId` = 傳入的 trace-id;**同一次請求的 JSON 日誌**
+      帶同一個 `traceId` + `spanId` + `requestId`(M3-16 端到端成立)
+    - JSON 日誌九個欄位齊全(背景執行緒的關聯欄位為空字串,如設計)
+    - Prometheus 的 `up{job="ctip-backend"} = 1`——來源 IP 白名單放行 compose 網段
+  - **反向驗證(判準不是假綠)**:
+    - 拿掉 `IngestionPipeline` 的 stage 計時 → `MetricsCompletenessTest` 轉紅 3 項
+      (逐 stage 計時器、`ctip.ingestion.stage.duration` 存在、Prometheus 抓取輸出)
+    - 把 `TracingAspect` 的 application service 切入點改成不存在的套件 →
+      `TracePropagationTest.oneRequestProducesOneTraceCoveringTheApiServiceAndDatabase` 轉紅
+    - 兩次都先 `install` 重建 ctip-core / ctip-app 才跑(Phase 20 的假綠教訓)
+- **交付物**:
+  - 相依:`micrometer-registry-prometheus`、`spring-boot-micrometer-tracing-opentelemetry` +
+    `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`(SDK 模式)、
+    `logstash-logback-encoder 9.0`、`spring-boot-starter-aspectj`;ctip-core 新增 `micrometer-core`
+  - core `application/observability/`:`CtipMetricNames`(六個 `ctip.*` 名稱的單一來源)、
+    `IngestionMetrics`(records{result} + stage.duration{stage},建構時就註冊)、
+    `BloomMetrics`、`RedistributionMetrics`
+  - core 埋點:`IngestionPipeline`(逐 stage 計時)、`IngestionBatchExecutor`(批次與單筆的筆數)、
+    `BloomGenerationService`(per-scope 計時,迴圈自 `BloomSnapshotService.generateAll()` 上移)、
+    `RedistributionFilter`(被濾掉的來源明細)
+  - app `infrastructure/observability/`:`RateLimitMetrics`、`SourceSyncLagBinder`(MultiGauge)、
+    `KafkaConsumerLagBinder`、`ElasticsearchClusterHealthBinder`、`TracingAspect`、
+    `TraceIdFilter`(改排在觀測 filter 之後、traceId 取自 span、加 requestId)、`LoggingContextFilter`、
+    `PrometheusAccessFilter`、`LogFields`、`CtipJsonEncoder`、`CtipContextJsonProvider`、
+    `SensitiveMasks`／`SensitiveValueMasker`／`MaskingMessageConverter`
+  - app:`ObservabilityConfig`、`MetricsSchedulers`、`logback-spring.xml`、
+    `RedisConfig` 的 lettuce 延遲記錄器、`SearchConfig` 的 ES 健康 binder、
+    `StartupValidator` 的 prod actuator 暴露守衛、`CtipProperties.Observability`
+  - 設定:`application.yml` 的 `management.tracing.*`／`management.opentelemetry.*`、
+    `ctip.observability.*`;compose 與五份樣板新增 `PROMETHEUS_ALLOWED_IPS`／`TRACING_*`;
+    staging 的 `ACTUATOR_EXPOSED_ENDPOINTS` 改為含 `prometheus`
+  - Grafana:`ctip-overview.json` 由 5 張圖增至 14 張(六個 `ctip.*` 指標 + Kafka lag + ES 健康 + Redis 延遲)
+  - 測試:`MetricsCompletenessTest`(16)、`SensitiveLogTest`(4)、`TracePropagationTest`(4)、
+    `SensitiveMasksTest`(6)、`CtipJsonEncoderTest`(11)、`PrometheusAccessFilterTest`(4)、
+    `RateLimitMetricsTest`(3)、`SourceSyncLagBinderTest`(3)、`TracingAspectTest`(4);`LogCapture` 加 `mdcValues()`、
+    新 `LoggingFormats` 測試工具、core 新 `TestMetrics`
+- **偏離事項 / ADR**:14 節見 `docs/architecture/decisions/0032-phase22-observability.md`;
+  規格回寫 `00 §0.29`(13 §13.6、01 §1.9、05 §5.4/§5.5、06 §6.3.6)
+- **本 phase 抓到的實質缺陷(值得記住)**:
+  1. ⚠️ **關掉 `management.tracing.export.enabled` 會連「接收傳入的 `traceparent`」一起關掉**——
+     Boot 的 `TextMapPropagator` bean 也掛在 `@ConditionalOnEnabledTracingExport` 上。
+     沒有 collector 時照直覺關掉全域 export,傳入的 trace 就被忽略、server span 另開一個 trace,
+     §13.6 要的唯一關聯線索等於不存在。改為只關 `management.tracing.export.otlp.enabled`
+  2. **AOP 切入點不能用整個套件**:`infrastructure.elasticsearch` 內的 `final`
+     `IndicatorSearchIndex` 被切到時 CGLIB 建不出代理,**整個 ES context 起不來**
+     (症狀出現在 `SearchFallbackTest`,看起來完全像搜尋的問題)
+  3. **`logback-spring.xml` 讀 `ctip.environment` 會使 context 起不來**:它的值是 `${ENVIRONMENT}`
+     這個必填佔位符,而日誌系統在 environment-prepared 階段就初始化——測試的
+     `DynamicPropertySource` 那時還沒進來
+  4. **以程式加入的 logback 元件必須自己 `start()`**:Joran 只啟動 XML 裡宣告的子元件,
+     漏掉時 `MaskingJsonGeneratorDecorator` 的 delegate 是 null,一寫日誌就 NPE
+  5. **判準與規格自相矛盾**:phase-22 的判準是 `up.sh staging` + `curl /actuator/prometheus`,
+     而 05 §5.5 把 staging 列為 `health,info` —— 照字面設定判準必然 404(已回寫)
+  6. ⚠️ **Prometheus 的 exemplar 與 Lettuce 指標在啟動時死鎖**(最嚴重的一項,ADR 0032 §15):
+     exemplar 取樣器會在**記錄指標的那條執行緒**(netty event loop)上向 bean factory 要 `Tracer`,
+     而啟動時主執行緒正握著 singleton 建立鎖、在 `RedisConfig` 等 Redis 連線完成——那條連線
+     只能由同一個 event loop 完成。`RATE_LIMIT_BACKEND=redis` 的環境(dev / staging / prod)
+     **卡在啟動且沒有任何錯誤訊息**。抓到它的是 Phase 17 的 `DistributedRateLimitTest`
+     (整個 verify 停在那支測試上),用 thread dump 才看出成因;
+     修法 `management.tracing.exemplars.include: none`,並以
+     `MetricsCompletenessTest.prometheusExemplarsStayDisabled` 鎖住設定
+  7. **`ConfigSymmetryTest` 是有效的守門員**:新增五個 `application.yml` 變數時它立刻抓到
+     compose 與 05 §5.4 都沒宣告;其中 `SOURCE_LAG_REFRESH_MS` 因此改為不開放成環境變數
+  8. **定義了卻沒被引用的 logback appender 會每次啟動印一則 WARN** → 兩個 appender 各自定義在
+     自己的 `<springProfile>` 區塊內
+- **給下一 session 的注意事項(下一步 Phase 23 = CI/CD 完整化、安全掃描、文件)**:
+  - **M3 的 gate 仍未執行**(`dod.sh full` 25 項);M3-01 要求 mvp 與 phase2 兩個 gate 仍全綠。
+    M3-12/13/14/15/16 的判準指令在本 phase 已全部就位並實測過
+  - **新增端點時的四件事**:同步 `WebCorsConfig.allowedMethods`、補 `interfaces/rest/openapi/*Api`、
+    若屬 §13.5 對照表則補 `AuditEndpoints`,**若新增 `application.yml` 變數則同步 compose 與 05 §5.4**
+  - 新的整合測試請自己分配 client IP(本 phase 用 `10.100.0.11`／`.12`／`.13`);
+    `TracePropagationTest` 以 `@Import` 帶了一個 `SpanProcessor`,因此**自成一個 Spring context**
+  - `TracingAspect` 的切入點只點名 `*Adapter` 與具名類別;**新增 `final` 的 infrastructure 類別
+    不會有問題,但把切入點放寬到整個套件會**
+  - **不要重新打開 Prometheus exemplar**(`management.tracing.exemplars.include`):
+    它與 Lettuce 指標的組合會在啟動時死鎖,而症狀是「啟動很慢」沒有錯誤訊息
+  - 一次完整 `verify` 約 25 分鐘,`KafkaUnavailableTest` 的連線逾時就佔掉約 10 分鐘(既有現象)
+  - 日誌格式由 profile 決定(mvp/dev plain、staging/prod JSON);要在測試裡驗 JSON 版,
+    用 `LoggingFormats.encodeAsJson`,驗實際生效的 appender 用 `encodeWithConfiguredAppender`
+  - **仍未做而回報的事**(沿用 Phase 21):`TOKEN_CLEANUP_CRON`(08 §8.7,標 M2)無實作;
+    12 §12.5 的 Settings 頁(`/settings`,M2)不存在,改密碼端點仍無前端入口
 
 ---

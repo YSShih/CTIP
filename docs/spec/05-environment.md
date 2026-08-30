@@ -313,6 +313,12 @@ API_DEFAULT_PAGE_SIZE          # 預設 50（09 §9.3；上限與批次上限改
 SWAGGER_ENABLED
 ACTUATOR_EXPOSED_ENDPOINTS
 
+PROMETHEUS_ALLOWED_IPS         # [M3] /actuator/prometheus 的來源 IP 白名單（CIDR，逗號分隔；13 §13.6）
+                               #      空 = 拒絕所有來源；預設涵蓋 loopback 與 RFC1918（compose 網段）
+TRACING_SAMPLE_RATE            # [M3] 追蹤取樣率，預設 1.0（未取樣的 span 仍有 traceId）
+TRACING_EXPORT_ENABLED         # [M3] 是否把 span 送往 OTLP collector，預設 false
+TRACING_OTLP_ENDPOINT          # [M3] 預設 http://localhost:4318/v1/traces
+
 AUDIT_RETENTION_DAYS           # 預設 180
 RAW_PAYLOAD_RETENTION_DAYS     # 預設 30
 REJECTION_RETENTION_DAYS       # 預設 30
@@ -392,7 +398,11 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 | `SWAGGER_ENABLED` | `true` | `true` | `true` | `false` |
 | `SCHEDULER_ENABLED` | `true` | `true` | `true` | `true` |
 | `*_BIND`（其餘） | `127.0.0.1:*` | `127.0.0.1:*` | `0.0.0.0:*` | 由代理層決定 |
-| `ACTUATOR_EXPOSED_ENDPOINTS` | `health,info` | `health,info` | `health,info` | **`health,info,prometheus`** |
+| `ACTUATOR_EXPOSED_ENDPOINTS` | `health,info` | `health,info` | **`health,info,prometheus`** | **`health,info,prometheus`** |
+| `PROMETHEUS_ALLOWED_IPS` | loopback + RFC1918 | loopback + RFC1918 | loopback + RFC1918 | **抓取端的實際位址** |
+| `TRACING_SAMPLE_RATE` | `1.0` | `1.0` | `1.0` | `0.1` |
+| `TRACING_EXPORT_ENABLED` | `false` | `false` | `false` | 有 collector 時 `true` |
+| 日誌格式 | plain | plain | **JSON** | **JSON** |
 
 **兩項相對 v1.1 的修正**
 
@@ -417,6 +427,13 @@ VITE_ENVIRONMENT  VITE_API_URL  VITE_WS_URL
 >
 > ⚠️ `phases/phase-22.md` 的判準用 `up.sh dev` 驗 `/actuator/prometheus`，但 dev 是
 > `health,info` 且 `COMPOSE_PROFILES=standard`（不啟 Prometheus）——判準已改用 `staging`。
+>
+> **2026-08-30 補（Phase 22 實測；[ADR 0032](../architecture/decisions/0032-phase22-observability.md) §12–§13）**：
+> 改用 `staging` 之後，本表的 staging 欄仍是 `health,info`——判準的 `curl /actuator/prometheus`
+> 照字面設定必然 404。staging 改為 `health,info,prometheus`（它本來就是 full profile、
+> 有 Prometheus 容器在抓）。同時補上 `PROMETHEUS_ALLOWED_IPS`（來源 IP 白名單，
+> **空 = 拒絕所有來源**）與兩個追蹤變數；日誌格式一列不是環境變數，而是由 profile 決定
+> （[13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3)）。
 
 ## 5.6 Compose 骨架
 

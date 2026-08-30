@@ -782,4 +782,40 @@ Bloom artifact 清理沿用 Phase 15 的 `BloomRetentionService`(以應用角色
 
 ---
 
-*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.28）。*
+## 0.29 實作回饋修訂（2026-08-30，Phase 22 實測後回寫）
+
+Phase 22（監控、日誌、追蹤）的修訂**已全數註記進對應主題檔**;
+完整決策記錄見 [ADR 0032](../architecture/decisions/0032-phase22-observability.md)（14 節）。
+
+### 照字面實作會失敗（4 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 1 | ⚠️ **關掉 `management.tracing.export.enabled` 會連「接收 `traceparent`」一起關掉**——Boot 的 `TextMapPropagator` bean 也掛在 `@ConditionalOnEnabledTracingExport` 上。沒有 OTLP collector 時照直覺關掉全域 export，傳入的 traceparent 就被忽略、server span 變成新 trace，§13.6 要的關聯線索等於不存在 | 全域開關維持 `true`，改用 `management.tracing.export.otlp.enabled`（`TRACING_EXPORT_ENABLED`）控制是否送出 span | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) |
+| 2 | 追蹤切面若以**整個套件**當切入點，`final` 類別（`IndicatorSearchIndex`、`KafkaTopics`）會使 CGLIB 建不出代理，**整個 context 起不來** | 切入點只點名 `*Adapter` 與具名類別 | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3)、[06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+| 3 | ⚠️ **Prometheus 的 exemplar 與 Lettuce 指標在啟動時死鎖**:exemplar 取樣器會在記錄指標的執行緒(netty event loop)上向 bean factory 要 `Tracer`,而主執行緒正握著 singleton 建立鎖等 Redis 連線——那條連線只能由同一個 event loop 完成。`RATE_LIMIT_BACKEND=redis` 的環境(dev/staging/prod)**卡在啟動且無任何錯誤訊息** | `management.tracing.exemplars.include: none`(exemplar 非 §13.6 要求項),並以測試鎖住 | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3)、[06 §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) |
+| 3b | `logback-spring.xml` 若以 `ctip.environment` 取環境名，其值是 `${ENVIRONMENT}` 這個必填佔位符；日誌系統在 environment-prepared 階段就初始化，測試的 `DynamicPropertySource` 還沒進來，**佔位符解不開會讓整個 context 起不來** | 直接讀 `ENVIRONMENT` 環境變數並給預設值 | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) |
+
+### 規格自身衝突（1 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 4 | phase-22 的判準是 `up.sh staging` + `curl /actuator/prometheus`，而 05 §5.5 的差異表把 staging 列為 `health,info`——照字面設定判準必然 404 | staging 改為 `health,info,prometheus`；同時補列 `PROMETHEUS_ALLOWED_IPS` 與兩個追蹤變數、日誌格式一列 | [05 §5.5](05-environment.md#55-四種-profile-差異表)、[05 §5.4](05-environment.md#54-環境變數清單) |
+
+### 規格缺口補齊與擴充（3 項）
+
+| # | 項目 | 解決 | 修訂處 |
+|---|---|---|---|
+| 5 | §13.6 只寫「`prometheus` 需限制來源 IP」，而 `SecurityConfig` 是 `anyRequest().permitAll()`，actuator 端點沒有任何方法層宣告可掛（ADR 0021 已點名「該限制沒有實作位置」） | 以 `PrometheusAccessFilter` 落實；`PROMETHEUS_ALLOWED_IPS` **空清單 = 拒絕所有來源**；另補 prod 的 actuator 暴露白名單啟動守衛（`env`／`beans`／`configprops`／`heapdump` 一律拒絕啟動） | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) |
+| 6 | 指標語意未定義：`ctip.source.sync.lag` 是耗時還是落後、`ctip.ratelimit.rejected` 的 `dimension` 是什麼、`kafka.consumer.lag` 與 Micrometer 的原生名稱不同 | 三者的語意與取值方式寫入 §13.6 的引用區塊 | [13 §13.6](13-platform-ops.md#136-監控日誌追蹤-phase-22--m3) |
+| 7 | `ctip-core` 的 application 層需要 Micrometer 當指標門面，而 ArchUnit 規則 1 的禁止清單沒有它——domain 層等於沒有防線 | 規則 1 的清單加入 `io.micrometer..`（規則數維持 11 條，§0.3 的契約不變） | [01 §1.9](01-architecture.md#19-archunit-規則強制共-11-條) |
+
+### 實作決策（不改規格正文，僅記於 ADR 0032）
+
+指標一律在啟動時註冊(序列不存在 ≠ 值為 0);日誌格式由 profile 決定而非環境變數
+(logback 的 `<if>` 需要版本表沒有的 Janino);遮罩刻意不動十六進位摘要(指紋與 traceId 是主線索);
+`BloomSnapshotService.generateAll()` 因 per-scope 計時而移除(執行規則 16)。
+
+---
+
+*主綱結束。規格版本 v2.0（含 2026-08-21、2026-08-25、2026-08-26、2026-08-27、2026-08-28、2026-08-29、2026-08-30 實作回饋修訂，見 §0.7–§0.29）。*

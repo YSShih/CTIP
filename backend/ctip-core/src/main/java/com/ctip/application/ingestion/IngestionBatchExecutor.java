@@ -1,5 +1,6 @@
 package com.ctip.application.ingestion;
 
+import com.ctip.application.observability.IngestionMetrics;
 import com.ctip.application.search.SearchIndexWriter;
 import com.ctip.application.stix.StixProjectionWriter;
 import com.ctip.sdk.RawThreatRecord;
@@ -19,12 +20,17 @@ public class IngestionBatchExecutor {
     private final IngestionBatchProcessor processor;
     private final StixProjectionWriter projections;
     private final SearchIndexWriter searchIndex;
+    private final IngestionMetrics metrics;
 
     public IngestionBatchExecutor(
-            IngestionBatchProcessor processor, StixProjectionWriter projections, SearchIndexWriter searchIndex) {
+            IngestionBatchProcessor processor,
+            StixProjectionWriter projections,
+            SearchIndexWriter searchIndex,
+            IngestionMetrics metrics) {
         this.processor = processor;
         this.projections = projections;
         this.searchIndex = searchIndex;
+        this.metrics = metrics;
     }
 
     public int batchSize() {
@@ -33,6 +39,7 @@ public class IngestionBatchExecutor {
 
     public BatchOutcome execute(SourceContext source, IngestionRun run, List<RawThreatRecord> batch) {
         BatchOutcome outcome = processor.process(source, run, batch);
+        metrics.recordBatch(outcome.accepted(), outcome.rejected(), outcome.merged());
         projections.writeAll(outcome.projections());
         searchIndex.indexAll(outcome.indexTargets());
         return outcome;
@@ -41,6 +48,7 @@ public class IngestionBatchExecutor {
     /** 單筆(手動提交):交易內攝取,提交後寫出 STIX 投影與搜尋索引,規則與批次相同。 */
     public RecordOutcome executeOne(SourceContext source, IngestionRun run, RawThreatRecord record) {
         RecordOutcome outcome = processor.processOne(source, run, record);
+        metrics.recordOne(outcome.rejected(), outcome.merged());
         projections.writeAll(outcome.projections());
         if (outcome.indicator() != null) {
             searchIndex.indexAll(List.of(outcome.indicator().id()));

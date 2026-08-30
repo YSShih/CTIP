@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  日誌設定(docs/spec/13-platform-ops.md §13.6)。
+
+  兩種格式,由 profile 決定(§5.5 的環境差異):
+    * mvp / dev    —— 人看的單行格式(PLAIN)
+    * staging / prod —— 結構化 JSON(JSON),九個必含欄位由 CtipJsonEncoder 保證
+
+  格式不做成環境變數:logback 的條件式 <if> 需要 Janino,而版本表沒有它;
+  用 appender 名稱直接吃變數則會在打錯字時「安靜地不輸出任何日誌」——那是最糟的失敗模式。
+
+  兩種格式都經過 SensitiveMasks 遮罩(§13.6「絕不記錄」):JSON 走 MaskingJsonGeneratorDecorator,
+  純文字走 %mask(...)。遮罩規則只有一份。
+-->
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <!--
+    直接讀環境變數而不是 ctip.environment:後者的值是 ${ENVIRONMENT} 這個「必填」佔位符,
+    而日誌系統在 environment-prepared 階段就初始化——那時測試的 DynamicPropertySource 還沒進來,
+    佔位符解不開會讓整個 context 起不來(實測)。
+  -->
+  <springProperty scope="context" name="ctipEnvironment" source="ENVIRONMENT" defaultValue="unknown"/>
+  <springProperty scope="context" name="ctipService" source="spring.application.name" defaultValue="ctip"/>
+
+  <conversionRule conversionWord="mask" class="com.ctip.infrastructure.observability.MaskingMessageConverter"/>
+
+  <!-- appender 定義在 profile 區塊內:定義了卻沒被引用的 appender 會讓 logback 每次啟動都印一則 WARN -->
+  <springProfile name="staging | prod">
+    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder class="com.ctip.infrastructure.observability.CtipJsonEncoder">
+        <service>${ctipService}</service>
+        <environment>${ctipEnvironment}</environment>
+      </encoder>
+    </appender>
+    <root level="${LOG_LEVEL:-INFO}">
+      <appender-ref ref="JSON"/>
+    </root>
+  </springProfile>
+
+  <!-- mvp / dev 以及任何未指定 profile 的執行(例如工具程式):人看的格式 -->
+  <springProfile name="!staging &amp; !prod">
+    <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+      <encoder>
+        <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [${ctipService},%X{traceId:-},%X{spanId:-}] %-40.40logger{39} : %mask(%m%n%wEx)</pattern>
+        <charset>UTF-8</charset>
+      </encoder>
+    </appender>
+    <root level="${LOG_LEVEL:-INFO}">
+      <appender-ref ref="PLAIN"/>
+    </root>
+  </springProfile>
+</configuration>

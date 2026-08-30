@@ -353,6 +353,27 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
     testcontainers 預設的 `docker.elastic.co/elasticsearch/elasticsearch` 座標。
     BOM 的 client 版本為 **9.4.2**(server image 9.5.1,相差一個 minor,在相容範圍內)。
 
+12. **Phase 22 的觀測性座標與地雷**(2026-08-30 實測;[ADR 0032](../architecture/decisions/0032-phase22-observability.md)):
+    - **AOP starter 更名**:Boot 4 沒有 `spring-boot-starter-aop`,改為
+      **`spring-boot-starter-aspectj`**(舊名直接是「找不到版本」的建置失敗)。
+    - **Prometheus 端點需要 registry 相依**:端點的 autoconfig 在 `spring-boot-micrometer-metrics`
+      (actuator starter 已帶入),但缺 `io.micrometer:micrometer-registry-prometheus` 時
+      `/actuator/prometheus` 根本不存在——與第 1 條同型態。
+    - **追蹤用三個座標而非 `spring-boot-starter-opentelemetry`**:後者會一併帶入
+      `micrometer-registry-otlp`,多一個每 60 秒往 `localhost:4318` 推送的 meter registry。
+      本專案宣告 `spring-boot-micrometer-tracing-opentelemetry`(autoconfig)+
+      `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp`。
+    - **`logstash-logback-encoder` 9.0 用的是 Jackson 3**(`tools.jackson.*`),與第 6 條一致;
+      自訂 `JsonProvider` 的 `writeTo` 收到的是 `tools.jackson.core.JsonGenerator`
+      (`writeStringProperty`,不是 Jackson 2 的 `writeStringField`)。
+    - **以程式加入的 logback 元件必須自己 `start()`**:Joran 只啟動 XML 裡宣告的子元件,
+      漏掉時 `MaskingJsonGeneratorDecorator` 的 delegate 是 null,一寫日誌就 NPE。
+    - **`spring-boot-data-redis` 與 `spring-boot-elasticsearch` 都沒有 metrics autoconfig**
+      (`lettuce.*`、`elasticsearch.cluster.health` 要自己綁,見 13 §13.6)。
+    - ⚠️ **Prometheus registry + 追蹤同時存在時,exemplar 預設開啟並會在記錄指標的執行緒上向
+      bean factory 要 `Tracer`**——與 Lettuce 的命令延遲記錄器組合起來會在啟動時死鎖
+      (13 §13.6 第 7 點、ADR 0032 §15)。`management.tracing.exemplars.include: none`。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

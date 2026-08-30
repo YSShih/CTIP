@@ -37,36 +37,15 @@ public class BloomSnapshotService {
 
     private final BloomPorts ports;
     private final BloomSettings settings;
-    private final BloomScopePlanner planner;
     private final EventPublisherPort events;
     private final BloomChangeTracker changes;
 
     public BloomSnapshotService(
-            BloomPorts ports,
-            BloomSettings settings,
-            BloomScopePlanner planner,
-            EventPublisherPort events,
-            BloomChangeTracker changes) {
+            BloomPorts ports, BloomSettings settings, EventPublisherPort events, BloomChangeTracker changes) {
         this.ports = ports;
         this.settings = settings;
-        this.planner = planner;
         this.events = events;
         this.changes = changes;
-    }
-
-    /** 排程入口:單一 scope 失敗不影響其他 scope。 */
-    public void generateAll() {
-        for (BloomTarget target : planner.targets()) {
-            try {
-                generate(target);
-            } catch (RuntimeException e) {
-                log.error(
-                        "Bloom full snapshot 生成失敗:{} / {}",
-                        target.scope(),
-                        target.tenantId().value(),
-                        e);
-            }
-        }
     }
 
     public BloomVersion generate(BloomTarget target) {

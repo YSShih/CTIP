@@ -15,6 +15,7 @@ import com.ctip.application.ingestion.ScoreStage;
 import com.ctip.application.ingestion.SearchIndexStage;
 import com.ctip.application.ingestion.StixProjectionStage;
 import com.ctip.application.ingestion.ValidateStage;
+import com.ctip.application.observability.IngestionMetrics;
 import com.ctip.application.port.ClockPort;
 import com.ctip.application.port.EventPublisherPort;
 import com.ctip.application.port.IdGeneratorPort;
@@ -88,27 +89,32 @@ public class IngestionPipelineConfig {
 
     @Bean
     IngestionPipeline ingestionPipeline(
-            CtipProperties properties, Repositories repositories, Collaborators collaborators) {
+            CtipProperties properties,
+            Repositories repositories,
+            Collaborators collaborators,
+            IngestionMetrics metrics) {
         IocNormalizers normalizers =
                 new IocNormalizers(properties.normalization().stripWww());
         FingerprintStrategy fingerprint = new Sha256FingerprintStrategy();
         ThreatScorer scorer = new RuleBasedThreatScorer(collaborators.clock()::now);
-        return new IngestionPipeline(List.of(
-                new ParseStage(normalizers),
-                new ValidateStage(),
-                new NormalizeStage(
-                        normalizers, Set.copyOf(properties.dataQuality().domainAllowlist())),
-                new FingerprintStage(fingerprint),
-                new DeduplicateStage(repositories.indicators()),
-                new MergeStage(collaborators.idGenerator(), fingerprint, repositories.sources()),
-                new ScoreStage(scorer),
-                // stage 8(§8.2):投影建構;寫出由 IngestionBatchExecutor 於交易提交後執行(ADR 0005)
-                new StixProjectionStage(collaborators.stixProjections()),
-                new PersistStage(repositories.indicators()),
-                // stage 10(phase-15):標記受影響的 Bloom scope;成員真相仍在資料庫(ADR 0024)
-                new BloomUpdateStage(repositories.bloomChanges()),
-                // stage 11(phase-19):標記待重新索引的 indicator;寫出同樣在交易提交後(ADR 0028)
-                new SearchIndexStage(),
-                new EventPublishStage(collaborators.events())));
+        return new IngestionPipeline(
+                List.of(
+                        new ParseStage(normalizers),
+                        new ValidateStage(),
+                        new NormalizeStage(
+                                normalizers, Set.copyOf(properties.dataQuality().domainAllowlist())),
+                        new FingerprintStage(fingerprint),
+                        new DeduplicateStage(repositories.indicators()),
+                        new MergeStage(collaborators.idGenerator(), fingerprint, repositories.sources()),
+                        new ScoreStage(scorer),
+                        // stage 8(§8.2):投影建構;寫出由 IngestionBatchExecutor 於交易提交後執行(ADR 0005)
+                        new StixProjectionStage(collaborators.stixProjections()),
+                        new PersistStage(repositories.indicators()),
+                        // stage 10(phase-15):標記受影響的 Bloom scope;成員真相仍在資料庫(ADR 0024)
+                        new BloomUpdateStage(repositories.bloomChanges()),
+                        // stage 11(phase-19):標記待重新索引的 indicator;寫出同樣在交易提交後(ADR 0028)
+                        new SearchIndexStage(),
+                        new EventPublishStage(collaborators.events())),
+                metrics);
     }
 }

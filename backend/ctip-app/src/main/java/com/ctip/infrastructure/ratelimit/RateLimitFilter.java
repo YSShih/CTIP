@@ -64,18 +64,18 @@ public class RateLimitFilter extends OncePerRequestFilter {
         Plan plan = anonymousPlan.get();
         // §10.7 依序檢查,任一超限即拒絕:minute 超限的請求不再消耗 day 配額,
         // 否則被 429 的猛打流量會燒光整個 IP 的日配額
-        RateLimitResult minute = limiter.tryConsume(
-                RateLimitKey.anonymousIp(subject, RateLimitKey.Window.MINUTE), 1, plan.requestsPerMinute());
+        RateLimitKey minuteKey = RateLimitKey.anonymousIp(subject, RateLimitKey.Window.MINUTE);
+        RateLimitResult minute = limiter.tryConsume(minuteKey, 1, plan.requestsPerMinute());
         responder.record(request, response, minute);
         if (!minute.allowed()) {
-            responder.reject(request, response, minute);
+            responder.reject(request, response, minute, minuteKey);
             return;
         }
-        RateLimitResult day = limiter.tryConsume(
-                RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY), 1, plan.requestsPerDay());
+        RateLimitKey dayKey = RateLimitKey.anonymousIp(subject, RateLimitKey.Window.DAY);
+        RateLimitResult day = limiter.tryConsume(dayKey, 1, plan.requestsPerDay());
         responder.record(request, response, day);
         if (!day.allowed()) {
-            responder.reject(request, response, day);
+            responder.reject(request, response, day, dayKey);
             return;
         }
         chain.doFilter(request, response);

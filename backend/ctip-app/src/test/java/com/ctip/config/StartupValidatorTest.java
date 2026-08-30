@@ -150,7 +150,8 @@ class StartupValidatorTest {
                                 "0 40 1 * * *",
                                 "0 50 1 * * *",
                                 "0 10 2 * * *",
-                                "0 20 2 * * *")));
+                                "0 20 2 * * *")),
+                new CtipProperties.Observability(java.util.List.of("127.0.0.1/32"), 60_000L));
         return new StartupValidator(properties, springEnv);
     }
 }

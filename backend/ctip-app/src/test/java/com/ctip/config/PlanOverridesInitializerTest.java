@@ -136,7 +136,8 @@ class PlanOverridesInitializerTest {
                                 "0 40 1 * * *",
                                 "0 50 1 * * *",
                                 "0 10 2 * * *",
-                                "0 20 2 * * *")));
+                                "0 20 2 * * *")),
+                new CtipProperties.Observability(java.util.List.of("127.0.0.1/32"), 60_000L));
     }
 
     /** PREMIUM 一份(§10.6 的值);save 只記錄,不改變後續查詢結果。 */

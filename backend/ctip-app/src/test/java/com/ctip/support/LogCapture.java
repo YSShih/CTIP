@@ -6,6 +6,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Collectors;
 import org.slf4j.LoggerFactory;
@@ -42,6 +44,17 @@ public final class LogCapture implements AutoCloseable {
         return List.copyOf(appender.lines).stream().collect(Collectors.joining("\n"));
     }
 
+    /**
+     * 某個 MDC 鍵在期間內出現過的所有值(13 §13.6:traceId 必須同時在錯誤回應與日誌中)。
+     * MDC 不在格式化後的訊息裡,{@link #text()} 看不到它。
+     */
+    public Set<String> mdcValues(String key) {
+        return List.copyOf(appender.mdc).stream()
+                .map(entry -> entry.get(key))
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
     @Override
     public void close() {
         root.setLevel(originalLevel);
@@ -52,10 +65,12 @@ public final class LogCapture implements AutoCloseable {
     private static final class ConcurrentAppender extends AppenderBase<ILoggingEvent> {
 
         private final List<String> lines = new CopyOnWriteArrayList<>();
+        private final List<Map<String, String>> mdc = new CopyOnWriteArrayList<>();
 
         @Override
         protected void append(ILoggingEvent event) {
             lines.add(event.getFormattedMessage() + " " + Arrays.toString(event.getArgumentArray()));
+            mdc.add(event.getMDCPropertyMap());
         }
     }
 }

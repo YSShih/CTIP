@@ -31,6 +31,16 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
     </dependency>
+    <!--
+      指標門面(docs/spec/13-platform-ops.md §13.6):ctip.ingestion.* / ctip.bloom.* /
+      ctip.redistribution.* 的產生點都在 application 層。micrometer-core 與 slf4j-api 同性質——
+      是門面而非基礎設施 client,ArchUnit 規則 11 的禁止清單不含它;規則 1 已加入
+      io.micrometer,domain 層仍不得觸碰(ADR 0032)。版本由 Boot BOM 納管。
+    -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-core</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>

@@ -19,6 +19,7 @@ import com.ctip.domain.tenant.TenantId;
 import com.ctip.sdk.IocType;
 import com.ctip.sdk.RedistributionPolicy;
 import com.ctip.sdk.Tlp;
+import com.ctip.testing.TestMetrics;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -102,7 +103,10 @@ class StixExportServiceTest {
 
     private static StixExportService service(List<Indicator> visible) {
         return new StixExportService(
-                repositoryOf(visible), new InMemoryStixObjects(visible), new RedistributionFilter(), () -> BUNDLE_UUID);
+                repositoryOf(visible),
+                new InMemoryStixObjects(visible),
+                new RedistributionFilter(TestMetrics.redistributionMetrics()),
+                () -> BUNDLE_UUID);
     }
 
     /** 兩頁分頁(每頁 2 筆)驗證 collectExportable 的迴圈;findVisible 之外的方法不會被呼叫。 */

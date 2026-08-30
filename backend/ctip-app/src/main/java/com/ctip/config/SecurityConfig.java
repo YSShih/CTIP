@@ -10,6 +10,7 @@ import com.ctip.application.port.PasswordHasherPort;
 import com.ctip.application.port.RolePermissionRepository;
 import com.ctip.application.port.SecureTokenGeneratorPort;
 import com.ctip.infrastructure.audit.AuditAccessFilter;
+import com.ctip.infrastructure.observability.LoggingContextFilter;
 import com.ctip.infrastructure.ratelimit.IdentityRateLimitFilter;
 import com.ctip.infrastructure.security.AccessTokenIdentityResolver;
 import com.ctip.infrastructure.security.BCryptPasswordHasher;
@@ -154,6 +155,19 @@ public class SecurityConfig {
         return registration;
     }
 
+    /** 身分進 MDC(13 §13.6 的 tenantId / userId);必須排在認證之後才有身分可放。 */
+    @Bean
+    LoggingContextFilter loggingContextFilter(TenantContext tenantContext) {
+        return new LoggingContextFilter(tenantContext);
+    }
+
+    @Bean
+    FilterRegistrationBean<LoggingContextFilter> loggingContextFilterRegistration(LoggingContextFilter filter) {
+        FilterRegistrationBean<LoggingContextFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
     /**
      * 限流的第二個檢查點掛在認證 filter <strong>之後</strong>:維度 1–3(apiKey / user / tenant)
      * 與維度 5 都需要已解析的身分(§10.7)。維度 4(匿名 IP)在整條 chain 之前,見
@@ -163,6 +177,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             CtipAuthenticationFilter authenticationFilter,
+            LoggingContextFilter loggingContextFilter,
             IdentityRateLimitFilter identityRateLimitFilter,
             AuditAccessFilter auditAccessFilter)
             throws Exception {
@@ -175,7 +190,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests.anyRequest().permitAll())
                 .addFilterBefore(authenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(identityRateLimitFilter, CtipAuthenticationFilter.class)
+                .addFilterAfter(loggingContextFilter, CtipAuthenticationFilter.class)
+                .addFilterAfter(identityRateLimitFilter, LoggingContextFilter.class)
                 // §13.5:API_ACCESS 的觸發點是「security filter chain 尾端」,而稽核要看得到
                 // 已解析的身分與最終狀態碼,故排在限流之後
                 .addFilterAfter(auditAccessFilter, IdentityRateLimitFilter.class)
