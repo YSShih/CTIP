@@ -57,7 +57,7 @@
 > 故不改變任何 pin。此前已依規則 17 回報四次（§0.14、§0.16、ADR 0004/0005/0012/0014）。
 >
 > **查證狀態（誠實標示）**：以下 19 項已於 2026-08-21 對 Maven Central / npm registry / 上游官方來源逐一查證 —
-> Java 25、Node 24、Spring Boot 4.1.0、springdoc 3.1.0、MapStruct 1.6.3、React 19.2.8、Vite 8.2.2、TypeScript 7.0.2、
+> Java 25、Node 24、Spring Boot 4.1.0（現為 4.1.1，見下表）、springdoc 3.1.0、MapStruct 1.6.3、React 19.2.8、Vite 8.2.2、TypeScript 7.0.2、
 > React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.101.4、Zod 4.4.3、
 > PostgreSQL 18.6、Redis 8.10、Valkey 9.0.4、Kafka 4.2.1、Elasticsearch 9.5.1、nginx 1.30.4。
 >
@@ -81,7 +81,7 @@
 
 | 套件 | 版本 | 支援終止 | 備註 |
 |---|---|---|---|
-| Spring Boot | **4.1.0** | 2027-07-31 ✅ | 2026-06-10 釋出。**無 LTS 制度**；OSS 支援 12 個月，之後僅 Tanzu 商業支援 |
+| Spring Boot | **4.1.1** | 2027-07-31 ✅ | 2026-06-10 釋出（4.1.0）。**無 LTS 制度**；OSS 支援 12 個月，之後僅 Tanzu 商業支援。⚠️ **2026-08-30 由 4.1.0 升至 4.1.1**（patch）——修掉 Trivy 掃到的三個 HIGH：BOM 納管的 `org.postgresql:postgresql` 42.7.11→**42.7.13**（CVE-2026-54291）與 `httpcore5`／`httpcore5-h2` 5.4.2→**5.4.3**（CVE-2026-54399／-54428）。見 [ADR 0044](../architecture/decisions/0044-security-findings-remediation.md) |
 | Spring Framework | 7.0.x | 隨 Boot | 由 BOM 決定 |
 | Spring Security | 7.1.x | 隨 Boot | 由 BOM 決定 |
 | Hibernate ORM | 7.4.x | 隨 Boot | 由 BOM 決定 |

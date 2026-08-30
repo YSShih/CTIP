@@ -90,6 +90,44 @@ CTIP 的核心能力與所屬里程碑：
 三個里程碑各有獨立的驗收閘門：**M1（Phase 1–12，38 項）→ M2（Phase 13–19，27 項）→ M3（Phase 20–23，25 項）**。
 未通過前一個閘門不得開始下一個里程碑。
 
+### Phase 一覽（23 個）
+
+每個 phase 一份執行單（`docs/spec/phases/phase-NN.md`）、一個 commit、一組完成判準；
+逐 phase 的判準結果與偏離事項見 [`docs/progress.md`](docs/progress.md)。
+
+| Phase | 內容 | 里程碑 | 狀態 |
+|---|---|---|---|
+| 1 | Repository skeleton(multi-module pom、linter、測試分層 profile) | M1 | ✅ |
+| 2 | Environment + Docker(唯一 compose、雙 Dockerfile、四環境樣板、腳本) | M1 | ✅ |
+| 3 | Spring Boot 啟動 + PostgreSQL + Flyway + 種子資料 | M1 | ✅ |
+| 4 | Domain:Indicator / Tenant / Source / TLP / 值物件 **＋最小安全層** | M1 | ✅ |
+| 5 | SDK + Mock Adapter + Resilience + Source Health | M1 | ✅ |
+| 6 | Ingestion pipeline + 資料品質 + 排程 **＋記憶體限流** | M1 | ✅ |
+| 7 | 去重、合併、指紋、評分 | M1 | ✅ |
+| 8 | STIX 2.1 正規化與匯出 | M1 | ✅ |
+| 9 | REST API + DTO/Mapper + 錯誤處理 + cursor 分頁 | M1 | ✅ |
+| 10 | OpenAPI / Swagger | M1 | ✅ |
+| 11 | React 前端骨架 + 型別產生 + 版面 | M1 | ✅ |
+| 12 | IOC Search / Detail / Dashboard + PostgreSQL 搜尋 | M1 | ✅ |
+| — | **DoD-MVP 閘門(38 項)** | | ✅ 38/38 |
+| 13 | 認證、RBAC、API Key、租戶隔離強制 | M2 | ✅ |
+| 14 | Plan、Subscription、配額 **＋ IOC 寫入端點** | M2 | ✅ |
+| 15 | Bloom Filter(兩層、snapshot、delta) | M2 | ✅ |
+| 16 | 增量同步 API 與 client 契約 | M2 | ✅ |
+| 17 | Redis(快取 + 分散式限流) | M2 | ✅ |
+| 18 | Threat 實體與關聯 + M2 的 STIX 物件 | M2 | ✅ |
+| 19 | Elasticsearch 搜尋 + reconciliation + 降級 | M2 | ✅ |
+| — | **DoD-Phase2 閘門(27 項)** | | ✅ 27/27 |
+| 20 | Kafka + 通知(WebSocket / SSE / Webhook) | M3 | ✅ |
+| 21 | Audit Log + 資料保留 | M3 | ✅ |
+| 22 | 監控、日誌、追蹤 | M3 | ✅ |
+| 23 | CI/CD 完整化、安全掃描、文件 | M3 | ✅ |
+| — | **DoD-Full 閘門(25 項)** | | 🟠 首次實跑 23/25,見「現況」 |
+
+> Phase 23 另有一次**補件**:補上兩項標 `[M2]` 卻不在任何執行單交付物清單裡的遺漏
+> ——`TOKEN_CLEANUP_CRON` 的過期 token 清理,與 `/settings` 頁(改密碼端點原本沒有前端入口)。
+> 見 [ADR 0042](docs/architecture/decisions/0042-m2-gaps-token-cleanup-and-settings.md)。
+
 ### 明確不做的事
 
 不自建所有第三方情資來源、不做 ML 威脅偵測、不做完整 SIEM / SOAR、不做 Kubernetes-first 部署、不做多區域 active-active、不串接真實金流、不做 TAXII 2.1 Server（僅保留擴充點）。不採用 CQRS 與 Event Sourcing。

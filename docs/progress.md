@@ -2024,3 +2024,66 @@ JaCoCo 的 `jacoco.exec` 預設 **append**,前一輪完整 `verify` 的覆蓋資
   VM 裡已裝 `gh 2.98.0` 並完成 `gh auth login`
 
 ---
+
+## 弱點處置 + README Phase 一覽(2026-08-30,閘門後)
+
+- **Commit**:見 git log(`Security: ...`)
+- **完整記錄**:`docs/architecture/decisions/0044-security-findings-remediation.md`;規格回寫 `06 §6.2.2`
+
+### CI 現況(使用者推上 `e94f4b2` 後)
+
+`openapi-check` **completed/success —— 30 次 run 以來第一次綠**(ADR 0043 §1 的修法在 CI 驗證通過)。
+其餘 `compose-validate`／`backend-lint`／`frontend-test`／`build`／`docker-build`／`deploy-staging` 全綠;
+`security` 仍紅(弱點當時尚未處置)。
+
+### 第一類弱點:一個 patch 升版全解(已修)
+
+三個 CVE 全落在 **Boot BOM 納管**的傳遞相依上,而 06 §6.1.3 規則 1 禁止硬寫納管者的版本
+→ **正確修法只有升 parent**。`spring-boot-starter-parent` **4.1.0 → 4.1.1**:
+
+| 元件 | → | CVE |
+|---|---|---|
+| `org.postgresql:postgresql` 42.7.11 | **42.7.13** | CVE-2026-54291 |
+| `httpcore5` / `httpcore5-h2` 5.4.2 | **5.4.3** | CVE-2026-54399 / -54428 |
+
+版本以 `mvn dependency:list` **實測**確認(不是照 release note 推斷);
+`clean verify -Ptest-integration` **1,128 tests 全綠**;前端六項全綠(186)。
+
+### 第二類弱點:基底映像(未修,回報)
+
+`eclipse-temurin:25-jre` 內 `pebble` 的 Go stdlib(8 項)、`nginx:1.30-alpine` 的 OpenSSL
+——**這個 repo 沒有任何動作可做**,映像每次 CI 重建,上游一修補就會自動消失。
+
+⚠️ **Dependabot PR #1(nginx 1.30-alpine → 1.31-alpine)不得合併**:
+1.31 是**奇數 minor = mainline**,而 00 §0.6 修正版本錯誤時的理由逐字就是
+「1.29 是 mainline(奇數 minor)且已退役」,本專案明確選 stable 分支。應關閉該 PR。
+
+### 沒有做的事
+
+**沒有放寬 `security.yml` 的門檻**。但結構性問題仍在:第二類的兩組無法在本 repo 修,
+卻會擋住每一個 PR。要處理的話應把「應用相依(擋)」與「基底映像(只回報)」分兩道
+——那是政策決定,應由人決定後寫進 13 §13.8。
+
+### 本機 Trivy 重驗的坑
+
+`docker run aquasec/trivy fs …` 在本機**跑不完**:它會連 Maven Central 解析 pom,
+撞到 **429 Too Many Requests(Retry-After: 1800,且會封鎖該 IP 後續請求)**。
+要在本機重驗必須把 `~/.m2` 掛進容器。CI 端不受影響(runner IP 不同、且有 maven cache)。
+
+### README:補上 Phase 一覽(23 個)
+
+使用者指出「專案有 23 個 phase,但 README 表格看不到 23 個」。逐表檢查後,
+既有的三張表(Maven module／domain 模組／前端 feature)的 Phase 欄本來就涵蓋到 23,
+**真正缺的是一張把 23 個 phase 逐一列出的總表** —— 那份清單此前只存在於
+`00-master.md §0.5`,README 沒有。已在「系統摘要」下新增
+**「Phase 一覽(23 個)」**,含每個 phase 的內容、里程碑、狀態,以及三個閘門的結果列。
+
+### 給下一輪的注意事項
+
+- **M3-19 仍待**:需要 `security` 轉綠(視上游是否已重建基底映像)、修好的 commit 推上去、
+  以及 **host 安裝 `gh`**(`dod.sh` 在 host 上呼叫它,VM 那份看不到 —— VM 是另一台機器,
+  有自己的檔案系統與 PATH)
+- **M3-01 需要完整重跑**(mvp 38 + phase2 27);M1-37 已修並單獨驗過
+- Dependabot 仍有 14 個開啟中的 PR;**#1 應關閉**(理由見上),**#12 已由本次升版涵蓋**
+
+---
