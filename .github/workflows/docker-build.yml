@@ -42,7 +42,7 @@ jobs:
 
       - name: 產生 tag 與 label
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}/ctip-${{ matrix.name }}
           tags: |
