@@ -19,7 +19,7 @@ COPY frontend/ ./
 RUN npm run build
 
 ########## production ##########
-FROM nginx:1.30-alpine AS production
+FROM nginx:1.31-alpine AS production
 COPY --from=build /src/dist /usr/share/nginx/html
 COPY environment/config/nginx/default.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
