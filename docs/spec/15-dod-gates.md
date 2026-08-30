@@ -63,7 +63,7 @@
 | ID | 檢查 | 指令 |
 |---|---|---|
 | M1-01 | 四個 module 皆編譯，L1–L3 測試通過 | `./mvnw -f backend/pom.xml verify -Ptest-integration` |
-| M1-02 | 覆蓋率門檻達標（domain ≥ 85%） | 同上（JaCoCo `check` 綁在 `verify`） |
+| M1-02 | 覆蓋率門檻達標（domain ≥ 85%） | `./mvnw -f backend/pom.xml jacoco:check@check`¹ |
 | M1-03 | ArchUnit 11 條規則通過 ¹ | `./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest` |
 | M1-04 | Spotless 格式一致 | `./mvnw -f backend/pom.xml spotless:check` |
 | M1-05 | Checkstyle 五條可讀性規則通過 | `./mvnw -f backend/pom.xml checkstyle:check` |
@@ -100,6 +100,20 @@
 | M1-36 | 前端 HMR 生效（修改 tsx 後 5 秒內更新） | `./environment/scripts/dod.sh mvp M1-36`（寫入標記字串、輪詢頁面內容） |
 | M1-37 | 後端 reload 生效（`reload.sh` 後 10 秒內新行為生效） | `./environment/scripts/dod.sh mvp M1-37` |
 | M1-38 | README 的啟動步驟可直接複製執行 | `./environment/scripts/dod.sh mvp M1-38`（擷取 README 的 bash 區塊並在乾淨環境執行） |
+
+> ¹ **實作回饋修訂（2026-08-30；[ADR 0047](../architecture/decisions/0047-dod-m1-02-coverage-check.md)）**：
+> 本欄原寫「同上（JaCoCo `check` 綁在 `verify`）」。那句的語意是**一次執行同時證明兩件事**，
+> 但 `dod.sh` 照字面把 M1-01 的完整建置又跑了一次——實測 M1-01 為 **5 分 00 秒**，
+> 而 **M3-01 底下 mvp 會跑兩次**（M2-01 是巢狀回歸），**卻沒有多驗到任何東西**。
+>
+> 改為對 M1-01 產生的覆蓋率資料執行 `jacoco:check@check`（`@check` 綁到 pom 裡那個 execution，
+> 用的是**完全相同的 rules**：parent 的 BUNDLE ≥ `${ctip.coverage.line-minimum}`、
+> `ctip-core` override 的 PACKAGE `com.ctip.domain.*` ≥ 0.85）。實測 **5 分 00 秒 → 4.216 秒**，
+> 且驗得比原本多——原本只是「同一個指令再退出 0 一次」，現在是對覆蓋率數字下斷言。
+>
+> ⚠️ **假綠守衛**：`jacoco.exec` 不存在時 `jacoco:check` 會**靜默通過**（實測裸指令 exit 0）。
+> `dod_coverage_threshold` 因此先確認四個 module 的覆蓋率資料存在，缺任一即 FAIL。
+> 本項單獨執行時驗的是「上一次建置」的覆蓋率——沒有資料就是沒被驗到，必須是 FAIL 而不是 PASS。
 
 **38 項，全部可執行。**
 

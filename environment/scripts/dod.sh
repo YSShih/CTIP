@@ -263,6 +263,30 @@ dod_backend_reload() { # M1-37:修改 Java 檔 → reload.sh → 10 秒內重啟
   return "$rc"
 }
 
+dod_coverage_threshold() { # M1-02:對 M1-01 產生的覆蓋率資料執行同一組 JaCoCo 規則
+  # 15 §15.1 的指令欄寫「同上(JaCoCo check 綁在 verify)」——語意是**一次執行同時證明兩件事**,
+  # 而不是把同一個完整建置再跑一次。原本照字面重跑,每個 mvp gate 因此多花約 7 分鐘,
+  # 而 M3-01 底下 mvp 會跑兩次(M2-01 是巢狀回歸),整輪多約 14 分鐘,卻沒有多驗到任何東西。
+  #
+  # `jacoco:check@check` 綁到 pom 裡那個 `check` execution,用的是**完全相同的 rules**
+  # (parent: BUNDLE LINE >= ${ctip.coverage.line-minimum};ctip-core override: PACKAGE
+  # com.ctip.domain.* >= 0.85,即本項要驗的 domain 門檻),不是 plugin 預設值。
+  #
+  # 假綠守衛:`jacoco.exec` 不存在時 jacoco:check 會直接 skip 並**通過**。
+  # 本項因此先確認覆蓋率資料存在——沒有資料就是「這一項沒被驗到」,必須是 FAIL。
+  local missing="" m
+  for m in ctip-sdk ctip-core ctip-adapters ctip-app; do
+    [ -f "backend/${m}/target/jacoco.exec" ] || missing="${missing} ${m}"
+  done
+  if [ -n "$missing" ]; then
+    echo "找不到覆蓋率資料(jacoco.exec):${missing}"
+    echo "(本項驗的是 M1-01 那次 verify 產生的覆蓋率;單獨執行本項前請先跑 M1-01,"
+    echo " 或 ${MVN} verify -Ptest-integration。jacoco:check 在沒有資料時會靜默通過,故此處先擋。)"
+    return 1
+  fi
+  ${MVN} jacoco:check@check
+}
+
 dod_readme_quickstart() { # M1-38:擷取 README 的 bash 區塊並執行
   awk '/^```bash/{f=1;next} /^```/{f=0} f' README.md > "${WORKDIR}/readme-steps.sh"
   [ -s "${WORKDIR}/readme-steps.sh" ] || { echo "README.md 無 bash 區塊"; return 1; }
@@ -389,7 +413,7 @@ PYEOF
 
 gate_mvp() {
   check M1-01 "四個 module 皆編譯,L1–L3 測試通過" "${MVN} verify -Ptest-integration"
-  check M1-02 "覆蓋率門檻達標(JaCoCo check 綁在 verify)" "${MVN} verify -Ptest-integration"
+  check M1-02 "覆蓋率門檻達標(domain >= 85%);對 M1-01 的覆蓋率資料執行同一組規則" dod_coverage_threshold
   check M1-03 "ArchUnit 規則全數通過" "${MVNT}ArchitectureTest"
   check M1-04 "Spotless 格式一致" "${MVN} spotless:check"
   check M1-05 "Checkstyle 五條可讀性規則通過" "${MVN} checkstyle:check"

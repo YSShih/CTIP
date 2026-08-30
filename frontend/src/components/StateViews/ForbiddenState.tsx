@@ -8,8 +8,10 @@ export interface ForbiddenStateProps {
 const COPY: Record<ForbiddenStateProps['reason'], { title: string; description: string }> = {
   login: {
     title: '需要登入',
-    description:
-      '這部分情資僅提供已登入的租戶成員檢視。M1 尚未開放註冊與登入;正式版將在此引導您登入。',
+    // 原文寫「M1 尚未開放註冊與登入」——那是 Phase 12 的實況,而登入與註冊自 Phase 13 起就存在
+    // (`/login`、`/register` 是實際路由)。§12.6 #4 要求顯示**原因**;顯示一個已經不成立的原因
+    // 比空白更糟,因此改為指向實際入口(2026-08-30 補拍 demo 截圖時發現)。
+    description: '這部分情資僅提供已登入的租戶成員檢視。請由右上角登入,或先註冊一個租戶。',
   },
   upgrade: {
     title: '權限不足',

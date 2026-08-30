@@ -34,7 +34,9 @@ function stylesheet(colors: Record<string, string>): cytoscape.StylesheetJson {
         'font-size': 10,
         'text-valign': 'bottom',
         'text-margin-y': 4,
-        'text-wrap': 'ellipsis',
+        // 'ellipsis' 不處理 \n,標籤裡刻意放的換行(型別 / 名稱兩行)因此從來沒生效過,
+        // 擠成一行後被 max-width 截掉頭尾。改 'wrap' 讓換行成立;過長的名稱在下方先行縮短。
+        'text-wrap': 'wrap',
         'text-max-width': '140px',
         width: 26,
         height: 26,
@@ -66,6 +68,11 @@ function stylesheet(colors: Record<string, string>): cytoscape.StylesheetJson {
   ];
 }
 
+/** 節點名稱可能是 32 字元的雜湊,沒有空白可斷行——先縮短,否則會溢出節點框。 */
+function truncate(label: string): string {
+  return label.length > 22 ? `${label.slice(0, 21)}\u2026` : label;
+}
+
 /**
  * Cytoscape.js 圖形檢視(§12.6 STIX Viewer)。
  * 節點點擊往上拋:載入與選取狀態屬於頁面,元件只負責畫與收事件。
@@ -89,7 +96,16 @@ export function StixGraph({ graph, selectedId, onSelect }: StixGraphProps) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const cy = cytoscape({ container, style: stylesheet(readColors(container)) });
+    // maxZoom 是必要的,不是美化:layout 的 fit() 沒有上限,而**單一節點且無關聯**
+    // (任何還沒有 relationship 的 indicator 都是這樣,也是最常見的情況)會讓它一路放大到
+    // 標籤撐爆畫布,看起來像壞掉。minZoom 則擋住節點多時縮到看不見。
+    // 2026-08-30 補拍 demo 截圖時發現。
+    const cy = cytoscape({
+      container,
+      style: stylesheet(readColors(container)),
+      minZoom: 0.2,
+      maxZoom: 1.5,
+    });
     cy.on('tap', 'node', (event) => onSelectRef.current(event.target.id() as string));
     cyRef.current = cy;
     return () => {
@@ -107,7 +123,7 @@ export function StixGraph({ graph, selectedId, onSelect }: StixGraphProps) {
         group: 'nodes' as const,
         data: {
           id: node.id,
-          label: `${node.stixType}\n${node.label}`,
+          label: `${node.stixType}\n${truncate(node.label)}`,
           pending: node.loaded ? undefined : 1,
         },
       })),

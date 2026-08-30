@@ -2143,3 +2143,77 @@ WebSocket 升級不是 OpenAPI operation)——**沒有多做、也沒有少做*
 - 下次若再新增資料表,`DataDictionaryConsistencyTest` 會強迫你同時改 §4.1、§3.3 與檔尾計數
 
 ---
+
+## M3-01 完整重跑 + README 重構 + demo 補拍(2026-08-30)
+
+- **完整記錄**:ADR `0046`(README 重構)、`0047`(M1-02 優化);規格回寫 `15 §15.1`
+- **使用者指示**:三件事——把 M3-01 完整重跑一次、更新 readme demo、README 太冗長要重新精簡優化
+
+### 1. M3-01:通過 ✅
+
+```
+=== 結果(mvp):38/38 通過 ===      MVP_EXIT=0
+=== 結果(phase2):27/27 通過 ===   PHASE2_EXIT=0
+```
+
+零失敗,用時 **76 分鐘**(17:11:36 → 18:27:57)。判準是 `dod.sh mvp && dod.sh phase2`,兩邊都綠才算過。
+上一輪掛的 M1-37(後端 reload)在**完整重跑**下確認修好,不是單項驗過就算。
+
+### 2. 為什麼跑這麼久 —— 以及一個真的浪費(已修)
+
+使用者問「為什麼會等這麼久」。沒有卡住,三個結構性原因疊加,其中**一個是純粹浪費**:
+
+- mvp gate 會跑兩次(M3-01 = `mvp && phase2`,而 phase2 的 M2-01 又是 `dod.sh mvp`)——**規格明文的回歸設計,正確**
+- 45 次獨立的 `-Dtest=` maven 呼叫,各付 JVM + reactor + Spring context + Testcontainers——**§15.0 逐項歸因的必然代價,正確**
+- ⚠️ **M1-01 與 M1-02 是逐字相同的指令**,實測各 **5:00**。規格指令欄寫「同上(JaCoCo check 綁在 verify)」,
+  語意是**一次執行同時證明兩件事**,`dod.sh` 卻照字面又跑了一次
+
+M1-02 改為 `jacoco:check@check`(綁 pom 裡那個 execution,用的是**完全相同的 rules**,
+不是 plugin 預設值)。**5 分 00 秒 → 4.216 秒**,而且驗得比原本多——原本只是「同一指令再退出 0 一次」。
+
+**三項實測驗證**:正向 `[PASS]` 4.2 秒;否定 1(門檻調 0.999)`[FAIL]` 並逐套件印出實際值
+(`domain.notification` 0.858、`stix` 0.891、`indicator` 0.971、`normalization` 0.943)——
+證明套用的是 `ctip-core` 的 PACKAGE override;否定 2(移走 `jacoco.exec`)`[FAIL]`。
+**回歸**:完整 `dod.sh mvp` 38/38、EXIT=0(且 M1-38 對新 README 也通過)。
+
+⚠️ **假綠風險是實測確認的**:裸 `jacoco:check@check` 在沒有覆蓋率資料時 **exit 0**,
+所以那道「四個 module 的 jacoco.exec 都要存在」的守衛是必要的,不是裝飾。
+
+⚠️ **不能宣稱整輪省了多少**:mvp gate 牆鐘 26:08 → 25:08,只少 1 分,與單項的 5 分對不上。
+兩輪起始環境不同(第二輪緊接在 phase2 之後,M2-25 把環境留在 staging,M1-14 要先收掉五個容器),
+而 `dod.sh` 的 `check` 只在失敗時印出被捕捉的輸出,**無法從日誌證實**。只主張單項數字。
+
+### 3. README:59.8 KB → 14.1 KB
+
+三個巨大表格儲存格(`backend/`／`frontend/`／`.github/` 的沿革)佔了約 34 KB。
+成因是 README 自己寫的「本檔隨里程碑擴充而不覆寫」——施工期正確,施工結束後讓 README 變成
+append-only 的施工日誌。**那條規則已移除**(理由見 ADR 0046)。
+
+- 「系統摘要」(18 列能力表)與「Phase 一覽」(26 列)**合併**為依里程碑分節、一列一個 phase 的三張表;
+  **23 個 phase 仍逐一列出**(折疊會退回使用者上次指出的「看不到 23 個」)
+- 沿革 → 新增 **`docs/history.md`**;「CI/CD」整段與 `getting-started.md` §6 幾乎逐字重複,改為指路;
+  「疑難排解」搬進 `getting-started.md` §3;快速開始的 20 列功能導覽移入 `docs/demo/`
+- 文件分工:README(現在是什麼)→ history(怎麼走到這裡)→ progress(逐 phase 判準)→ ADR(決策理由)
+
+### 4. demo 補拍 11 張,並因此抓到兩個實質缺陷
+
+`docs/demo/` 原本只有 M1 四張(2026-08-27),M2/M3 的 15 個頁面從未出現。補拍後共 15 張。
+
+**截圖是一種沒有測試在做的檢查**——它逼你真的去看每一個頁面。兩個缺陷因此浮出來(皆已修):
+
+1. `ForbiddenState` 的文案寫「**M1 尚未開放註冊與登入**」——那是 Phase 12 的實況,
+   而登入/註冊**自 Phase 13 就存在**。§12.6 #4 要顯示原因,顯示一個不成立的原因比空白更糟
+2. **STIX Viewer 在最常見的情況下看起來像壞掉** —— cytoscape 的 `fit()` 無 zoom 上限,
+   單節點無關聯(目前全部的 indicator)會放大到標籤撐爆畫布;且 `text-wrap: 'ellipsis'` 不處理 `\n`,
+   程式碼刻意組的兩行標籤從來沒生效過。加 `minZoom`/`maxZoom`、改 `wrap` + 長名稱截短
+
+### 給下一輪的注意事項
+
+- **拍前端截圖的坑**:token **只存記憶體**(避免 XSS),Playwright 每次 `page.goto()` 的整頁重載
+  都會清掉登入狀態,拍出來全是「需要登入」。登入後必須走 SPA 內導航(`history.pushState` + `popstate`)
+- 截圖用的示範租戶手動指派了 `ENTERPRISE` + `SYSTEM_ADMIN`,威脅資料由 `POST /threats` 建立
+  ——兩者**都已在 `docs/demo/README.md` 標明**,不是預設狀態
+- **M3-19 仍待**:host 安裝 `gh`、CI `security` 轉綠(剩兩組弱點在基底映像,上游重建即消失)
+- M1-02 優化後,下一次乾淨的 `dod.sh full` 才量得到真正的節省幅度
+
+---

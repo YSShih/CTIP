@@ -69,6 +69,23 @@ bind mount 在部分平台需要 polling 才偵測得到變更。代價是較高
 但 gate 執行期間仍**不得**在 host 端跑任何 Maven 指令
 ([15 §15.0](../spec/15-dod-gates.md#150-執行方式) 第 4 點)。
 
+### 疑難排解:backend 沒回應(Swagger / API 打不開,容器卻顯示 Up)
+
+dev 容器與 host **共享 `backend/*/target/classes`**(bind mount)。此問題**已於
+[ADR 0010](../architecture/decisions/0010-devtools-trigger-file.md) 根治**:DevTools 的 restart
+改由 trigger file 觸發(`reload.sh` 編譯成功後 touch `backend/ctip-app/.devtools/.reloadtrigger`),
+host 上跑 `mvnw verify`／`clean` 不再引發容器內熱重啟,也就不會再撞上「半寫入」的 classpath
+使 application context 死亡。
+
+若仍遇到 backend 無回應(`curl http://localhost:8080/actuator/health` 空回應、
+`docker ps` 卻顯示 Up),restart 即恢復:
+
+```sh
+docker compose --env-file environment/.env.mvp -f environment/docker-compose.yml restart backend
+```
+
+`dod.sh` 的 M1-14／M1-33 也內建同款自我修復(縱深防禦,ADR 0009／0010)。
+
 ---
 
 ## 4. 測試
