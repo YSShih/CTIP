@@ -38,12 +38,23 @@ class SampleDataIntegrationTest extends AbstractPostgresIntegrationTest {
     }
 
     @Test
-    void amberDataBelongsToDemoTenantAndPublicHoldsClearGreenOnly() {
+    void amberDataBelongsToDemoTenantAndPublicHoldsClearGreen() {
+        // 本項驗的是**種子的歸屬規則**(sample_data.sql:「CLEAR/GREEN 歸 public、
+        // AMBER/AMBER_STRICT 歸 demo」),不是全表不變量——因此是 contains 而非 containsExactly。
+        //
+        // 原本寫 containsExactlyInAnyOrder,等於宣稱「public tenant 永遠不會持有 AMBER」。
+        // 那不成立:TLP **事後收緊**是合法的領域行為(新來源以更嚴格的 TLP 回報 → 多來源合併收緊,
+        // 發出 IndicatorTlpTightened,見 02 §2.4),而收緊**不改變擁有權**。
+        // `ThreatIntegrationTest` 正是在測 H6 的這條路徑,它留下的 public AMBER 是正確的狀態。
+        //
+        // 症狀:整個 ctip-app 共用同一個 Testcontainers PostgreSQL,而 surefire 預設
+        // runOrder=filesystem 在 APFS 與 ext4 上順序不同——本項因此會隨執行順序時紅時綠
+        // (以 -Dsurefire.runOrder=reversealphabetical 重現)。詳見 ADR 0048。
         assertThat(jdbc.queryForList(
                         "SELECT DISTINCT tlp FROM indicators"
                                 + " WHERE owner_tenant_id = '00000000-0000-0000-0000-000000000000'::uuid",
                         String.class))
-                .containsExactlyInAnyOrder("CLEAR", "GREEN");
+                .contains("CLEAR", "GREEN");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tenants WHERE slug = 'demo'", Integer.class))
                 .isEqualTo(1);
     }

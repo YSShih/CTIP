@@ -194,7 +194,7 @@ npx playwright install chromium && npx playwright test
 | 規格書 | ✅ v2.0（含二十六輪實作回饋修訂，[00 §0.7–§0.32](docs/spec/00-master.md)） |
 | 實作 | ✅ 23 個 phase 全部交付。後端 **1,131 tests**、前端 **186 tests + 6 E2E**，皆全綠 |
 | 閘門 | ✅ M1 38/38 · ✅ M2 27/27 · 🟠 M3 **23/25**（首次實跑；兩項失敗其後皆已處置，見下） |
-| CI | 11 支 workflow。`security` 仍紅——兩組弱點在**基底映像**，本 repo 無動作可做，上游重建即消失 |
+| CI | 11 支 workflow。**兩支仍紅**：`security`（兩組弱點在**基底映像**，本 repo 無動作可做，上游重建即消失）與 `backend-test`（測試順序相依，2026-08-30 已修，待推送後由 CI 確認）。詳見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md) |
 
 M3 閘門的兩項失敗：**M3-01**（巢狀 gate 回歸）成因是 Phase 22 換 plain log pattern 時掉了 `%thread`，
 判準要找的 `restartedMain` 是執行緒名、永遠對不到 —— 已修。

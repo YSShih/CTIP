@@ -34,6 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -79,6 +80,9 @@ class NotificationApiTest extends AbstractPostgresIntegrationTest {
     @Autowired
     private ClockPort clock;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private TestIdentities identities;
     private TestPlans testPlans;
 
@@ -86,6 +90,14 @@ class NotificationApiTest extends AbstractPostgresIntegrationTest {
     void setUp() {
         identities = new TestIdentities(authService, memberships);
         testPlans = new TestPlans(plans, subscriptions, idGenerator, clock);
+        // 本類的斷言是絕對值(items[0]、length()==0),只有在「這張表除了本測試剛送出的以外是空的」
+        // 時才成立。而可見度是 tenant_id IN (自家, public)——來源事件產生的 SOURCE_FAILURE 掛在
+        // public tenant,**對每個租戶都可見**,任何先跑的測試留下一列就會污染這裡。
+        //
+        // 這不是理論問題:CI(Linux/ext4)與本機(macOS/APFS)的 surefire 預設 runOrder=filesystem
+        // 給出不同的測試類順序,backend-test 因此在 CI 連續 19 次 run 全紅、本機卻全綠
+        // (以 -Dsurefire.runOrder=alphabetical 在本機重現:length() 期望 0 實際 50)。詳見 ADR 0048。
+        jdbc.update("DELETE FROM notifications");
     }
 
     @Test

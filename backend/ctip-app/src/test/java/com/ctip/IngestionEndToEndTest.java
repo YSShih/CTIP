@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Ingestion 端到端(docs/spec/08-ingestion-sdk.md §8.2、03 §3.4):三個 mock 全啟用,
  * fetch → pipeline → PostgreSQL;驗證正規化落庫、拒絕記錄、source_sync、跨來源合併與
- * 再同步的 UPSERT 冪等。測試自行清理(啟用旗標與新增資料),不影響種子斷言。
+ * 再同步的 UPSERT 冪等。本類斷言絕對筆數,故前後都自己清(整個 ctip-app 共用一個資料庫;ADR 0048)。
  */
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "ctip.data-quality.domain-allowlist=allowlisted.example.com")
@@ -43,22 +43,22 @@ class IngestionEndToEndTest extends AbstractPostgresIntegrationTest {
     private MockMvc mvc;
 
     /**
-     * 測試開始前既有的 indicator id。原本用暫存表,但應用角色改為非特權的 {@code ctip_app}
-     * 之後就沒有 schema 的 CREATE 權限了(ADR 0021)——那是<strong>刻意的</strong>:測試必須跟
-     * 正式環境用同一組權限。快照因此存在 Java 端,SQL 以 {@code NOT IN (:ids)} 展開。
+     * 測試開始前既有的 indicator id。應用角色 {@code ctip_app} 無 schema CREATE 權限,用不了暫存表
+     * ——那是<strong>刻意的</strong>(ADR 0021:測試與正式環境同權限);快照存 Java 端,SQL 以 {@code NOT IN} 展開。
      */
     private List<UUID> preExistingIds = List.of();
 
     @BeforeAll
     void enableAllMocksAndSnapshotIndicators() {
+        // 別人留下的列會讓下面的「12 筆拒絕」與「3 列 source_sync」對不上(順序相依,ADR 0048)
+        List.of("ingestion_rejections", "source_sync").forEach(t -> jdbc.update("DELETE FROM " + t));
         preExistingIds = jdbc.queryForList("SELECT id FROM indicators", UUID.class);
         jdbc.update("UPDATE sources SET enabled = true WHERE source_type IN ('MOCK_ABUSEIPDB','MOCK_ALIENVAULT')");
     }
 
     @AfterAll
     void restoreSeedState() {
-        jdbc.update("DELETE FROM ingestion_rejections");
-        jdbc.update("DELETE FROM source_sync");
+        List.of("ingestion_rejections", "source_sync").forEach(t -> jdbc.update("DELETE FROM " + t));
         jdbc.update("DELETE FROM indicators WHERE " + notPreExisting("id"));
         jdbc.update("UPDATE sources SET enabled = (source_type IN ('MANUAL','MOCK_OPENPHISH')), status = 'ACTIVE',"
                 + " consecutive_failures = 0, last_sync_at = NULL, last_success_at = NULL, last_failure_at = NULL,"

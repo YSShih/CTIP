@@ -45,3 +45,15 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]
+      # nginx 只用 **stable 分支(偶數 minor)**(06 §6.2:「上游有 LTS 或 stable 分支制度時
+      # 必須 pin 該分支」;00 §0.6 修正 v1.1 的理由逐字是「1.29 是 mainline(奇數 minor)且已退役」)。
+      #
+      # Dependabot 無法表達「只接受偶數 minor」,而 tag 是浮動的 `1.30-alpine`——
+      # 它唯一會提的就是 minor(1.31、1.32…),其中奇數是 mainline、不得使用。
+      # 實測:PR #1 提了 1.31-alpine(mainline),已依本規則關閉。
+      #
+      # 因此 minor 一併忽略,改由 06 §6.4 的版本複查程序手動升到下一個 **stable**(1.32-alpine)。
+      # 代價是 stable 分支內的安全修補不會自動開 PR——但 `1.30-alpine` 本身就是浮動 tag,
+      # 每次 docker build 都會拉到該分支最新的 patch,而 security.yml 的 Trivy image 掃描會擋住漏網的。
+      - dependency-name: "nginx"
+        update-types: [version-update:semver-minor]

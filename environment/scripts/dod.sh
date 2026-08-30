@@ -327,8 +327,13 @@ dod_prod_config_guard() { # M3-17:prod 設定驗證(對真實 .env.prod)
   [ "$v" = "false" ] || { echo "SWAGGER_ENABLED 必須為 false"; return 1; }
 }
 
-dod_ci_green() { # M3-19:11 支 workflow 皆存在 + 最後一次 CI run 全綠
-  # 檔案存在性先於 run 結論:只看最後一次 run 的結論時,「只有兩支 workflow 且都綠」
+# M3-19 的三段:11 支 workflow 皆存在 → deploy-prod 綁 protected environment → HEAD 的 CI 全綠。
+# 只有 push 會觸發的九支列入「全綠」的必檢集合(見 dod_ci_all_green 的註)。
+DOD_PUSH_WORKFLOWS='backend-test backend-lint frontend-test build compose-validate
+                    openapi-check docker-build security deploy-staging'
+
+dod_ci_green() { # M3-19
+  # 檔案存在性先於 run 結論:只看 run 結論時,「只有兩支 workflow 且都綠」
   # 也會通過——13 §13.8 的六支 M1/M2 workflow 逾期到 Phase 23 才被發現就是這樣來的
   # (ADR 0016 Z3、ADR 0022)。清單即 13 §13.8 的 11 支。
   local w rc=0
@@ -342,7 +347,34 @@ dod_ci_green() { # M3-19:11 支 workflow 皆存在 + 最後一次 CI run 全綠
   grep -qE '^ +name: production$' .github/workflows/deploy-prod.yml \
     || { echo "deploy-prod.yml 未綁定 production environment"; return 1; }
   command -v gh >/dev/null 2>&1 || { echo "本項需要 gh CLI 並已推上 GitHub 跑過 CI(15 §15.3 註)"; return 1; }
-  gh run list --limit 1 --json conclusion -q '.[0].conclusion == "success"' | grep -q true
+  dod_ci_all_green
+}
+
+# 「CI 全綠」= HEAD 這個 commit 上,每一支 push 觸發的 workflow 都 completed + success。
+#
+# 原本是 `gh run list --limit 1`,只看**最近一次 run**。但九支 workflow 在同一次 push
+# 同時觸發,「最近一次」是它們之中的哪一支基本上是任意的:實測抽到 build(success),
+# 而同一個 commit 上 security 與 backend-test 都是 failure,該項照樣 PASS
+# ——與 ADR 0022「只有兩支且都綠也會通過」是同一個形狀,只是換到 run 結論這一半(ADR 0048)。
+#
+# heavy-test(schedule + dispatch)與 deploy-prod(只有 dispatch)對 HEAD 不會有 run,
+# 列入必檢會永遠 FAIL,故不在集合內——它們的存在性已由上面的檔案檢查涵蓋。
+dod_ci_all_green() {
+  local sha w result status conclusion rc=0
+  sha="$(git rev-parse HEAD 2>/dev/null)" || { echo "取不到 HEAD"; return 1; }
+  for w in ${DOD_PUSH_WORKFLOWS}; do
+    result="$(gh run list --workflow="${w}.yml" --commit "${sha}" --limit 1 --json status,conclusion \
+              -q 'if length == 0 then "none -" else "\(.[0].status) \(.[0].conclusion // "-")" end' 2>&1)" \
+      || { echo "${w}:查詢失敗——${result}"; rc=1; continue; }
+    status="${result%% *}"; conclusion="${result##* }"
+    case "$status" in
+      none) echo "${w}:HEAD(${sha:0:7})沒有對應的 run——尚未推送?"; rc=1 ;;
+      completed) [ "$conclusion" = success ] || { echo "${w}:${conclusion}"; rc=1; } ;;
+      *) echo "${w}:${status}(尚未結束)"; rc=1 ;;
+    esac
+  done
+  [ "$rc" -eq 0 ] || echo "CI 未全綠(HEAD=${sha:0:7});M3-19 要求九支 push 觸發的 workflow 全部 success"
+  return "$rc"
 }
 
 dod_sbom_present() { # M3-20
@@ -502,7 +534,7 @@ gate_full() {
   check M3-16 "traceId 同時出現在錯誤回應與日誌" "${MVNT}TracePropagationTest"
   check M3-17 "prod 設定驗證:不掛原始碼、無明文 secret、CORS 非 *、Swagger 關閉" dod_prod_config_guard
   check M3-18 "prod 啟動守衛生效(樣板 JWT_SECRET 與 CORS=* 皆拒絕啟動)" "${MVNT}StartupValidatorTest"
-  check M3-19 "11 支 workflow 皆存在且最後一次 CI run 全綠" dod_ci_green
+  check M3-19 "11 支 workflow 皆存在且 HEAD 的 CI 全綠(九支 push 觸發者)" dod_ci_green
   check M3-20 "SBOM 產出(backend CycloneDX + frontend npm sbom)" dod_sbom_present
   check M3-21 "ctip-sdk 可獨立打包" "${MVN} -pl ctip-sdk package"
   check M3-22 "ExampleThreatSourceAdapter 可編譯並通過測試" "${MVN} -pl ctip-sdk test -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ExampleAdapterTest"

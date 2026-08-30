@@ -2217,3 +2217,84 @@ append-only 的施工日誌。**那條規則已移除**(理由見 ADR 0046)。
 - M1-02 優化後,下一次乾淨的 `dod.sh full` 才量得到真正的節省幅度
 
 ---
+
+## gh 安裝 + M3-19 假綠 + backend-test 順序相依(2026-08-30)
+
+- **完整記錄**:[ADR 0048](architecture/decisions/0048-ci-green-and-test-isolation.md);規格回寫 `15 §15.3` 註 ²
+- **起點**:使用者問「host 安裝 gh 不會影響我本地的 git 嗎」「vm 裡有安裝了不行嗎」,續以「我想徹底解決問題」
+
+### 先更正一個前提:host 與 VM 是**同一個 repo**
+
+`Vagrantfile:55` 把 `/Users/yusen/workspace/java/` 掛成 VM 的 `/home/vagrant/java/`(synced folder)。
+兩邊同一份工作目錄、同一個 `.git`、同一個 remote。**不是兩個 remote。**
+
+VM 的 gh 實測可用,但 **VM 缺 docker / node / npm / jq**,`dod.sh full` 主體跑不了 → host 需要 gh。
+
+### 1. gh 裝在 host,且對 git 零影響(已驗證)
+
+`brew install gh` 只放 binary,不碰 git。**唯一的風險是 `gh auth login` 的那一題**
+(「Authenticate Git with your GitHub credentials?」),答 yes 會在 `~/.gitconfig` 寫入
+`credential."https://github.com".helper`,影響**所有**用 HTTPS github remote 的 repo。
+
+**改用 `GH_TOKEN` 環境變數**(gh 官方支援,不寫入任何設定檔,連 `~/.config/gh/hosts.yml` 都不產生)。
+token 為 fine-grained PAT,僅 `YSShih/CTIP` + **Actions: Read-only**,
+存於 `~/.config/ctip/gh-token`(0600,**repo 外**,gitleaks 掃不到),由 `~/.zshrc` 帶入。
+
+零影響證據:`git config --global --list` diff 無差異、`~/.gitconfig` sha 相同(`8f14859…`)、
+`credential.helper` 仍是 `osxkeychain`、`~/.config/gh` 不存在、remote 未被修改。
+
+⚠️ **`zsh -lc`(非互動 login shell)不會讀 `.zshrc`**,驗證要用 `zsh -ic`。
+
+### 2. M3-19 的假綠(已修)
+
+`gh run list --limit 1` 只看**最近一次 run**,而九支 workflow 在同一次 push 同時觸發,
+「最近一次」是哪一支基本上是任意的。**實測抽到 `build`(success)→ M3-19 回報 PASS**,
+而同一個 commit 上 `security` 與 `backend-test` 都是 failure。
+
+與 [ADR 0022](architecture/decisions/0022-orphan-deliverables.md)「只有兩支且都綠也會通過」同一形狀,
+只是換到 run 結論這一半——當時補了檔案存在性,沒動 run 結論,同一類缺陷又躲一次。
+
+改為:**HEAD 的九支 push 觸發 workflow 全部 `completed` + `success`**
+(排除 `deploy-prod` 只有 dispatch、`heavy-test` 是 schedule——實測對 HEAD 無 run,列入必檢會永遠 FAIL)。
+
+### 3. `backend-test` 19 次 run、0 次成功(已修)
+
+**先前的複查從未檢查過它** —— `progress.md:2036` 列了六支綠 + security 紅,backend-test 不在任何一邊。
+它能一直躲著,正是因為第 2 點的 `--limit 1`。
+
+根因:整個 `ctip-app` 共用同一個 Testcontainers PostgreSQL,而 surefire 未設 `runOrder`、
+預設 `filesystem` —— **APFS(本機)與 ext4(CI runner)給的測試類順序不同**,所以本機全綠、CI 全紅。
+
+**三個順序相依的測試,三種不同成因**:
+
+| 測試 | 成因 | 修法 |
+|---|---|---|
+| `NotificationApiTest` | 斷言絕對值(`items[0]`、`length()==0`),但可見度是 `tenant_id IN (自家, public)`,而來源事件的 `SOURCE_FAILURE` 掛 public tenant、**對每個租戶都可見** | `@BeforeEach` 清 `notifications`,讓「跨租戶看不到」這個意圖真的成立 |
+| `IngestionEndToEndTest` | 只在 `@AfterAll` 收拾,**沒在 `@BeforeAll` 建立前提**;斷言絕對筆數卻假設自己先跑 | `@BeforeAll` 清 `ingestion_rejections` / `source_sync` |
+| `SampleDataIntegrationTest` | **斷言本身寫錯**:用 `containsExactlyInAnyOrder` 宣稱 public tenant「只有」CLEAR/GREEN,把**種子的歸屬規則**當成全表不變量 | 改 `contains` |
+
+第三項一度被我懷疑是規格違反,追下去**不是**:`ThreatIntegrationTest` 測的是 H6 ——
+已發布的公開 IOC 被新來源以更嚴格 TLP 回報 → 合併收緊 → `IndicatorTlpTightened`。
+**TLP 事後收緊是合法行為,且不改變擁有權**,public 持有 AMBER 沒有違反任何不變量。
+
+**不採用「把 runOrder 釘死」當修法** —— 那只是把今天的巧合凍結,下一個新測試照樣踩,
+而且會以更難理解的方式踩(「為什麼加一個測試會讓另一個不相關的測試變紅」)。
+固定順序只當**重現工具**。
+
+### 本輪最值得記住的一件事
+
+**只驗「原本會紅的那個順序」會漏掉東西。** 修完 `NotificationApiTest` 後 `alphabetical` 轉綠,
+但 `reversealphabetical` 立刻抓出 `SampleDataIntegrationTest` —— 成因完全不同。
+**順序無關才算修好,只驗預設順序等於沒驗。**
+
+### 給下一輪的注意事項
+
+- **M3-19 仍會 FAIL**,因為 `security` 紅。剩兩組弱點在基底映像,本 repo 無動作可做
+  ([ADR 0044](architecture/decisions/0044-security-findings-remediation.md))。
+  要讓它能綠,得先決定那個**政策問題**:把「應用相依(擋)」與「基底映像(只回報)」分兩道,
+  寫進 `13 §13.8`。**那不由 AI 定調。**
+- `backend-test` 的修法要**推上去由 CI 確認**才算數——本機三種順序全綠只是必要條件
+- 新增整合測試時:**斷言絕對值(筆數、`items[0]`、`containsExactly`)就必須自己建立前提**,
+  因為整個 `ctip-app` 共用一個資料庫
+
+---

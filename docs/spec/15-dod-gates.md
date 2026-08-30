@@ -202,18 +202,36 @@
 | M3-16 | `traceId` 同時出現在錯誤回應與日誌 | 同 M3-14 |
 | M3-17 | prod 設定驗證：不掛載原始碼、無明文 secret、CORS 非 `*`、Swagger 關閉 | `./environment/scripts/dod.sh full M3-17` |
 | M3-18 | prod 啟動守衛生效（樣板 JWT_SECRET 與 `CORS=*` 皆拒絕啟動） | `test -Dtest=StartupValidatorTest` |
-| M3-19 | **11 支 workflow 檔案皆存在**、`deploy-prod` 綁定 protected environment，且 CI 全綠：測試、lint、build、compose 驗證、弱點掃描、secret 掃描、映像掃描 | `./environment/scripts/dod.sh full --only M3-19`（依序：檔案存在性 → environment 綁定 → `gh run list --limit 1 --json conclusion -q '.[0].conclusion == "success"'`） |
+| M3-19 | **11 支 workflow 檔案皆存在**、`deploy-prod` 綁定 protected environment，且 **HEAD 這個 commit 的 CI 全綠**：測試、lint、build、compose 驗證、弱點掃描、secret 掃描、映像掃描 | `./environment/scripts/dod.sh full --only M3-19`（依序：檔案存在性 → environment 綁定 → 逐支 `gh run list --workflow=<w>.yml --commit $(git rev-parse HEAD)`²） |
 | M3-20 | SBOM 產出（backend CycloneDX + frontend npm sbom） | `test -f target/bom.json && test -f frontend/sbom.json` |
 | M3-21 | `ctip-sdk` 可獨立打包 | `./mvnw -f backend/pom.xml -pl ctip-sdk package` |
 | M3-22 | `ExampleThreatSourceAdapter` 可編譯並通過測試 | `./mvnw -f backend/pom.xml -pl ctip-sdk test -Dtest=ExampleAdapterTest` |
 | M3-23 | 文件齊備（12 份必要文件皆存在且非空） | `./environment/scripts/dod.sh full M3-23` |
 | M3-24 | 所有規格內部交叉引用皆指向存在的目標 | `./environment/scripts/dod.sh full M3-24`（掃描 `docs/spec/**` 的相對連結與 anchor） |
 
+> ² **實作回饋修訂（2026-08-30；[ADR 0048](../architecture/decisions/0048-ci-green-and-test-isolation.md)）**——
+> 本欄原本是 `gh run list --limit 1`，**只看最近一次 run**。但九支 workflow 在同一次 push 同時觸發，
+> 「最近一次」是它們之中的哪一支基本上是任意的：實測抽到 `build`（success），
+> 而同一個 commit 上 `security` 與 `backend-test` 都是 failure，**該項照樣 PASS**。
+> 這與 [ADR 0022](../architecture/decisions/0022-orphan-deliverables.md) 記的
+> 「只有兩支 workflow 且都綠也會通過」是同一個形狀，只是換到 run 結論這一半。
+>
+> 改為：**HEAD 這個 commit 上，每一支 push 觸發的 workflow 都必須 `completed` + `success`**。
+> 必檢集合是九支（`backend-test`、`backend-lint`、`frontend-test`、`build`、`compose-validate`、
+> `openapi-check`、`docker-build`、`security`、`deploy-staging`）；
+> **排除** `deploy-prod`（只有 `workflow_dispatch`）與 `heavy-test`（`schedule` + `dispatch`）——
+> 實測兩者對 HEAD 沒有 run，列入必檢會永遠 FAIL，而它們的存在性已由「11 支檔案皆存在」涵蓋。
+>
+> `gh` 的認證建議用 **`GH_TOKEN` 環境變數**而非 `gh auth login`：後者會詢問
+> 「Authenticate Git with your GitHub credentials?」，答 yes 會在 `~/.gitconfig` 寫入
+> `credential."https://github.com".helper`，影響**所有**使用 HTTPS github remote 的 repo。
+> `GH_TOKEN` 不寫入任何設定檔；權限只需 **Actions: Read-only**。
+
 **25 項，全部可執行。**
 
 > **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
 > 「全部可執行」有兩項前置未在此註明——**M3-17** 需要 `environment/.env.prod`（真實檔，
-> 依 `.gitignore` 不進版控，須由操作者先從樣板建立）；**M3-19** 需要本機安裝 `gh` 並已推上 GitHub 跑過 CI。
+> 依 `.gitignore` 不進版控，須由操作者先從樣板建立）；**M3-19** 需要本機安裝 `gh` 並已推上 GitHub 跑過 CI（見註 ²）。
 > 兩者都不是腳本能自備的，執行 `dod.sh full` 前必須先備妥。
 
 > **實作回饋修訂（2026-08-30，Phase 23；[ADR 0041](../architecture/decisions/0041-phase23-cicd-security-docs.md)）**——前置再加一項，M3-19 的內容擴充：
