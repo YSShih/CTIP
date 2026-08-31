@@ -27,7 +27,7 @@
 - 附一份中英對照的 Ubiquitous Language 詞彙表——規格是中文而程式碼是英文，沒有這張表命名會發散
 
 規格是 **single source of truth**：實作撞到的每一個規格衝突都寫回規格正文，而不是在程式裡繞過去
-（二十七輪，見 [00 §0.7–§0.33](docs/spec/00-master.md)）。
+（二十八輪，見 [00 §0.7–§0.34](docs/spec/00-master.md)）。
 
 **要讀它** —— AI agent 從 [`docs/spec/README.md`](docs/spec/README.md) 開始，它會告訴你讀取順序，
 **不要一次讀完全部檔案**；人類先讀下面的里程碑表，再讀 [00 §0.6](docs/spec/00-master.md) 的變更摘要
@@ -83,7 +83,7 @@
 | 22 | **可觀測性**：Prometheus／Grafana 指標、結構化 JSON 日誌（憑證遮罩）、OpenTelemetry 追蹤 |
 | 23 | **CI/CD 與供應鏈安全**：11 支 workflow、secret／相依／映像掃描、SBOM、12 份必要文件 |
 
-**🟠 DoD-Full 閘門：首次實跑 23/25**，兩項失敗其後皆已處置 —— 見[現況](#現況)。
+**✅ DoD-Full 閘門 25/25**（2026-08-31 完整實跑；首次實跑為 23/25，兩項失敗其後皆已修復並重新驗證）。
 
 > 三個閘門是**順序性**的：未通過前一個閘門不得開始下一個里程碑
 > （[15](docs/spec/15-dod-gates.md)；`./environment/scripts/dod.sh <gate>`）。
@@ -191,9 +191,9 @@ npx playwright install chromium && npx playwright test
 
 | 項目 | 狀態 |
 |---|---|
-| 規格書 | ✅ v2.0（含二十七輪實作回饋修訂，[00 §0.7–§0.33](docs/spec/00-master.md)） |
+| 規格書 | ✅ v2.0（含二十八輪實作回饋修訂，[00 §0.7–§0.34](docs/spec/00-master.md)） |
 | 實作 | ✅ 23 個 phase 全部交付。後端 **1,131 tests**、前端 **186 tests + 6 E2E**，皆全綠 |
-| 閘門 | ✅ M1 38/38 · ✅ M2 27/27 · 🟠 M3 **23/25**（首次實跑；兩項失敗其後皆已處置，見下） |
+| 閘門 | ✅ M1 38/38 · ✅ M2 27/27 · ✅ M3 **25/25**（2026-08-31 完整實跑，94 分鐘、零失敗）——三個閘門全數通過 |
 | CI | 11 支 workflow。`security` 的 `dependency-scan`／`secret-scan` 已綠；**`image-scan` 的 10 個 HIGH 已於 2026-08-30 修掉**（`pebble` 不受 apt 管理且本容器用不到 → 刪除；`libcrypto3` 的修補版早在 Alpine repo → `apk upgrade`）。`backend-test` 的測試順序相依亦已修 —— **兩者都待推送後由 CI 實測確認**。見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md)、[0049](docs/architecture/decisions/0049-base-image-vulnerability-remediation.md) |
 
 M3 閘門的兩項失敗：**M3-01**（巢狀 gate 回歸）成因是 Phase 22 換 plain log pattern 時掉了 `%thread`，

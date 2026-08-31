@@ -249,7 +249,7 @@ Prometheus 的 **exemplar** 會在記錄指標的執行緒上向 bean factory �
 |---|---|---|
 | `dod.sh mvp` | 38 | ✅ 38/38 |
 | `dod.sh phase2` | 27 | ✅ 27/27 |
-| `dod.sh full` | 25 | 🟠 首次實跑 **23/25**（2026-08-30），兩項失敗其後皆已處置 |
+| `dod.sh full` | 25 | ✅ **25/25**（2026-08-31 完整實跑）。首次實跑為 23/25，失敗的 M3-01 與 M3-19 其後皆已修復並重新驗證 |
 
 **M3-01**（巢狀 gate 回歸）—— `dod.sh mvp` 37/38，掛在 M1-37（後端 reload）。成因是 Phase 22
 換 plain log pattern 時掉了 `%thread`，判準要找的 `restartedMain` 是**執行緒名**、永遠對不到。
