@@ -13,7 +13,28 @@
 ./environment/scripts/dod.sh phase2
 ./environment/scripts/dod.sh full
 ./environment/scripts/dod.sh mvp M1-14  # 只執行單一項目
+
+./environment/scripts/dod.sh full --parallel        # 自行 fan-out(建議用法)
+./environment/scripts/dod.sh full --parallel -j 6
 ```
+
+多個執行者(agent)分工時共用同一個 run 目錄：
+
+```bash
+export CTIP_DOD_RUN=/tmp/ctip-dod-multi
+./environment/scripts/dod.sh full --reset         # 開新的一輪(必做,見下)
+./environment/scripts/dod.sh full --plan          # 項目 / lane / 資源 / 相依
+./environment/scripts/dod.sh full --lane build    # 執行者 A
+./environment/scripts/dod.sh full --lane frontend # 執行者 B
+./environment/scripts/dod.sh full --shard 2/4     # 或依 shard 切
+./environment/scripts/dod.sh full --status        # 隨時查(唯讀,不執行任何東西)
+./environment/scripts/dod.sh full --report        # 彙整全部,exit 0/1
+```
+
+> ⚠️ `--lane` / `--shard` **刻意不清上一輪的結果**——它們要跟其他執行者共用同一輪。
+> 因此共用同一個 `CTIP_DOD_RUN` 開新的一輪時**必須先 `--reset`**,
+> 否則會直接沿用上一輪的 `PASS` 與新鮮度基準,什麼都不會重跑。
+> `--parallel` 與不帶 `--lane`/`--shard` 的一般執行會自動重設,不需要這一步。
 
 `dod.sh` 契約：
 
@@ -24,8 +45,10 @@
 | 支援 `--only <id>` 與 `--skip <id>` |
 | **不得**因為某項失敗就中止後續檢查（要一次看到全部問題） |
 | 結尾必須印出「需人工確認」清單，並提示這些項目未被自動驗證 |
-| **同一個 repo 同時只能有一個 gate 在執行**（互斥鎖）；巢狀呼叫（`M2-01` → `dod.sh mvp`）不受限 |
-| 結果行必須帶 gate 名稱：`=== 結果(<gate>):N/M 通過 ===` |
+| **搶同一個實體資源的項目不得同時執行**（具名資源鎖；2026-08-31 修訂，原文見下方修訂 6） |
+| 結果行必須帶 gate 名稱：`=== 結果(<gate>):N/M 通過 ===`；**只跑一部分時必須把範圍一併寫進去**（如 `=== 結果(full/lane=frontend):6/6 通過 ===`），否則會被誤讀成整個 gate 的結論 |
+| 每一個判準項目都有**逾時上限**，逾時即判 `FAIL` 並強制中斷（不得無上限等待） |
+| 支援並行執行與多執行者分工：`--parallel [-j N]`、`--lane`、`--shard i/N`、`--plan`、`--status`、`--report` |
 
 > 判準中的 `./backend/mvnw … -Dtest=<類名>` 在多 module reactor 下依賴 parent pom 的 surefire 設定
 > `failIfNoSpecifiedTests=false`（[06-tech-stack.md §6.3.6](06-tech-stack.md#636-spring-boot-4-模組化與-testcontainers-2x編譯地雷) 第 4 點）；缺少該設定時，沒有該測試類的 module 會使整個指令失敗。
@@ -56,6 +79,62 @@
 >    以 `=== 結果` 為完成條件會在外層還在跑時就誤判結束（Phase 19 因此啟動了第二輪，見第 4 點）。
 >    結果行自本版起帶 gate 名稱以降低誤判，但**正確的作法仍是等行程結束**。
 
+> **實作回饋修訂（2026-08-31；[ADR 0052](../architecture/decisions/0052-dod-parallel-and-report-reuse.md)）**——
+> 起因是 `dod.sh full` 實跑 **94 分鐘**（`docs/progress.md`）。盤點後，時間並不是花在「檢查很多」，
+> 而是花在**把同一批測試重跑好幾次**。三項修訂：
+>
+> 6. <a id="dod-resource-locks"></a>**單一全域互斥鎖 → 具名資源鎖**。第 4 點的實據是
+>    **共用 `backend/*/target` 與容器記憶體**，而不是「gate」這個單位。把互斥降到資源層級之後，
+>    前端、靜態檢查、`gh` 查 CI 這些與 Maven 毫無衝突的項目不必再排隊等它。
+>
+>    | 資源 | 誰要 | 為什麼是資源（有實據才列） |
+>    |---|---|---|
+>    | `maven` | 所有 host 端 `mvnw` 的項目、`stack` 的項目 | host 寫的 `backend/*/target/` 正是 mvp dev 容器掛載的目錄（第 4 點、`dod_ensure_backend_up` 的註） |
+>    | `docker-env` | `up.sh` / 容器相關項目 | 四個環境共用同一個 compose 專案名、port 與 `postgres-data` volume（[05 §5.10](05-environment.md#510-腳本契約) 第 6 點） |
+>    | `frontend-src` | `M1-10` | 只有 `api:check` 會**寫入** `src/api/generated/` |
+>    | `frontend-dist` | `M1-08` | 只有 `npm run build` 會寫 `dist/` |
+>
+>    ⚠️ **`build` 與 `stack` 仍然不得並行**（兩者都要 `maven`）——這是唯一無法拆開的序列化，
+>    第 4 點的教訓完整保留。`docker compose config`（`M1-11`/`M1-12`/`M1-13`/`M3-17`）是**唯讀**、
+>    不碰容器，因此不佔 `docker-env`。
+>    鎖一律以**排序後的順序**取得，且**取不到就全部放掉**（非阻塞），死鎖與活鎖都不可能發生。
+>
+> 7. <a id="dod-report-assertion"></a>**逐類測試判準改為對測試報告下斷言**（本檔指令欄的「報告斷言²」）。
+>    `M1-01` 的 `verify -Ptest-integration` 已經把全部測試跑完，而 `M1-16`~`M1-34` 原本又用
+>    `mvn test -Dtest=<類名>` 把其中 17 個類**逐一重跑**，每次付一整輪 reactor + JVM + Testcontainers
+>    啟動；`phase2` 再 23 個、`full` 再 17 個，三個 gate 合計約 **64 次 Maven 呼叫**。
+>    真正需要獨立執行的只有 3 個 `@Tag("heavy")` 的類（`-Ptest-integration` 會排除 `heavy`），
+>    現在以**一次批次**跑完。與 [ADR 0047](../architecture/decisions/0047-dod-m1-02-coverage-check.md)
+>    修 `M1-02` 是同一個形狀。
+>
+>    ⚠️ **假綠守衛（四道，缺一不可）**：報告檔留在 `target/` 裡，不驗新鮮度的話，一份幾天前的舊報告
+>    會讓一個根本沒跑過的判準一路 `PASS`——與 `jacoco:check` 在沒有 `jacoco.exec` 時靜默通過完全同型。
+>
+>    | # | 守衛 | 擋掉什麼 |
+>    |---|---|---|
+>    | 1 | 測試類**原始碼存在** | ADR 0017 記的「不存在的測試類靜默通過」 |
+>    | 2 | 報告檔存在 | 「沒跑過」被當成「通過」 |
+>    | 3 | 報告**比基準新**——本輪跑過建置時基準是建置開始的 stamp；沒跑過建置時（單獨執行某一項）基準是**最新的原始碼**mtime | 拿上一輪、甚至上一週的結果給分 |
+>    | 4 | `tests > 0`、`failures == 0`、`errors == 0`、且**不是全部 skipped** | 整個類別被 `@Disabled` 卻照樣 `PASS` |
+>
+>    `M1-35` 與 `M3-05` 同理改為對 `M1-09` / `M2-26` 的 JSON 報告下斷言——它們原本是把上一項
+>    已經跑過的測試再挑一部分跑一次。
+>
+> 8. **`M2-01` / `M3-01` 由巢狀執行改為聚合判定**。`M3-01 = dod.sh mvp && dod.sh phase2`，
+>    而 `phase2` 的 `M2-01` 又是 `dod.sh mvp`——**mvp 在 full gate 底下連跑兩次**，約佔 40 分鐘。
+>    memo 目錄當時是 `mktemp -d` 且沒有 export，巢狀行程共用不到（對比 `CTIP_DOD_LOCK` 是有 export 的）。
+>    gate 現在展開為項目集合的聯集（`full = M1-* ∪ M2-* ∪ M3-*`），每一項只跑一次；
+>    「DoD-MVP 全部仍通過」以**所有 `M1-*` 皆 PASS** 判定，語意完全相同。
+>    第 5 點的「不得比對 log 判斷結束」因此更為必要——巢狀執行雖已消失，但並行輸出的順序是完成順序。
+>
+> 9. **每一項都有逾時上限**。2026-08-31 的過夜執行在系統睡眠後**無聲卡死 8 小時 51 分**：
+>    Testcontainers 的連線壞掉，測試永遠等下去，不逾時、不報錯、也不結束，
+>    外觀上與「跑得比較慢」無法區分。預設 `build` 2700 秒、`stack` 1800、`frontend` 900、
+>    其餘 300，`--timeout <秒>` 可覆寫；逾時即把整棵行程樹中斷並判 `FAIL`。
+>    這一層與 [14 §14.8](14-testing.md#148-測試逾時契約強制) 的 JUnit 30 秒**不能互相取代**：
+>    後者在 JVM 內，管不到「JVM 整個卡死」或「Maven 呼叫不回來」。
+>    `--parallel` 另在 macOS 自動以 `caffeinate -ims` 包住自己。
+
 ---
 
 ## 15.1 DoD-MVP（Phase 1–12）
@@ -64,7 +143,7 @@
 |---|---|---|
 | M1-01 | 四個 module 皆編譯，L1–L3 測試通過 | `./mvnw -f backend/pom.xml verify -Ptest-integration` |
 | M1-02 | 覆蓋率門檻達標（domain ≥ 85%） | `./mvnw -f backend/pom.xml jacoco:check@check`¹ |
-| M1-03 | ArchUnit 11 條規則通過 ¹ | `./mvnw -f backend/pom.xml test -Dtest=ArchitectureTest` |
+| M1-03 | ArchUnit 11 條規則通過 ¹ | 報告斷言²:`ArchitectureTest` |
 | M1-04 | Spotless 格式一致 | `./mvnw -f backend/pom.xml spotless:check` |
 | M1-05 | Checkstyle 五條可讀性規則通過 | `./mvnw -f backend/pom.xml checkstyle:check` |
 | M1-06 | 前端 type check 通過 | `cd frontend && npx tsc --noEmit` |
@@ -77,26 +156,26 @@
 | M1-13 | prod 設定不含 JDWP debug agent | 同上，`grep -qi jdwp` |
 | M1-14 | `up.sh mvp` 成功，且**只有** frontend/backend/postgres 三個容器 | `./environment/scripts/up.sh mvp && test "$(docker compose ... ps --services \| wc -l)" -eq 3` |
 | M1-15 | 三個容器皆 healthy | `docker compose ... ps --format json \| jq -e 'all(.Health == "healthy" or .Health == "")'` |
-| M1-16 | Flyway 從空資料庫執行至最新版本成功 | `./mvnw -f backend/pom.xml test -Dtest=MigrationIntegrationTest` |
-| M1-17 | public system tenant 存在且不可刪除 | `test -Dtest=PublicTenantIntegrationTest` |
-| M1-18 | 樣本資料寫入成功（≥1000 IOC，涵蓋所有型別與四種 TLP） | `test -Dtest=SampleDataIntegrationTest` |
-| M1-19 | 資料庫中無 `TLP:RED` 資料 | `test -Dtest=TlpRedAbsenceTest` |
-| M1-20 | 所有必要索引存在 | `test -Dtest=RequiredIndexTest`（比對 [04](04-data-dictionary.md) 的索引清單） |
-| M1-21 | `MockOpenPhishAdapter` 端對端：抓取→驗證→正規化→去重→合併→落庫 | `test -Dtest=IngestionEndToEndTest` |
-| M1-22 | 髒資料被拒絕並記入 `ingestion_rejections`，八種 reason 皆覆蓋 | `test -Dtest=RejectionRuleTest` |
-| M1-23 | 多來源重疊 IOC 依 `IndicatorMergePolicy` 正確合併 | `test -Dtest=IndicatorMergePolicyTest` |
-| M1-24 | 三步 `valid_until` 計算正確（含來源未明示與 `FILE_HASH` 分支） | `test -Dtest=ValidityPeriodTest` |
-| M1-25 | 正規化規則七種型別全數正確 | `test -Dtest=NormalizationTest` |
-| M1-26 | `GET /api/v1/iocs` 回傳正確結果，cursor 分頁可連續翻至最後一頁 | `test -Dtest=CursorPaginationIntegrationTest` |
-| M1-27 | `POST /api/v1/iocs/search` 篩選正確 | `test -Dtest=IocSearchIntegrationTest` |
-| M1-28 | 安全測試 1、3、7、9 通過（匿名 TLP、跨租戶 404、限流 429、再散布作用域） | `test -Dtest=SecurityTest` |
-| M1-29 | STIX 匯出以 STIX 2.1 JSON Schema 驗證通過 | `test -Dtest=StixSchemaValidationTest` |
-| M1-30 | 五個 TLP marking UUID 與 OASIS 定義完全相符 | `test -Dtest=StixTlpMarkingsTest` |
-| M1-31 | 六種 IocType 的 pattern 模板與四種 hash 演算法對應正確 | `test -Dtest=StixPatternTest` |
-| M1-32 | 錯誤回應符合統一結構，含 `traceId` | `test -Dtest=ErrorResponseTest` |
+| M1-16 | Flyway 從空資料庫執行至最新版本成功 | 報告斷言²:`MigrationIntegrationTest` |
+| M1-17 | public system tenant 存在且不可刪除 | 報告斷言²:`PublicTenantIntegrationTest` |
+| M1-18 | 樣本資料寫入成功（≥1000 IOC，涵蓋所有型別與四種 TLP） | 報告斷言²:`SampleDataIntegrationTest` |
+| M1-19 | 資料庫中無 `TLP:RED` 資料 | 報告斷言²:`TlpRedAbsenceTest` |
+| M1-20 | 所有必要索引存在 | 報告斷言²:`RequiredIndexTest`（比對 [04](04-data-dictionary.md) 的索引清單） |
+| M1-21 | `MockOpenPhishAdapter` 端對端：抓取→驗證→正規化→去重→合併→落庫 | 報告斷言²:`IngestionEndToEndTest` |
+| M1-22 | 髒資料被拒絕並記入 `ingestion_rejections`，八種 reason 皆覆蓋 | 報告斷言²:`RejectionRuleTest` |
+| M1-23 | 多來源重疊 IOC 依 `IndicatorMergePolicy` 正確合併 | 報告斷言²:`IndicatorMergePolicyTest` |
+| M1-24 | 三步 `valid_until` 計算正確（含來源未明示與 `FILE_HASH` 分支） | 報告斷言²:`ValidityPeriodTest` |
+| M1-25 | 正規化規則七種型別全數正確 | 報告斷言²:`NormalizationTest` |
+| M1-26 | `GET /api/v1/iocs` 回傳正確結果，cursor 分頁可連續翻至最後一頁 | 報告斷言²:`CursorPaginationIntegrationTest` |
+| M1-27 | `POST /api/v1/iocs/search` 篩選正確 | 報告斷言²:`IocSearchIntegrationTest` |
+| M1-28 | 安全測試 1、3、7、9 通過（匿名 TLP、跨租戶 404、限流 429、再散布作用域） | 報告斷言²:`SecurityTest` |
+| M1-29 | STIX 匯出以 STIX 2.1 JSON Schema 驗證通過 | 報告斷言²:`StixSchemaValidationTest` |
+| M1-30 | 五個 TLP marking UUID 與 OASIS 定義完全相符 | 報告斷言²:`StixTlpMarkingsTest` |
+| M1-31 | 六種 IocType 的 pattern 模板與四種 hash 演算法對應正確 | 報告斷言²:`StixPatternTest` |
+| M1-32 | 錯誤回應符合統一結構，含 `traceId` | 報告斷言²:`ErrorResponseTest` |
 | M1-33 | Swagger UI 可開啟 | `curl -fsS http://localhost:8080/swagger-ui/index.html` |
-| M1-34 | 所有端點皆有 summary、response schema 與至少一個範例 | `test -Dtest=OpenApiCompletenessTest`（解析 `/v3/api-docs` 逐端點檢查） |
-| M1-35 | 前端 IOC 搜尋頁能查到後端資料，四種狀態皆呈現 | `cd frontend && npm run test -- IocSearchPage` |
+| M1-34 | 所有端點皆有 summary、response schema 與至少一個範例 | 報告斷言²:`OpenApiCompletenessTest`（解析 `/v3/api-docs` 逐端點檢查） |
+| M1-35 | 前端 IOC 搜尋頁能查到後端資料，四種狀態皆呈現 | 報告斷言²:M1-09 的 vitest JSON 報告中 `IocSearchPage` |
 | M1-36 | 前端 HMR 生效（修改 tsx 後 5 秒內更新） | `./environment/scripts/dod.sh mvp M1-36`（寫入標記字串、輪詢頁面內容） |
 | M1-37 | 後端 reload 生效（`reload.sh` 後 10 秒內新行為生效） | `./environment/scripts/dod.sh mvp M1-37` |
 | M1-38 | README 的啟動步驟可直接複製執行 | `./environment/scripts/dod.sh mvp M1-38`（擷取 README 的 bash 區塊並在乾淨環境執行） |
@@ -117,6 +196,9 @@
 
 **38 項，全部可執行。**
 
+> ² **報告斷言／聚合判定**:見 [§15.0 修訂 7](#dod-report-assertion)——判準改為對 `M1-01`(或 heavy 批次)產生的測試報告下斷言,不再逐類重跑;四道假綠守衛與新鮮度基準都寫在那一節。
+
+
 > ¹ **規則數 9 → 11（2026-08-29）**：規則 10（詞彙表禁用命名）由 [ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)
 > 依 §15.5 的 P-02 加入卻未回寫計數；規則 11（application 不得依賴 Redis／Bucket4j 型別）為 Phase 17 新增。
 > 判準指令不變——它跑的是整個 `ArchitectureTest`，規則增減自動涵蓋。
@@ -129,30 +211,30 @@
 
 | ID | 檢查 | 指令 |
 |---|---|---|
-| M2-01 | DoD-MVP 全部仍通過（回歸） | `./environment/scripts/dod.sh mvp` |
-| M2-02 | 註冊／登入／refresh／登出全流程 | `test -Dtest=AuthFlowIntegrationTest` |
-| M2-03 | Refresh token 輪替與重用偵測（重用觸發 family 全撤） | `test -Dtest=RefreshTokenRotationTest` |
-| M2-04 | 五種角色的權限矩陣正確，`@PreAuthorize` 生效 | `test -Dtest=RbacMatrixTest`（參數化，涵蓋 [10](10-identity-plans.md) 矩陣每一格） |
-| M2-05 | API Key 建立（僅回傳一次）、撤銷、scope 檢查、不可提權 | `test -Dtest=ApiKeyTest` |
-| M2-06 | 跨租戶測試：**每一個** tenant-scoped 端點皆回 404 | `test -Dtest=CrossTenantIsolationTest` |
-| M2-07 | 安全測試 1–9 全數通過 | `test -Dtest=SecurityTest` |
-| M2-08 | 方案配額生效，超限回 429 且帶 `X-RateLimit-*` | `test -Dtest=QuotaEnforcementTest` |
-| M2-09 | Redis 限流在**兩個 app 實例**下正確 | `test -Dtest=DistributedRateLimitTest`（Testcontainers 起兩個 app） |
-| M2-10 | Public bloom 與 tenant bloom 皆可生成 | `test -Dtest=BloomGenerationTest` |
-| M2-11 | Bloom 位元序與雙雜湊索引符合 11.4 規格 | `test -Dtest=BloomBitLayoutTest` |
+| M2-01 | DoD-MVP 全部仍通過（回歸） | 聚合判定²:所有 `M1-*` 皆 PASS |
+| M2-02 | 註冊／登入／refresh／登出全流程 | 報告斷言²:`AuthFlowIntegrationTest` |
+| M2-03 | Refresh token 輪替與重用偵測（重用觸發 family 全撤） | 報告斷言²:`RefreshTokenRotationTest` |
+| M2-04 | 五種角色的權限矩陣正確，`@PreAuthorize` 生效 | 報告斷言²:`RbacMatrixTest`（參數化，涵蓋 [10](10-identity-plans.md) 矩陣每一格） |
+| M2-05 | API Key 建立（僅回傳一次）、撤銷、scope 檢查、不可提權 | 報告斷言²:`ApiKeyTest` |
+| M2-06 | 跨租戶測試：**每一個** tenant-scoped 端點皆回 404 | 報告斷言²:`CrossTenantIsolationTest` |
+| M2-07 | 安全測試 1–9 全數通過 | 報告斷言²:`SecurityTest` |
+| M2-08 | 方案配額生效，超限回 429 且帶 `X-RateLimit-*` | 報告斷言²:`QuotaEnforcementTest` |
+| M2-09 | Redis 限流在**兩個 app 實例**下正確 | 報告斷言²:`DistributedRateLimitTest`（Testcontainers 起兩個 app） |
+| M2-10 | Public bloom 與 tenant bloom 皆可生成 | 報告斷言²:`BloomGenerationTest` |
+| M2-11 | Bloom 位元序與雙雜湊索引符合 11.4 規格 | 報告斷言²:`BloomBitLayoutTest` |
 | M2-12 | Bloom checksum 驗證通過 | 同 M2-10 |
-| M2-13 | `TLP:GREEN` 不進入 public bloom | `test -Dtest=BloomCoverageTest` |
-| M2-14 | Delta 生成與套用正確，`resultingChecksum` 相符 | `test -Dtest=BloomDeltaTest` |
-| M2-15 | Delta 鏈超過上限時回 `409 SNAPSHOT_REQUIRED` | `test -Dtest=SyncEndToEndTest` ¹ |
-| M2-16 | 完整同步流程端對端（manifest → delta → 套用 → 更新版本） | `test -Dtest=SyncEndToEndTest` |
+| M2-13 | `TLP:GREEN` 不進入 public bloom | 報告斷言²:`BloomCoverageTest` |
+| M2-14 | Delta 生成與套用正確，`resultingChecksum` 相符 | 報告斷言²:`BloomDeltaTest` |
+| M2-15 | Delta 鏈超過上限時回 `409 SNAPSHOT_REQUIRED` | 報告斷言²:`SyncEndToEndTest` ¹ |
+| M2-16 | 完整同步流程端對端（manifest → delta → 套用 → 更新版本） | 報告斷言²:`SyncEndToEndTest` |
 | M2-17 | manifest 含 `coverage` 與 `notCovered` 欄位 | 同 M2-16 |
-| M2-18 | 手動提交 IOC 走完整 pipeline，預設 `TLP:AMBER` | `test -Dtest=ManualSubmissionTest` |
+| M2-18 | 手動提交 IOC 走完整 pipeline，預設 `TLP:AMBER` | 報告斷言²:`ManualSubmissionTest` |
 | M2-19 | 匯入超出方案上限回 `413` | 同 M2-18 |
-| M2-20 | 誤判回報後 status 由合併規則決定（非呼叫端指定） | `test -Dtest=FalsePositiveReportTest` |
-| M2-21 | Threat 實體與 `threat_indicators`、`threat_external_references` 可用 | `test -Dtest=ThreatIntegrationTest` |
-| M2-22 | Elasticsearch 索引建立、搜尋正確 | `test -Ptest-all -Dtest=ElasticsearchSearchTest` ³ |
-| M2-23 | ES 掛掉時 API 降級為 PostgreSQL（回 200 + `X-Search-Backend: postgres`） | `test -Dtest=SearchFallbackTest` |
-| M2-24 | Reconciliation 能偵測並修正 DB 與 ES 差異 | `test -Dtest=SearchReconciliationTest` |
+| M2-20 | 誤判回報後 status 由合併規則決定（非呼叫端指定） | 報告斷言²:`FalsePositiveReportTest` |
+| M2-21 | Threat 實體與 `threat_indicators`、`threat_external_references` 可用 | 報告斷言²:`ThreatIntegrationTest` |
+| M2-22 | Elasticsearch 索引建立、搜尋正確 | 報告斷言²:`ElasticsearchSearchTest`(heavy 批次)³ |
+| M2-23 | ES 掛掉時 API 降級為 PostgreSQL（回 200 + `X-Search-Backend: postgres`） | 報告斷言²:`SearchFallbackTest` |
+| M2-24 | Reconciliation 能偵測並修正 DB 與 ES 差異 | 報告斷言²:`SearchReconciliationTest`(heavy 批次) |
 | M2-25 | `up.sh staging` 成功且未掛載原始碼 | `./environment/scripts/dod.sh phase2 M2-25` |
 | M2-26 | Playwright E2E：匿名搜尋、登入、建立 API key、提交 IOC | `cd frontend && npx playwright test` ² |
 | M2-27 | L1–L3 全通過，覆蓋率門檻達標 | `./mvnw -f backend/pom.xml verify -Ptest-integration` |
@@ -177,35 +259,38 @@
 
 **27 項，全部可執行。**
 
+> ² **報告斷言／聚合判定**:見 [§15.0 修訂 7](#dod-report-assertion)——判準改為對 `M1-01`(或 heavy 批次)產生的測試報告下斷言,不再逐類重跑;四道假綠守衛與新鮮度基準都寫在那一節。
+
+
 ---
 
 ## 15.3 DoD-Full（Phase 20–23）
 
 | ID | 檢查 | 指令 |
 |---|---|---|
-| M3-01 | DoD-MVP 與 DoD-Phase2 全部仍通過 | `./environment/scripts/dod.sh mvp && ./environment/scripts/dod.sh phase2` |
-| M3-02 | Kafka（KRaft）啟動，事件正確發佈與消費 | `./mvnw verify -Ptest-all -Dtest=KafkaEventTest` |
-| M3-03 | 消費端冪等（重複 `eventId` 不產生重複副作用） | `test -Dtest=EventIdempotencyTest` |
-| M3-04 | Kafka 不可用時業務操作不失敗 | `test -Dtest=KafkaUnavailableTest` |
-| M3-05 | WebSocket 通知端對端，斷線自動重連 | `cd frontend && npx playwright test websocket` |
-| M3-06 | Webhook 送達、HMAC 簽章正確（含 timestamp 防重放） | `test -Dtest=WebhookDeliveryTest` |
+| M3-01 | DoD-MVP 與 DoD-Phase2 全部仍通過 | 聚合判定²:所有 `M1-*` 與 `M2-*` 皆 PASS |
+| M3-02 | Kafka（KRaft）啟動，事件正確發佈與消費 | 報告斷言²:`KafkaEventTest`(heavy 批次) |
+| M3-03 | 消費端冪等（重複 `eventId` 不產生重複副作用） | 報告斷言²:`EventIdempotencyTest` |
+| M3-04 | Kafka 不可用時業務操作不失敗 | 報告斷言²:`KafkaUnavailableTest` |
+| M3-05 | WebSocket 通知端對端，斷線自動重連 | 報告斷言²:M2-26 的 Playwright JSON 報告中 `websocket` |
+| M3-06 | Webhook 送達、HMAC 簽章正確（含 timestamp 防重放） | 報告斷言²:`WebhookDeliveryTest` |
 | M3-07 | Webhook 失敗重試與連續 5 次後停用 | 同 M3-06 |
-| M3-08 | 訂閱過濾在伺服器端執行 | `test -Dtest=WebhookFilterTest` |
-| M3-09 | Audit log append-only：應用角色的 UPDATE/DELETE 被 DB 拒絕 | `test -Dtest=AuditAppendOnlyTest` |
-| M3-10 | 稽核寫入失敗不影響主要業務操作 | `test -Dtest=AuditFailureIsolationTest` |
-| M3-11 | 六項資料保留任務正確清理 | `test -Dtest=RetentionTaskTest` |
-| M3-11b | 26 種稽核行為皆有實際寫入路徑（無永不可達行為） | `test -Dtest=AuditCompletenessTest` |
-| M3-12 | Prometheus 指標齊全（含每個 ingestion stage 的耗時） | `test -Dtest=MetricsCompletenessTest`（比對 [13](13-platform-ops.md) 指標清單） |
+| M3-08 | 訂閱過濾在伺服器端執行 | 報告斷言²:`WebhookFilterTest` |
+| M3-09 | Audit log append-only：應用角色的 UPDATE/DELETE 被 DB 拒絕 | 報告斷言²:`AuditAppendOnlyTest` |
+| M3-10 | 稽核寫入失敗不影響主要業務操作 | 報告斷言²:`AuditFailureIsolationTest` |
+| M3-11 | 六項資料保留任務正確清理 | 報告斷言²:`RetentionTaskTest` |
+| M3-11b | 26 種稽核行為皆有實際寫入路徑（無永不可達行為） | 報告斷言²:`AuditCompletenessTest` |
+| M3-12 | Prometheus 指標齊全（含每個 ingestion stage 的耗時） | 報告斷言²:`MetricsCompletenessTest`（比對 [13](13-platform-ops.md) 指標清單） |
 | M3-13 | Grafana dashboard 可載入 | `./environment/scripts/dod.sh full M3-13`（驗證 provisioning JSON 有效） |
-| M3-14 | OpenTelemetry trace 從 API 串到 DB / Kafka / ES | `test -Dtest=TracePropagationTest` |
-| M3-15 | 日誌不含敏感欄位 | `test -Dtest=SensitiveLogTest` |
+| M3-14 | OpenTelemetry trace 從 API 串到 DB / Kafka / ES | 報告斷言²:`TracePropagationTest` |
+| M3-15 | 日誌不含敏感欄位 | 報告斷言²:`SensitiveLogTest` |
 | M3-16 | `traceId` 同時出現在錯誤回應與日誌 | 同 M3-14 |
 | M3-17 | prod 設定驗證：不掛載原始碼、無明文 secret、CORS 非 `*`、Swagger 關閉 | `./environment/scripts/dod.sh full M3-17` |
-| M3-18 | prod 啟動守衛生效（樣板 JWT_SECRET 與 `CORS=*` 皆拒絕啟動） | `test -Dtest=StartupValidatorTest` |
+| M3-18 | prod 啟動守衛生效（樣板 JWT_SECRET 與 `CORS=*` 皆拒絕啟動） | 報告斷言²:`StartupValidatorTest` |
 | M3-19 | **11 支 workflow 檔案皆存在**、`deploy-prod` 綁定 protected environment，且 **HEAD 這個 commit 的 CI 全綠**：測試、lint、build、compose 驗證、弱點掃描、secret 掃描、映像掃描 | `./environment/scripts/dod.sh full --only M3-19`（依序：檔案存在性 → environment 綁定 → 逐支 `gh run list --workflow=<w>.yml --commit $(git rev-parse HEAD)`²） |
 | M3-20 | SBOM 產出（backend CycloneDX + frontend npm sbom） | `test -f target/bom.json && test -f frontend/sbom.json` |
 | M3-21 | `ctip-sdk` 可獨立打包 | `./mvnw -f backend/pom.xml -pl ctip-sdk package` |
-| M3-22 | `ExampleThreatSourceAdapter` 可編譯並通過測試 | `./mvnw -f backend/pom.xml -pl ctip-sdk test -Dtest=ExampleAdapterTest` |
+| M3-22 | `ExampleThreatSourceAdapter` 可編譯並通過測試 | 報告斷言²:`ExampleAdapterTest` |
 | M3-23 | 文件齊備（12 份必要文件皆存在且非空） | `./environment/scripts/dod.sh full M3-23` |
 | M3-24 | 所有規格內部交叉引用皆指向存在的目標 | `./environment/scripts/dod.sh full M3-24`（掃描 `docs/spec/**` 的相對連結與 anchor） |
 
@@ -228,6 +313,9 @@
 > `GH_TOKEN` 不寫入任何設定檔；權限只需 **Actions: Read-only**。
 
 **25 項，全部可執行。**
+
+> ² **報告斷言／聚合判定**:見 [§15.0 修訂 7](#dod-report-assertion)——判準改為對 `M1-01`(或 heavy 批次)產生的測試報告下斷言,不再逐類重跑;四道假綠守衛與新鮮度基準都寫在那一節。
+
 
 > **實作回饋修訂（2026-08-28；[ADR 0016](../architecture/decisions/0016-phase1-13-spec-backfill.md)）**：
 > 「全部可執行」有兩項前置未在此註明——**M3-17** 需要 `environment/.env.prod`（真實檔，

@@ -126,12 +126,21 @@ npx playwright install chromium && npm run e2e
 ./environment/scripts/dod.sh phase2     # M2,27 項
 ./environment/scripts/dod.sh full       # M3,25 項
 ./environment/scripts/dod.sh full --only M3-23
+
+./environment/scripts/dod.sh full --parallel        # 並行(建議);macOS 自動包 caffeinate
+./environment/scripts/dod.sh full --status          # 唯讀查進度(可另開一個 shell)
 ```
 
 規則:逐項執行不中止、全綠才 exit 0、結尾列出「需人工確認」清單。
-**同一個 repo 同時只能有一個 gate 在執行**(互斥鎖);
+**搶同一個實體資源的項目不得同時執行**(具名資源鎖:`maven` / `docker-env` /
+`frontend-src` / `frontend-dist`),其餘一律並行;
 判斷是否結束一律看行程退出碼,**不要比對 log 內容**
-([15 §15.0](../spec/15-dod-gates.md#150-執行方式) 第 5 點)。
+([15 §15.0](../spec/15-dod-gates.md#150-執行方式) 第 5 點)
+——並行之後輸出順序是**完成順序**,更不能拿來判斷進度。
+
+多個執行者(agent)分工時共用 `CTIP_DOD_RUN` 指定的 run 目錄:
+`--reset` 開新的一輪 → 各自 `--lane build` / `--lane frontend` / `--shard i/N`
+→ `--report` 彙整。
 
 `dod.sh full` 有三項本機前置,腳本自己備不了:
 

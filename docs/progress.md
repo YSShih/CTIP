@@ -2522,3 +2522,108 @@ bootstrap 位址一併參數化。
 那是下一個 commit 的事。
 
 ---
+
+## dod.sh 重構:報告複用、聚合去重、資源感知並行(2026-08-31)
+
+- **狀態**:done
+- **緣由**:使用者指示「重構 dod.sh,執行時間太長,應該讓多個 agent 帶不同參數非同步執行、
+  檢查狀態」,追加「除了不能同時跑的以外,其他都要優化」
+- **ADR**:[0052](architecture/decisions/0052-dod-parallel-and-report-reuse.md)
+- **規格回寫**:`15 §15.0`(修訂 6–9)、`15 §15.1–15.3` 指令欄、`05 §5.1`／`§5.10`
+
+### 結果
+
+```
+=== 結果(full):89/90 通過 ===    18 分 57 秒(1137 秒)
+```
+
+**94 分鐘 → 18 分 57 秒**。唯一未通過的 M3-19 是 HEAD 尚未推上 GitHub(查不到 CI run),
+與本次改動無關。
+
+`dod.sh` 573 行 → CLI 前端 + `dod/{registry,runner,checks,reports}.sh`。
+新增 `--parallel` / `--reset` / `--plan` / `--lane` / `--shard` / `--status` / `--report` / `--timeout` / `--run-id`。
+
+### 時間花在哪裡(這是下一輪要看的重點)
+
+| 項目 | 耗時 | **獨佔牆鐘** | 是什麼 |
+|---|---|---|---|
+| M1-38 | 345s | 345s | README quickstart |
+| M1-01 | 334s | 279s | `verify -Ptest-integration` |
+| M2-25 | 134s | 134s | `up.sh staging`(8 個容器) |
+| _heavy | 133s | 110s | 3 個 heavy 類批次 |
+| M1-14 | 90s | 90s | `up.sh mvp` |
+| 其餘 85 項 | ~98s | ~76s | |
+
+「獨佔牆鐘」= 該項執行時全場只有它在跑的秒數,**只有這一段直接計入總時間**。
+整輪 1134 秒裡有 **1034 秒(91%)是獨佔**——並行只救得到剩下的 9%。
+
+| lane | 項數 | 累計耗時 | 獨佔牆鐘 |
+|---|---|---|---|
+| stack | 9 | 610s | 611s |
+| build | 65 | 524s | 420s |
+| frontend | 6 | 134s | **0s** |
+| static | 8 | 8s | **0s** |
+| ci | 1 | 0s | **0s** |
+
+**前端 6 項與靜態 8 項完全藏在 Maven 底下(獨佔 0 秒)** ——並行的收穫就是這 142 秒。
+真正的加速來自把 **64 次 Maven 呼叫變成 2 次**(報告複用 + 聚合去重)。
+
+### ⚠️ 剩下最大的一塊:完整測試套件仍然跑了兩次
+
+`M1-38` 的 345 秒裡有 **約 255 秒在跑 `./backend/mvnw verify -Ptest-integration`**
+——因為 README 的 quickstart 區塊逐字寫著那一行,而 M1-38 的判準就是「照 README 逐字執行」:
+
+```bash
+[ -f environment/.env.mvp ] || cp environment/.env.mvp.example environment/.env.mvp
+./environment/scripts/up.sh mvp
+curl -fsS http://localhost:8080/actuator/health
+./backend/mvnw -f backend/pom.xml verify -Ptest-integration   ← 整套測試第二次
+```
+
+memo 幫不上忙——那一行在 bash 子腳本裡執行,不是 dod 項目。
+**使用者已知悉,決定「之後再處理」**,本輪不動 README。
+選項:改成較輕的煙霧測試(如 `-Ptest-slice` 或只留 health curl)可省約 255 秒(22%),
+代價是 README 的「跑完這段就知道環境沒問題」變弱。
+
+### 實跑抓到的 8 個 bug(都是跑起來才看得出來的)
+
+| # | bug | 症狀 |
+|---|---|---|
+| 1 | `_heavy` 重設 `stamp-backend` | M1-01 產生的 40 幾份報告全被判過期,**50 項無辜 FAIL** |
+| 2 | 聚合項(M2-01/M3-01)沒有相依 | 第 0 秒就跑掉並判 FAIL |
+| 3 | 聚合判定看「本行程選中的項目」 | `--lane aggregate` 之下會**空空地 PASS**(假綠) |
+| 4 | `--shard` 相依落在別的 shard 被當成不用等 | 報告斷言搶在建置前跑 |
+| 5 | `caffeinate` re-exec 掉參數 | 解析的 `shift` 已把 `$@` 吃光 |
+| 6 | 同一項可能被發動兩次 | 子行程寫結果檔前的空窗被重複掃到 |
+| 7 | 失敗訊息從來沒印出來 | BSD sed 的 BRE 不支援 `\|`,那一行是死的 |
+| 8 | `--status` 會改寫 `run.meta` | 查一次狀態,已跑 15 分鐘變成「已跑 11 秒」 |
+
+另修一個誤導性輸出:`--lane frontend` 印 `=== 結果(full):6/6 通過 ===` 看起來像整個 gate 過了,
+現在標成 `結果(full/lane=frontend)`。
+
+### 驗證
+
+| 類別 | 內容 |
+|---|---|
+| 否定驗證 | 7/7 正確:報告不存在、比原始碼舊、比 stamp 舊、測試類原始碼不存在、`tests=0`、全部 skipped、完好時 PASS |
+| 端對端否定 | 在 `NormalizationTest` 插入必定失敗的測試 → **M1-25 FAIL**,並指出 `dodNegativeVerificationProbe: expected: 2 but was: 1` |
+| 多執行者 | 三個行程同時跑 static / frontend / ci + 第四個行程唯讀 `--status`;`--report` 彙整 14/90 且 exit 1 |
+| 有界等待 | 沒人跑 build 時,static 空轉逾 `DOD_DEP_WAIT` 後放行,不再無限等 |
+| 契約回歸 | `--only` / `--skip` / 單項執行、結果行格式、P-01~P-07 清單、exit 0/1 皆維持 |
+
+### 給下一輪的注意事項
+
+- ⚠️ **不要在 gate 執行中編輯 `dod.sh` 或 `dod/*.sh`**。bash 是邊讀邊執行腳本檔,
+  改動會讓讀取位移錯亂。本輪為此主動終止並重跑了一輪
+- ⚠️ **上一輪殘留的容器會讓這一輪的分數不可信**。實測:前一輪被 kill 後 staging 的 8 個容器
+  還開著,下一輪 M1-01 就在 surefire「forked VM terminated without properly saying goodbye」掛掉
+  ——容器與 Testcontainers 搶記憶體,錯誤訊息完全看不出這件事(同 ADR 0028 的形狀)。
+  `dod.sh` 現在會在開跑前偵測「超過 mvp 三個容器」並警告;被 kill 過後請先 `down.sh staging`
+- **多執行者分工必須先 `--reset`**:`--lane` / `--shard` 刻意不清上一輪結果(要共用同一輪),
+  不 reset 會直接沿用上一輪的 PASS,什麼都不重跑
+- **偏離計畫的一處**:原訂改 `frontend/package.json` 加 JSON reporter,實作改為由
+  `dod.sh` 以 CLI flag 傳入(`--reporter=json --outputFile.json=…`、`PLAYWRIGHT_JSON_OUTPUT_NAME`)。
+  好處是 CI 的 `npm run test` 完全不受影響
+- **M3-19 要 PASS 必須先 push**:它查的是 HEAD 這個 commit 上九支 push 觸發的 workflow
+
+---

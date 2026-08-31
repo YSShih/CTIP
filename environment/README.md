@@ -51,10 +51,12 @@ cp environment/.env.mvp.example environment/.env.mvp
 | `logs.sh` | `logs.sh <service> <env>` | 追蹤日誌 |
 | `migrate.sh` | `migrate.sh <env>` | 手動觸發 `mvn flyway:migrate`(migration 檔自 Phase 3 起提供) |
 | `reload.sh` | `reload.sh <service> <env>` | 後端熱替換,見下節 |
-| `dod.sh` | `dod.sh <mvp\|phase2\|full> [id] [--only id] [--skip id]` | 執行 DoD Gate(`docs/spec/15-dod-gates.md`);逐項 PASS/FAIL、不因單項失敗中止、結尾列出失敗與需人工確認清單 |
+| `dod.sh` | `dod.sh <mvp\|phase2\|full> [id] [--only id] [--skip id] [--parallel [-j N]]` | 執行 DoD Gate(`docs/spec/15-dod-gates.md`);逐項 PASS/FAIL、不因單項失敗中止、結尾列出失敗與需人工確認清單。多執行者分工另有 `--reset` / `--plan` / `--lane` / `--shard` / `--status` / `--report`(共用 `CTIP_DOD_RUN` 指定的 run 目錄) |
 | `openapi-breaking-check.py` | `openapi-breaking-check.py <base.json> <new.json>` | OpenAPI 破壞性變更比對(移除端點、移除必填欄位、變更型別即 exit 1);由 `.github/workflows/openapi-check.yml` 呼叫 |
 
 共用邏輯在 `_common.sh`(被其他腳本 source,不直接執行)。
+`dod.sh` 的實作拆在 `scripts/dod/`(`registry.sh` 檢查表、`runner.sh` 排程與資源鎖、
+`checks.sh` 複合檢查、`reports.sh` 報告斷言),同樣只被 source,不直接執行。
 
 ## Hot reload(`docs/spec/05-environment.md` §5.11)
 

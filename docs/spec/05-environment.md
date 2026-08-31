@@ -30,6 +30,7 @@ CTIP/
 │   ├── scripts/
 │   │   ├── up.sh  down.sh  restart.sh  logs.sh
 │   │   ├── migrate.sh  reload.sh  dod.sh
+│   │   ├── dod/{registry.sh,runner.sh,checks.sh,reports.sh}  ← 2026-08-31 新增，見下方註
 │   │   ├── _common.sh
 │   │   └── openapi-breaking-check.py   ← Phase 10 新增，見下方註
 │   └── README.md
@@ -46,6 +47,13 @@ CTIP/
 ```
 
 **不得增減頂層目錄。** `docs/spec/` 是 `docs/` 之下的子目錄，不違反此規則。
+
+> **`scripts/dod/` 為 2026-08-31 新增（[ADR 0052](../architecture/decisions/0052-dod-parallel-and-report-reuse.md)）**：
+> `dod.sh` 拆為「CLI 前端 + 四個被 source 的檔」——`registry.sh`（宣告式檢查表：id / lane /
+> 資源 / 相依 / kind）、`runner.sh`（run 目錄、跨行程 memo、具名資源鎖、逐項逾時、
+> 資源感知的 DAG 排程）、`checks.sh`（既有的 `dod_*` 複合函式）、`reports.sh`（測試報告斷言）。
+> 進入點與既有用法不變。**四個檔皆由 `dod.sh` source，不得直接執行。**
+> 中間產物（結果檔、memo）放 `${TMPDIR}` 而非 repo 內，本結構契約因此不必為它們開特例。
 
 > **`openapi-breaking-check.py` 為 2026-08-30 補列（[ADR 0045](../architecture/decisions/0045-full-project-review-doc-sync.md)）**：
 > 該腳本於 Phase 10 建立（[ADR 0007](../architecture/decisions/0007-phase10-openapi-decisions.md) §2——版本表無 oasdiff，
@@ -905,7 +913,7 @@ Schema 一律由 Flyway 管理，應用啟動時自動執行。**`ddl-auto: vali
 | `logs.sh <service> <env>` | 追蹤日誌 |
 | `migrate.sh <env>` | 手動觸發 Flyway（`mvn flyway:migrate`） |
 | **`reload.sh <service> <env>`** | **重新編譯並熱替換，見 5.11** |
-| **`dod.sh <gate>`** | **執行 DoD Gate 檢查，見 [15-dod-gates.md](15-dod-gates.md)**；同一個 repo 以互斥鎖限制**同時只能有一個 gate 在跑**（[15 §15.0](15-dod-gates.md#150-執行方式)） |
+| **`dod.sh <gate>`** | **執行 DoD Gate 檢查，見 [15-dod-gates.md](15-dod-gates.md)**；以**具名資源鎖**限制「搶同一個實體資源的項目不得同時執行」，其餘一律可並行（2026-08-31 修訂，原本是單一全域互斥鎖，見 [15 §15.0 修訂 6](15-dod-gates.md#dod-resource-locks)）。支援 `--parallel` 與多執行者分工（`--lane` / `--shard` / `--status` / `--report`） |
 
 共用邏輯放 `_common.sh`。**不得要求開發者記憶複雜的 Compose 指令。**
 
