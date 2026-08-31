@@ -2465,3 +2465,60 @@ ADR 0049 當時只能寫「版本表未列此項」,**沒有任何依據可以�
   需規格回寫 + ADR + 否定驗證,**尚未進行**
 
 ---
+
+## 全域測試逾時契約(2026-08-31)
+
+- **狀態**:done
+- **緣由**:使用者要求重構 `dod.sh`(94 分鐘太久)。盤點瓶頸時發現
+  「全專案沒有任何一個 `@Timeout`,也沒有 `junit-platform.properties`」,
+  於是先處理這一層。使用者指示:**全域限定 30 秒,超過的提出來讓他判斷**
+- **ADR**:[0051](architecture/decisions/0051-test-timeout-contract.md)
+- **規格回寫**:`14 §14.8`(新增「測試逾時契約」)、`06 §6.3.6` 第 13 條
+
+### 做了什麼
+
+parent pom 的 surefire `<systemPropertyVariables>` 設四個 JUnit 設定參數:
+測試方法 **30 秒**、lifecycle 方法 **5 分鐘**、`SEPARATE_THREAD`、`disabled_on_debug`。
+值取自 `${ctip.test.timeout}` / `${ctip.test.lifecycle.timeout}`,`-D` 可覆寫。
+
+`KafkaUnavailableTest` 補上 consumer / admin 側的逾時(原本只收緊 producer),
+bootstrap 位址一併參數化。
+
+### 實測
+
+| # | 動作 | 結果 |
+|---|---|---|
+| T1 | `clean verify -Ptest-all` | **BUILD SUCCESS,5:37,1,145 tests 全綠**,零個被 30 秒誤殺 |
+| T2 | 暫時加 `sleep(35s)` 的探針測試 | `Time elapsed: **30.12 s**`——**搶先中斷**,不是等滿 35 秒(探針用完即刪) |
+| T3 | `-Dctip.test.timeout=1ms` | 全數 `TimeoutException … after 1 millisecond`,參數化確實生效 |
+| T4 | `KafkaUnavailableTest` 單獨執行 | **70.99 s → 34.04 s**;完整 reactor 下 **6.04 s** |
+
+**30 秒有 8 倍餘裕**:1,145 個測試方法最慢的是 3.89 秒
+(`AuthHardeningTest#lockedAccountIsIndistinguishableFromAnUnknownOne`)。
+**≥30 秒的清單是空的**,因此沒有需要使用者裁示的項目。
+
+### 兩個被自己推翻的判斷(值得記住)
+
+1. **「類別層級有 15 個 ≥27 秒,30 秒會弄紅一片」——錯。**
+   那是 Spring context 與 Testcontainers 啟動被計進**類別**總時間;
+   本設定管的是 `<testcase>` 的 `time`,逐方法看最慢只有 3.89 秒。
+   **要量的是方法,不是類別。**
+
+2. **「70 秒的大宗是 TEST-NET-1 不可路由造成的 TCP 逾時」——錯。**
+   改指向關閉的本機 port(`127.0.0.1:1`,即時 `ECONNREFUSED`)實測 36.30 秒,
+   與 TEST-NET-1 的 34.04 秒在雜訊範圍內。省時**全部來自 consumer/admin 的逾時參數**。
+   因此位址預設改回 TEST-NET-1(保留「不會意外連到任何東西」的性質),只留參數化。
+
+### 連帶更正一筆舊記錄
+
+`docs/progress.md:1830`(Phase 22)記「`KafkaUnavailableTest` 的連線逾時就佔掉約 10 分鐘
+(既有現象)」。**該現象在本次之前就已不存在**——是產生該筆記錄之後補上的那組 producer 參數
+修掉的,只是沒有回寫。原文保留,以本節為準。
+
+### ⚠️ 這一層擋不住什麼
+
+`SEPARATE_THREAD` 的 30 秒在 **JVM 內**,管不到「JVM 整個卡死」或「Maven 呼叫不回來」。
+2026-08-31 那次過夜 8 小時 51 分的卡死要靠 **`dod.sh` 的逐項逾時**才擋得住——
+那是下一個 commit 的事。
+
+---

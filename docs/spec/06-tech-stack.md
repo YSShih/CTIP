@@ -386,6 +386,17 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
       bean factory 要 `Tracer`**——與 Lettuce 的命令延遲記錄器組合起來會在啟動時死鎖
       (13 §13.6 第 7 點、ADR 0032 §15)。`management.tracing.exemplars.include: none`。
 
+13. **surefire 另負責測試逾時設定**(2026-08-31 補入;[14 §14.8](14-testing.md#148-測試逾時契約強制)、
+    [ADR 0051](../architecture/decisions/0051-test-timeout-contract.md))。除了第 4 條的
+    `failIfNoSpecifiedTests`,parent 的 surefire `<systemPropertyVariables>` 還設四個 JUnit 設定參數
+    (測試方法 30 秒、lifecycle 方法 5 分鐘、`SEPARATE_THREAD`、`disabled_on_debug`),
+    值取自 `${ctip.test.timeout}` / `${ctip.test.lifecycle.timeout}`,可用 `-D` 覆寫。
+
+    > 放在 surefire 而不是 `junit-platform.properties`:四個 module 只有 `ctip-app` 有
+    > `src/test/resources`,散成四份會漂移;JUnit Platform 也從 system property 讀設定參數。
+    > **`thread.mode` 必須是 `SEPARATE_THREAD`**——預設的 `SAME_THREAD` 不會中斷卡住的呼叫,
+    > 逾時形同虛設。理由與實測見 14 §14.8。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

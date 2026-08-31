@@ -154,4 +154,49 @@ L1 測試**不得**使用 `@SpringBootTest`、`@MockBean` 或任何 Spring 註�
 
 ---
 
-*檔案結束。上次校對：2026-08-21。*
+## 14.8 測試逾時契約（強制）
+
+> **2026-08-31 新增。** 起因：`dod.sh full` 的一次過夜執行**無聲卡死 8 小時 51 分**
+> （`docs/progress.md`）——電腦進入睡眠後 Testcontainers 的連線壞掉，測試永遠等下去，
+> **不會逾時、不會報錯、也不會結束**，外觀上與「跑得比較慢」無法區分。
+> 當時全專案**沒有任何一個 `@Timeout`，也沒有 `junit-platform.properties`**，
+> 一個卡住的測試在任何一層都不會被截斷。
+
+**每一個測試方法的執行時間上限為 30 秒。** 設定集中在 `backend/pom.xml` 的 surefire
+`systemPropertyVariables`（四個 module 只有 `ctip-app` 有 `src/test/resources`，
+與其散成四份 `junit-platform.properties`，不如在 parent 一處設定——JUnit Platform
+同樣從 system property 讀設定參數，且 `-D` 可直接覆寫）：
+
+| 參數 | 值 | 為什麼 |
+|---|---|---|
+| `junit.jupiter.execution.timeout.testable.method.default` | `${ctip.test.timeout}` = **30s** | 測試方法的上限 |
+| `junit.jupiter.execution.timeout.lifecycle.method.default` | `${ctip.test.lifecycle.timeout}` = **5m** | `@BeforeAll` / `@BeforeEach` 可能觸發 Testcontainers 與 Spring context 啟動，套 30 秒必然誤殺 |
+| `junit.jupiter.execution.timeout.thread.mode.default` | **`SEPARATE_THREAD`** | ⚠️ 見下 |
+| `junit.jupiter.execution.timeout.mode` | `disabled_on_debug` | 掛 debugger 時不誤觸 |
+
+覆寫方式：`./backend/mvnw … -Dctip.test.timeout=60s`。
+
+> ⚠️ **`thread.mode` 必須是 `SEPARATE_THREAD`，這不是可選項。**
+> JUnit 預設的 `SAME_THREAD` **不會中斷卡住的呼叫**，只在方法自己回來之後才判定超時
+> ——卡在 TCP connect 或壞掉的 Testcontainers 連線的測試照樣卡滿再報失敗，**一秒都沒省到**，
+> 上述那次 8 小時 51 分的卡死也照樣攔不住。
+> 本專案的測試碼**零個 `@Transactional`**（2026-08-31 全檔核對），
+> 因此不會撞到 Spring TestContext 的執行緒繫結交易；日後若引入 `@Transactional` 測試，
+> 必須為該類別另標 `@Timeout(threadMode = SAME_THREAD)`。
+
+**30 秒是有餘裕的門檻，不是緊箍咒**：訂定當時全專案 1,145 個測試方法**沒有任何一個超過 30 秒**，
+最慢的是 `AuditCompletenessTest#everyAuditActionHasAPathThatActuallyWritesARow` 的 6.2 秒。
+（類別層級有 15 個 ≥27 秒，但那是 Spring context 與 Testcontainers 啟動，不是方法本身。）
+**新測試撞到這個上限時，預設應該是把測試改快，而不是加豁免**；
+確有必要豁免時以 `@Timeout` 標在該方法或類別上，並寫明理由。
+
+### 這一層擋不住什麼
+
+| 層 | 管什麼 | 為什麼不能互相取代 |
+|---|---|---|
+| 本節的 JUnit 30 秒 | 「某個測試**變慢了**」的回歸守衛 | 它在 JVM 內，管不到 JVM 整個卡死 |
+| `dod.sh` 的逐項逾時（[15 §15.0](15-dod-gates.md#150-執行方式)） | 「整個判準項目**卡死**」的斷路器 | 直接砍掉整個 Maven 呼叫，是過夜卡死唯一擋得住的一層 |
+
+---
+
+*檔案結束。上次校對：2026-08-31。*

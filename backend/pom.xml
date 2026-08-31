@@ -51,6 +51,9 @@
     <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
     <!-- 測試分層(docs/spec/14-testing.md §14.1):預設只跑 L1(unit) -->
     <ctip.test.excludedGroups>slice,integration,heavy</ctip.test.excludedGroups>
+    <!-- 測試逾時契約(docs/spec/14-testing.md §14.8)。以 -D 覆寫,例如 -Dctip.test.timeout=60s -->
+    <ctip.test.timeout>30s</ctip.test.timeout>
+    <ctip.test.lifecycle.timeout>5m</ctip.test.lifecycle.timeout>
     <!-- 各 module 以此覆寫行覆蓋率下限(docs/spec/14-testing.md §14.3);ctip-core 另以套件層級規則覆寫 -->
     <ctip.coverage.line-minimum>0.60</ctip.coverage.line-minimum>
     <!-- dev 容器 CMD 為 `mvnw -pl ctip-app -am spring-boot:run`,run goal 會對 reactor 每個
@@ -191,6 +194,24 @@
             <!-- 規格與 DoD 的判準以 -Dtest=<類名> 在 reactor 根執行;
                  沒有該測試類的 module(如 ctip-sdk)不得因此失敗 -->
             <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+            <!--
+              測試逾時契約(docs/spec/14-testing.md §14.8)。四個 module 只有 ctip-app 有
+              src/test/resources,與其塞四份 junit-platform.properties,不如在此一處設定
+              ——JUnit Platform 也從 system property 讀設定參數,且 -D 可直接覆寫。
+
+              測試方法與 lifecycle 方法分開計:@BeforeAll/@BeforeEach 可能觸發
+              Testcontainers 與 Spring context 啟動,套 30 秒必然誤殺。
+
+              ⚠️ thread.mode 必須是 SEPARATE_THREAD。預設的 SAME_THREAD **不會中斷卡住的呼叫**,
+              只在方法自己回來之後才判定超時——卡在 TCP connect 或壞掉的 Testcontainers 連線的
+              測試照樣卡滿再報失敗,一秒都沒省到(2026-08-31 那次過夜卡死 8 小時 51 分即此類)。
+            -->
+            <systemPropertyVariables>
+              <junit.jupiter.execution.timeout.testable.method.default>${ctip.test.timeout}</junit.jupiter.execution.timeout.testable.method.default>
+              <junit.jupiter.execution.timeout.lifecycle.method.default>${ctip.test.lifecycle.timeout}</junit.jupiter.execution.timeout.lifecycle.method.default>
+              <junit.jupiter.execution.timeout.thread.mode.default>SEPARATE_THREAD</junit.jupiter.execution.timeout.thread.mode.default>
+              <junit.jupiter.execution.timeout.mode>disabled_on_debug</junit.jupiter.execution.timeout.mode>
+            </systemPropertyVariables>
           </configuration>
         </plugin>
       </plugins>

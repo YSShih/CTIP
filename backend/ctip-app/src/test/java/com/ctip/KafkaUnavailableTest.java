@@ -41,7 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * DoD M3-04:<strong>Kafka 不可用時業務操作不失敗</strong>(docs/spec/13-platform-ops.md §13.1 規則 7)。
  *
  * <p>設定成 {@code NOTIFICATION_TRANSPORT=kafka} 但把 bootstrap 指向一個<strong>不存在的</strong>
- * broker(保留給文件用途的 TEST-NET-1 位址,不會意外連到任何東西)。三件事必須成立:
+ * broker。三件事必須成立:
  * <ul>
  *   <li>應用照常啟動——broker 不在不得使 context refresh 失敗</li>
  *   <li>讀取端點照常回 200</li>
@@ -49,19 +49,42 @@ import org.springframework.transaction.support.TransactionTemplate;
  * </ul>
  *
  * <p>不是 L4:這裡要的是「broker 不存在」,起一個容器再停掉反而更慢也更不穩定。
+ *
+ * <p><strong>2026-08-31 實測:70.99 秒 → 34.04 秒</strong>。原本只收緊了 producer 的逾時,
+ * 而 {@code NotificationEventConsumer} 的 {@code @KafkaListener} 容器與 admin client
+ * 一樣會對著不存在的 broker 反覆重連,各自吃掉預設的數十秒。收緊那兩邊是唯一的省時來源。
+ *
+ * <p>bootstrap 位址一併參數化,但**預設維持 TEST-NET-1**:曾假設不可路由位址的靜默丟棄
+ * (每次 connect 要等滿 OS 的 TCP 逾時)才是元凶,改指向關閉的本機 port
+ * ({@code 127.0.0.1:1},拿的是即時的 {@code ECONNREFUSED})實測 36.30 秒——
+ * 與 34.04 秒在雜訊範圍內,**該假設不成立**。省時既然全來自逾時參數,
+ * 就沒有理由放棄「保留位址保證不會意外連到任何東西」這個性質。需要時以
+ * {@code -Dctip.test.kafka.unreachable-broker=127.0.0.1:1} 切換。
  */
 @AutoConfigureMockMvc
 @SpringBootTest(
         properties = {
             "ctip.notification.transport=kafka",
             // 192.0.2.0/24 是 RFC 5737 的 TEST-NET-1,保證不可路由
-            "spring.kafka.bootstrap-servers=192.0.2.1:9092",
+            "spring.kafka.bootstrap-servers=${ctip.test.kafka.unreachable-broker:192.0.2.1:9092}",
             // 送出失敗要快速放棄,否則每個事件會卡住預設的 60 秒 delivery timeout
             "spring.kafka.producer.properties.max.block.ms=500",
             "spring.kafka.producer.properties.delivery.timeout.ms=1000",
             "spring.kafka.producer.properties.request.timeout.ms=500",
             "spring.kafka.producer.properties.retries=0",
-            "spring.kafka.admin.fail-fast=false"
+            "spring.kafka.admin.fail-fast=false",
+            // 省時的來源就在這一段(見類別註解的實測數字)。
+            "spring.kafka.producer.properties.socket.connection.setup.timeout.ms=500",
+            "spring.kafka.producer.properties.socket.connection.setup.timeout.max.ms=1000",
+            "spring.kafka.consumer.properties.socket.connection.setup.timeout.ms=500",
+            "spring.kafka.consumer.properties.socket.connection.setup.timeout.max.ms=1000",
+            "spring.kafka.consumer.properties.default.api.timeout.ms=1000",
+            "spring.kafka.consumer.properties.request.timeout.ms=500",
+            "spring.kafka.consumer.properties.reconnect.backoff.max.ms=1000",
+            "spring.kafka.admin.properties.socket.connection.setup.timeout.ms=500",
+            "spring.kafka.admin.properties.socket.connection.setup.timeout.max.ms=1000",
+            "spring.kafka.admin.properties.default.api.timeout.ms=1000",
+            "spring.kafka.admin.properties.request.timeout.ms=500"
         })
 class KafkaUnavailableTest extends AbstractPostgresIntegrationTest {
 
