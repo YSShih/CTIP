@@ -2644,12 +2644,18 @@ memo 幫不上忙——那一行在 bash 子腳本裡執行,不是 dod 項目。
 | 　└ CTIP App | 4:06 | **2:57** |
 | `M1-01` | 334s | **245s** |
 | `M1-38`(README quickstart) | 345s | **136s** |
-| `dod.sh full` 整輪 | 1137s(18:57) | **1009s(16:49)**,89/90 |
+| `dod.sh full`(改動後第一輪) | 1137s(18:57) | 1009s(16:49),89/90 |
+| `dod.sh full`(**穩態,實測**) | 1137s(18:57) | **934s(15:34)**,89/90 |
 
-⚠️ 整輪只少 128 秒,比兩項相加(−298s)少很多,原因**必須記下來**:
+⚠️ 改動後第一輪只少 128 秒,比兩項相加(−298s)少很多,原因**必須記下來**:
 `backend/pom.xml` 一改,`up.sh` 的相依漂移守衛就判定快取要重新預熱(這正是它該做的事),
-`M1-14` 因此從 90s 變成 218s。那是**一次性**的——改動後再量,兩個守衛分別是 16 秒與 1 秒。
-扣掉這 128 秒與 heavy 批次的 19 秒修正,**穩態預估約 14 分半**。
+`M1-14` 因此從 90s 變成 218s。**第二輪證實那是一次性的**:`M1-14` 回到 85s,整輪 934 秒。
+
+穩態逐項:`M1-01` 291s(−43s)、`M1-38` 138s(−207s)、`M1-14` 85s、`_heavy` 137s、`M2-25` 178s。
+
+> 誠實標示兩處對不上的:`M1-01` 隔離量測是 −69s(307→238),在 gate 裡只有 −43s;
+> `M2-25` 反而多了 44 秒。兩者都與 Maven／fork 無關(是容器啟動與當下負載的變動),
+> 屬單次量測的雜訊,未再深究。**15:34 是實測值,不是推估。**
 
 ### 三項改動
 
@@ -2696,10 +2702,33 @@ registry 對這一項明確帶 `-Dctip.test.forkCount=1`。
 - **`M1-01` 還剩 86 秒是 14 次 Spring context 啟動**(246 秒中)。要再壓只能合併 property 組合,
   但 `KafkaUnavailableTest`(死 broker)、`SearchFallbackTest`(ES 掛掉)各有存在理由,
   可併的約 3~4 個、每個省 5 秒。投入產出比最差,**不建議做**
-- ⚠️ **本機 Docker**:若 OrbStack 不是從 GUI 啟動(例如用 `orb start`),
-  `/var/run/docker.sock` 那個 symlink 不會建,而 `~/.testcontainers.properties` 釘死了
-  `UnixSocketClientProviderStrategy` ⇒ Java 端會 `Could not find a valid Docker environment`。
-  繞法(不動全域設定):`export DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock`
-  + `TESTCONTAINERS_DOCKER_CLIENT_STRATEGY=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy`
+### ⚠️ 本機環境的一個坑(已修好,但值得記住成因)
+
+整輪測試一度全掛在 `Could not find a valid Docker environment`,而 `docker info` 是通的、
+OrbStack 也開著、`orbctl doctor` 還回報「All checks passed」。
+
+**成因不在 OrbStack。** OrbStack 不建 `/var/run/docker.sock`,它走 **docker context**
+(`docker.set_context: true`),`docker` CLI 認得——但 **Testcontainers 不看 context**。
+而 `~/.testcontainers.properties` 裡有一行是 **Testcontainers 自己寫下的策略快取**
+(檔頭 `#Modified by Testcontainers`,2026-08-21):
+
+```
+docker.client.strategy=org.testcontainers.dockerclient.UnixSocketClientProviderStrategy
+```
+
+那個策略**只認 `/var/run/docker.sock`**。symlink 當年存在(所以被快取下來),
+現在不存在了,於是必然失敗。
+
+**修法**(已套用,原檔備份於 `~/.testcontainers.properties.bak`):
+
+```
+docker.host=unix:///Users/yusen/.orbstack/run/docker.sock
+```
+
+刪掉 `docker.client.strategy` 那行即可。已驗證:不帶任何環境變數跑
+`MigrationIntegrationTest`,8 個測試全綠。
+
+> 教訓:我一度叫使用者「去 OrbStack 設定裡找 Docker socket 選項」——**那個選項不存在**,
+> 我沒查證就給了指示,害對方白找。`orbctl config show` 與 `orbctl doctor` 兩分鐘就能確認。
 
 ---
