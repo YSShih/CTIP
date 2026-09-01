@@ -58,7 +58,7 @@
 >
 > **查證狀態（誠實標示）**：以下 19 項已於 2026-08-21 對 Maven Central / npm registry / 上游官方來源逐一查證 —
 > Java 25、Node 24、Spring Boot 4.1.0（現為 4.1.1，見下表）、springdoc 3.1.0、MapStruct 1.6.3、React 19.2.8、Vite 8.2.2、TypeScript 7.0.2、
-> React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.102.7、Zod 4.4.3、
+> React Router 8.3.0、ESLint 10.8.1、Vitest 4.1.11、Tailwind 4.3.3、TanStack Query 5.102.8、Zod 4.4.3、
 > PostgreSQL 18.6、Redis 8.10、Valkey 9.0.4、Kafka 4.2.1、Elasticsearch 9.5.1、nginx 1.30.4。
 >
 > 其餘項目（Resilience4j、Bucket4j、ArchUnit、Spotless、Checkstyle、JaCoCo、`@vitejs/plugin-react`、

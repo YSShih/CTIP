@@ -4,14 +4,24 @@
 #    合併一律由人決定;major 升級另須寫 ADR。
 #
 # 同時作為 §6.2.3b「相依弱點:OWASP Dependency-Check 或 Dependabot alerts 二擇一」
-# 的選項:本專案選 Dependabot(alerts 於 repo 設定啟用),
-# CI 端的可失敗訊號由 .github/workflows/security.yml 的 Trivy fs 掃描提供。
+# 的選項:本專案選 Dependabot。
+# ⚠️ 但 alerts 在 **2026-08-30 最後一次查證時是關閉的**(ADR 0050 以
+#    `gh api repos/YSShih/CTIP/dependabot/alerts` 得到 403
+#    「Dependabot alerts are disabled for this repository」),且此後**無人回報已開啟**。
+#    該端點需要認證才讀得到,未持 token 者無法自行複查——**要確認請到
+#    Settings → Code security 看**。本檔的 `updates:` 只管「開升級 PR」,
+#    與 alerts 是兩個獨立開關;alerts 沒開,§6.2.3b 宣告的相依弱點偵測就沒有在運作。
+# CI 端的可失敗訊號由 .github/workflows/security.yml 的 Trivy fs 掃描提供(目前是綠的)。
+#
+# 更新頻率:**monthly**(2026-09-01,使用者指示降噪;ADR 0054)。
+# 規格只要求「啟用 Dependabot、patch/minor 自動開 PR」(06 §6.1.3 規則 3),
+# **未規範頻率**,因此改月更不牴觸規格。代價寫在 ADR 0054。
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /backend
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     labels: [dependencies, backend]
     ignore:
@@ -30,7 +40,7 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
+      interval: monthly
     open-pull-requests-limit: 5
     labels: [dependencies, frontend]
     ignore:
@@ -51,7 +61,7 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
     labels: [dependencies, ci]
     ignore:
       # 與 maven / npm / docker 一致:major 不自動開 PR,需人工核准並寫 ADR(06 §6.1.2)。
@@ -70,7 +80,7 @@ updates:
       - /environment/docker/backend
       - /environment/docker/frontend
     schedule:
-      interval: weekly
+      interval: monthly
     labels: [dependencies, docker]
     ignore:
       - dependency-name: "*"

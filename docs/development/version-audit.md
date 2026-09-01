@@ -16,7 +16,7 @@
 | palantir-java-format | 2.x | 2.97.0 | 2.x 最新 ✅ |
 | maven-checkstyle-plugin | 3.x | 3.6.0 | ✅ |
 | JaCoCo | 0.8.x | 0.8.15 | ✅ |
-| ArchUnit | 1.4.x | 1.4.2(Phase 4 引入) | 1.5.0 已釋出,屬 minor,記錄但不升版(依 06 §6.4 第 3 判斷) |
+| ArchUnit | 1.4.x | 1.4.2 | ⚠️ 本行原記「1.4.2(Phase 4 引入)」是**錯的**:`git log -S "archunit.version"` 顯示 Phase 4(`daf2a9a`)引入的是 **1.4.1**,直到 2026-09-01 合併 PR #16 才成為 1.4.2(ADR 0054 §4.2)。1.5.0 已釋出,屬 minor,記錄但不升版(依 06 §6.4 第 3 判斷) |
 | React | 19.2.x | ~19.2.8 | npm ✅ |
 | Vite | 8.2.x | ~8.2.2 | npm ✅ |
 | TypeScript | 7.0.x | **~5.9.3(降版)** | 7.0.2 存在於 npm,但 typescript-eslint 8.67.0 的 peer 範圍為 `typescript <6.1.0`,`npm ci` 無法解析。依 06 §6.3.2 動用**唯一允許的降版**至 5.9.x。複查日確認 typescript-eslint 是否已支援 TS 7 後升回 |
