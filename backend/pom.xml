@@ -29,7 +29,7 @@
     <java.version>25</java.version>
     <!-- 未由 Spring Boot BOM 納管的相依/外掛,集中於此(docs/spec/06-tech-stack.md §6.1.3) -->
     <mapstruct.version>1.6.3</mapstruct.version>
-    <archunit.version>1.4.1</archunit.version>
+    <archunit.version>1.4.2</archunit.version>
     <!--
       06 §6.2 中未由 Spring Boot BOM 納管者(§6.1.3 規則 2:必須在 parent 集中定義)。
       這三項供後續 phase 使用,現階段尚未有任何 module 宣告相依——先定版本,
