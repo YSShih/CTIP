@@ -26,7 +26,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cytoscape": "^3.34.2",
-    "lucide-react": "^1.0.0",
+    "lucide-react": "^1.35.0",
     "react": "~19.2.8",
     "react-dom": "~19.2.8",
     "react-hook-form": "^7.71.1",
