@@ -35,7 +35,7 @@
       這三項供後續 phase 使用,現階段尚未有任何 module 宣告相依——先定版本,
       使該 phase 不必為了「版本表沒有」而卡住(規則 6),見 ADR 0018。
     -->
-    <zstd.version>1.5.7-15</zstd.version>
+    <zstd.version>1.5.7-16</zstd.version>
     <logstash-logback-encoder.version>9.0</logstash-logback-encoder.version>
     <cyclonedx-maven-plugin.version>2.9.3</cyclonedx-maven-plugin.version>
     <!-- 06 §6.2:Resilience4j 2.3.x、Bucket4j 8.x(僅標 major 系列,取系列內現行版) -->
