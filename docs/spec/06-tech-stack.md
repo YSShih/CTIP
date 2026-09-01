@@ -397,6 +397,28 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
     > **`thread.mode` 必須是 `SEPARATE_THREAD`**——預設的 `SAME_THREAD` 不會中斷卡住的呼叫,
     > 逾時形同虛設。理由與實測見 14 §14.8。
 
+14. **surefire 平行 fork 與 JaCoCo 的組合**(2026-09-01 補入;[ADR 0053](../architecture/decisions/0053-parallel-forks-and-readme-quickstart.md))。
+    parent 設 `<forkCount>${ctip.test.forkCount}</forkCount>`(預設 2,`-Dctip.test.forkCount=1` 可回退)。
+
+    ⚠️ **開 fork 就必須同時處理 JaCoCo**:兩個 fork 寫同一個 `jacoco.exec` 會讓覆蓋率失真,
+    而 [15 §15.1](15-dod-gates.md#151-dod-mvpphase-112) 的 `M1-02` 正是對那個數字下斷言。
+    作法是 `prepare-agent` 用 `destFile=…/jacoco-${surefire.forkNumber}.exec`
+    (`${surefire.forkNumber}` 由 surefire 在 fork 時代換,Maven 解析階段保留字面值),
+    再以 `merge` execution 合併回 `jacoco.exec`——`report` / `check` 與 `dod.sh` 都不必改。
+
+    > 之所以敢開 fork:所有 Testcontainers 容器皆宣告為 `static`,而每個 fork 是獨立 JVM
+    > ⇒ **各自一組容器,DB state 不共用**;測試一律 `RANDOM_PORT` / `server.port=0`;
+    > 暫存目錄用 `Files.createTempDirectory`。改動前後**四個 module 的覆蓋率逐字相同**。
+    >
+    > **例外**:`dod.sh` 的 heavy 批次(3 個 `@Tag("heavy")` 的類)明確帶
+    > `-Dctip.test.forkCount=1`——類太少,拆兩個 fork 反而要付兩套 ES / Kafka 容器的啟動成本
+    > (實測 133s → 147s),且同時起兩份 Elasticsearch 會撞到記憶體。
+
+15. **cyclonedx 的預設 execution 要停掉**(2026-09-01 補入):plugin 自帶的 `(default)` execution
+    會讓 `makeAggregateBom` 在宣告了 `aggregate-bom` 之後**再跑一次**(實測 log 裡兩行都在)。
+    以 `<execution><id>default</id><phase>none</phase></execution>` 停用。收益僅 1~2 秒,
+    修它是因為它確實是重複。
+
 ## 6.4 版本複查程序（強制）
 
 每次複查產出一筆記錄於 `docs/development/version-audit.md`（append-only）。

@@ -184,8 +184,15 @@ environment/scripts/dod/
 
 ## 刻意不動的
 
-- **不加 surefire 平行 fork(`-DforkCount=2C`)**:Testcontainers 與共用 DB state
-  會使測試結果與失敗定位都不可信,且屬於 `06 §6.3.6` 的 pom 契約範圍。
+- ~~**不加 surefire 平行 fork(`-DforkCount=2C`)**:Testcontainers 與共用 DB state
+  會使測試結果與失敗定位都不可信,且屬於 `06 §6.3.6` 的 pom 契約範圍。~~
+
+  > ⚠️ **本項於 2026-09-01 被實測推翻,見 [ADR 0053](0053-parallel-forks-and-readme-quickstart.md)**。
+  > 「共用 DB state」的說法是錯的:所有 Testcontainers 容器都宣告為 `static`,
+  > 而每個 fork 是獨立 JVM ⇒ 各自一組容器,DB 根本不共用;port 全用 `RANDOM_PORT`,
+  > 暫存目錄用 `Files.createTempDirectory`。真正要解的是 **JaCoCo**(兩個 fork 寫同一個
+  > `jacoco.exec` 會讓 M1-02 的斷言失真),以 per-fork destfile + `jacoco:merge` 解決。
+  > 實測 `clean verify -Ptest-integration` 307s → 238s,**四個 module 的覆蓋率逐字相同**。
 - **不保留 `dod.sh` 的巢狀自我呼叫**:它正是決策 2 要消除的東西。
   `15 §15.0` 第 5 點「判斷結束一律用退出碼」因此更為必要——巢狀雖已消失,
   但並行輸出的順序是**完成順序**,更不能拿來判斷進度。

@@ -49,8 +49,11 @@ reg() {
 
 # `-Ptest-integration` 排除 @Tag("heavy")。全專案只有三個 heavy 類,一次批次跑完,
 # 供 M2-22 / M2-24 / M3-02 三項的報告斷言使用——比各自起一輪 reactor 省兩次啟動。
+# ⚠️ 這一批**刻意不平行 fork**(ADR 0053):只有 3 個類,拆成兩個 fork 反而要付兩套
+# ES / Kafka 容器的啟動成本(實測 133s → 147s),而且同時起兩份 Elasticsearch 正是
+# 先前把 M1-01 的 surefire fork 撐爆的那個記憶體形狀。
 reg _heavy build maven M1-01 cmd "heavy 測試批次(供 M2-22 / M2-24 / M3-02)" \
-    "${MVN} test -Ptest-all -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ElasticsearchSearchTest,KafkaEventTest,SearchReconciliationTest"
+    "${MVN} test -Ptest-all -Dctip.test.forkCount=1 -Dsurefire.failIfNoSpecifiedTests=false -Dtest=ElasticsearchSearchTest,KafkaEventTest,SearchReconciliationTest"
 
 # ---------------------------------------------------------------------------
 # DoD-MVP(15 §15.1)

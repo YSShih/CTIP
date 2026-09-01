@@ -156,9 +156,19 @@ curl -fsS http://localhost:8080/actuator/health
 | REST API | `GET /api/v1/iocs?limit=10`、`GET /api/v1/stats/summary`（匿名可讀 public `TLP:CLEAR` 情資） |
 | PostgreSQL | `127.0.0.1:5432`（帳密見 `environment/.env.mvp`；啟動時自動跑 Flyway 並載入約 1,020 筆樣本 IOC） |
 
-後端測試（L1–L3，整合測試自帶 Testcontainers，不需先啟動環境）：
+後端單元測試（L1，秒級）：
 
 ```bash
+./backend/mvnw -f backend/pom.xml verify -Ptest-slice
+```
+
+完整的 L1–L3（整合測試自帶 Testcontainers，不需先啟動環境；約 5 分鐘）：
+
+<!-- 此區塊刻意用 sh 而非 bash:dod.sh M1-38 會執行 README 的全部 bash 區塊,
+     而完整 verify 已由 M1-01 跑過一次,再跑一次是純粹的重複(約 4 分鐘)。
+     上面那個 -Ptest-slice 已足以證明「README 的步驟可直接複製執行」。 -->
+
+```sh
 ./backend/mvnw -f backend/pom.xml verify -Ptest-integration
 ```
 

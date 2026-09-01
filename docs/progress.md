@@ -2627,3 +2627,79 @@ memo 幫不上忙——那一行在 bash 子腳本裡執行,不是 dod 項目。
 - **M3-19 要 PASS 必須先 push**:它查的是 HEAD 這個 commit 上九支 push 觸發的 workflow
 
 ---
+
+## 測試平行 fork + README quickstart 去重複(2026-09-01)
+
+- **狀態**:done
+- **緣由**:使用者看完 ADR 0052 的耗時剖析後指示「A2 + B 一起做」
+- **ADR**:[0053](architecture/decisions/0053-parallel-forks-and-readme-quickstart.md)
+  (並更正 ADR 0052「刻意不動的」裡被推翻的一句)
+- **規格回寫**:`06 §6.3.6` 第 14、15 條
+
+### 結果
+
+| | 改動前 | 改動後 |
+|---|---|---|
+| `clean verify -Ptest-integration` | 307s | **238s**(−22%) |
+| 　└ CTIP App | 4:06 | **2:57** |
+| `M1-01` | 334s | **245s** |
+| `M1-38`(README quickstart) | 345s | **136s** |
+| `dod.sh full` 整輪 | 1137s(18:57) | **1009s(16:49)**,89/90 |
+
+⚠️ 整輪只少 128 秒,比兩項相加(−298s)少很多,原因**必須記下來**:
+`backend/pom.xml` 一改,`up.sh` 的相依漂移守衛就判定快取要重新預熱(這正是它該做的事),
+`M1-14` 因此從 90s 變成 218s。那是**一次性**的——改動後再量,兩個守衛分別是 16 秒與 1 秒。
+扣掉這 128 秒與 heavy 批次的 19 秒修正,**穩態預估約 14 分半**。
+
+### 三項改動
+
+1. **README quickstart 改用 `-Ptest-slice`**。`M1-38` 的 345 秒裡約 255 秒在跑
+   `verify -Ptest-integration`——因為 README 的 bash 區塊逐字寫著那一行。
+   完整版移到 **`sh` 區塊**(不會被 `M1-38` 執行),用的是 README 裡既有的手法
+   (前端 E2E 那段同理)。文件對讀者仍完整,判準要證明的事一點沒少。
+2. **surefire `forkCount=2`**(`-Dctip.test.forkCount=1` 可回退)。
+3. **停掉 cyclonedx 重複的 `(default)` execution**——收益僅 1~2 秒,修它是因為它確實是重複。
+   (先前從 gate log 看 Parent 花 42.8 秒而估「約省 20 秒」是**誤判**:暖快取下 Parent 只有
+   8~12 秒,那 42.8 秒主要是冷啟動的相依解析。)
+
+### 一個被自己推翻的判斷
+
+ADR 0052 寫「不加平行 fork,因為 Testcontainers 與**共用 DB state**會使結果不可信」。
+**這句話是錯的**:所有 Testcontainers 容器都宣告為 `static`,而每個 fork 是獨立 JVM
+⇒ **各自一組容器,DB 根本不共用**;port 全用 `RANDOM_PORT`,暫存目錄用 `createTempDirectory`。
+
+真正要解的是 **JaCoCo**——兩個 fork 寫同一個 `jacoco.exec` 會讓 `M1-02` 的斷言失真。
+作法:`prepare-agent` 用 `destFile=…/jacoco-${surefire.forkNumber}.exec`,
+再以 `merge` execution 合併回 `jacoco.exec`(`report`/`check`/`dod_coverage_threshold` 都不必改)。
+
+**驗證的判準是「時間變短 **且** 覆蓋率逐字相同」**,兩條缺一不可:
+
+| module | 基準 | forkCount=2 |
+|---|---|---|
+| ctip-sdk | 49 / 0 | **49 / 0** |
+| ctip-core | 4380 / 284 | **4380 / 284** |
+| ctip-adapters | 257 / 15 | **257 / 15** |
+| ctip-app | 3769 / 583 | **3769 / 583** |
+
+### heavy 批次刻意不 fork
+
+`_heavy` 只有 3 個測試類,拆兩個 fork 反而要付兩套 ES / Kafka 容器啟動成本:
+**133s(原) → 147s(fork=2) → 128s(明確 fork=1)**。
+而且同時起兩份 Elasticsearch 正是先前把 M1-01 撐爆
+(`forked VM terminated without properly saying goodbye`)的那個記憶體形狀。
+registry 對這一項明確帶 `-Dctip.test.forkCount=1`。
+
+### 給下一輪的注意事項
+
+- **改 `backend/pom.xml` 之後的第一輪 gate 會慢約 2 分鐘**(`up.sh` 重新預熱 Maven 快取),
+  那是守衛正常作動,不是回歸。要量穩態請跑第二輪
+- **`M1-01` 還剩 86 秒是 14 次 Spring context 啟動**(246 秒中)。要再壓只能合併 property 組合,
+  但 `KafkaUnavailableTest`(死 broker)、`SearchFallbackTest`(ES 掛掉)各有存在理由,
+  可併的約 3~4 個、每個省 5 秒。投入產出比最差,**不建議做**
+- ⚠️ **本機 Docker**:若 OrbStack 不是從 GUI 啟動(例如用 `orb start`),
+  `/var/run/docker.sock` 那個 symlink 不會建,而 `~/.testcontainers.properties` 釘死了
+  `UnixSocketClientProviderStrategy` ⇒ Java 端會 `Could not find a valid Docker environment`。
+  繞法(不動全域設定):`export DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock`
+  + `TESTCONTAINERS_DOCKER_CLIENT_STRATEGY=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy`
+
+---

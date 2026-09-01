@@ -53,6 +53,14 @@
     <ctip.test.excludedGroups>slice,integration,heavy</ctip.test.excludedGroups>
     <!-- 測試逾時契約(docs/spec/14-testing.md §14.8)。以 -D 覆寫,例如 -Dctip.test.timeout=60s -->
     <ctip.test.timeout>30s</ctip.test.timeout>
+    <!--
+      surefire 平行 fork(ADR 0053)。每個 fork 是獨立 JVM,而所有 Testcontainers 容器
+      都宣告為 static ⇒ **每個 fork 各自一組容器,DB state 不共用**;測試一律用
+      RANDOM_PORT / server.port=0,暫存目錄用 Files.createTempDirectory,因此沒有共用狀態。
+      覆蓋率以 per-fork destfile + jacoco:merge 處理(見下方 jacoco 設定)。
+      量測或回退用 -Dctip.test.forkCount=1。
+    -->
+    <ctip.test.forkCount>2</ctip.test.forkCount>
     <ctip.test.lifecycle.timeout>5m</ctip.test.lifecycle.timeout>
     <!-- 各 module 以此覆寫行覆蓋率下限(docs/spec/14-testing.md §14.3);ctip-core 另以套件層級規則覆寫 -->
     <ctip.coverage.line-minimum>0.60</ctip.coverage.line-minimum>
@@ -155,6 +163,34 @@
               <goals>
                 <goal>prepare-agent</goal>
               </goals>
+              <configuration>
+                <!--
+                  ⚠️ 兩個 fork 寫同一個 jacoco.exec 會讓覆蓋率失真,而 M1-02 正是對這個數字
+                  下斷言——往哪個方向誤判都有可能。${surefire.forkNumber} 由 surefire 在
+                  fork 時代換(Maven 解析階段保留字面值),每個 fork 因此各寫一份。
+                -->
+                <destFile>${project.build.directory}/jacoco-${surefire.forkNumber}.exec</destFile>
+              </configuration>
+            </execution>
+            <execution>
+              <!-- 必須排在 report / check 之前:同一個 phase 內依宣告順序執行 -->
+              <id>merge-forks</id>
+              <goals>
+                <goal>merge</goal>
+              </goals>
+              <phase>verify</phase>
+              <configuration>
+                <fileSets>
+                  <fileSet>
+                    <directory>${project.build.directory}</directory>
+                    <includes>
+                      <include>jacoco-*.exec</include>
+                    </includes>
+                  </fileSet>
+                </fileSets>
+                <!-- 合併回既有路徑:report / check 與 dod.sh 的 dod_coverage_threshold 都不必改 -->
+                <destFile>${project.build.directory}/jacoco.exec</destFile>
+              </configuration>
             </execution>
             <execution>
               <id>report</id>
@@ -194,6 +230,7 @@
             <!-- 規格與 DoD 的判準以 -Dtest=<類名> 在 reactor 根執行;
                  沒有該測試類的 module(如 ctip-sdk)不得因此失敗 -->
             <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+            <forkCount>${ctip.test.forkCount}</forkCount>
             <!--
               測試逾時契約(docs/spec/14-testing.md §14.8)。四個 module 只有 ctip-app 有
               src/test/resources,與其塞四份 junit-platform.properties,不如在此一處設定
@@ -278,6 +315,12 @@
               <goal>makeAggregateBom</goal>
             </goals>
             <phase>package</phase>
+          </execution>
+          <execution>
+            <!-- plugin 自帶的預設 execution 會讓 makeAggregateBom 跑第二次
+                 (實測 log 裡 `(default)` 與 `(aggregate-bom)` 兩行都在)。停掉。 -->
+            <id>default</id>
+            <phase>none</phase>
           </execution>
         </executions>
         <configuration>
