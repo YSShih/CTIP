@@ -192,7 +192,11 @@ environment/scripts/dod/
   > 而每個 fork 是獨立 JVM ⇒ 各自一組容器,DB 根本不共用;port 全用 `RANDOM_PORT`,
   > 暫存目錄用 `Files.createTempDirectory`。真正要解的是 **JaCoCo**(兩個 fork 寫同一個
   > `jacoco.exec` 會讓 M1-02 的斷言失真),以 per-fork destfile + `jacoco:merge` 解決。
-  > 實測 `clean verify -Ptest-integration` 307s → 238s,**四個 module 的覆蓋率逐字相同**。
+  > 實測 `clean verify -Ptest-integration` 307s → 238s。
+  >
+  > ⚠️ 當時另以「四個 module 的覆蓋率逐字相同」當作 merge 正確的**證明**——
+  > 那次相同是運氣,不是證明:`forkCount=2` 之下覆蓋率並非逐位元可重現(±2 行)。
+  > 完整數據與「為何仍維持 fork=2」見 [ADR 0053](0053-parallel-forks-and-readme-quickstart.md)。
 - **不保留 `dod.sh` 的巢狀自我呼叫**:它正是決策 2 要消除的東西。
   `15 §15.0` 第 5 點「判斷結束一律用退出碼」因此更為必要——巢狀雖已消失,
   但並行輸出的順序是**完成順序**,更不能拿來判斷進度。

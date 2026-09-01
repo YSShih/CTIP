@@ -408,7 +408,22 @@ Phase 3 實測發現的四個地雷（2026-08-21 補入；皆已在 Phase 3 修�
 
     > 之所以敢開 fork:所有 Testcontainers 容器皆宣告為 `static`,而每個 fork 是獨立 JVM
     > ⇒ **各自一組容器,DB state 不共用**;測試一律 `RANDOM_PORT` / `server.port=0`;
-    > 暫存目錄用 `Files.createTempDirectory`。改動前後**四個 module 的覆蓋率逐字相同**。
+    > 暫存目錄用 `Files.createTempDirectory`。
+
+    ⚠️ **開 fork 的代價:覆蓋率不再逐位元可重現**(2026-09-01 實測)。
+    同一份原始碼在 `forkCount=2` 下連跑三次,`ctip-app` 得到 `3769/583`、`3768/584`、`3767/585`
+    (covered/missed),Spring context 啟動次數也在 14~17 之間變動;
+    對照 `forkCount=1` 連跑兩次都是 `3769/583`、14 次。
+    成因是兩個 fork 之間的 class 分配每次不同,而有些行只由「該 JVM 裡第一個跑到它的類」覆蓋。
+
+    | | 實測 | 門檻 | 餘裕 |
+    |---|---|---|---|
+    | `ctip-app` BUNDLE line | 86.6% | 0.60 | 26.6 pp |
+    | `ctip-core`(domain PACKAGE) | 93.9% | 0.85 | 9.0 pp |
+    | 漂移幅度 | ±2 行 / 4352 行 | | **0.05%** |
+
+    `M1-02` 斷言的是**比例**而非絕對行數,0.05% 的漂移不可能撼動它,故維持 `forkCount=2`。
+    但**看到覆蓋率差幾行不得視為回歸**;需要逐位元可重現的數字時加 `-Dctip.test.forkCount=1`。
     >
     > **例外**:`dod.sh` 的 heavy 批次(3 個 `@Tag("heavy")` 的類)明確帶
     > `-Dctip.test.forkCount=1`——類太少,拆兩個 fork 反而要付兩套 ES / Kafka 容器的啟動成本
