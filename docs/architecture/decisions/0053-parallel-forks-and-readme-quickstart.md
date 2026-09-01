@@ -94,8 +94,28 @@ ADR 0052 的「刻意不動的」寫著:
 | ctip-adapters | 257 / 15 | **257 / 15** |
 | ctip-app | 3769 / 583 | **3769 / 583** |
 
-**四個 module 的覆蓋率逐字相同**——這是 merge 正確的直接證據,也是本決策能被接受的前提。
-1,131 個測試全綠。`backend/ctip-app/target/` 下確實出現 `jacoco-1.exec` 與 `jacoco-2.exec`。
+四個 module 的覆蓋率逐字相同,1,131 個測試全綠,`backend/ctip-app/target/` 下確實出現
+`jacoco-1.exec` 與 `jacoco-2.exec`。
+
+> ⚠️ **2026-09-01 更正:上面那句「覆蓋率逐字相同」當時被當成 merge 正確的證明,那是運氣,不是證明。**
+> 後續連續量測發現 **`forkCount=2` 之下覆蓋率並非逐位元可重現**:同一份原始碼連跑三次得到
+> `3769/583`、`3768/584`、`3767/585`,context 啟動次數也在 14~17 之間變動。
+> 對照組 `forkCount=1` **連跑兩次都是 `3769/583`、14 次 context**——完全可重現。
+>
+> 成因:兩個 fork 之間的 class 分配每次不同,而有些行只由「該 JVM 裡第一個跑到它的類」覆蓋
+> (static initializer、一次性分支等)。
+>
+> **仍然保留 `forkCount=2`**,理由是漂移幅度與門檻的距離差了兩個數量級:
+>
+> | | 實測 | 門檻 | 餘裕 |
+> |---|---|---|---|
+> | ctip-app BUNDLE line | 86.6% | 0.60 | 26.6 個百分點 |
+> | ctip-core(domain PACKAGE 規則) | 93.9% | 0.85 | 9.0 個百分點 |
+> | 漂移幅度 | ±2 行 / 4352 行 | | **0.05%** |
+>
+> `M1-02` 斷言的是**比例**而不是絕對行數,±0.05% 不可能撼動它。
+> 但**下一輪看到覆蓋率差幾行時不要當成回歸**——那是 fork 的正常變異。
+> 要拿逐位元可重現的數字(例如比較兩個版本的覆蓋率差異)時,請加 `-Dctip.test.forkCount=1`。
 
 `ctip.test.forkCount` 是 property,**回退只要 `-Dctip.test.forkCount=1`**。
 
@@ -151,8 +171,35 @@ registry 因此對這一項明確帶 `-Dctip.test.forkCount=1`。
 是容器啟動與機器當下負載的變動——單次量測的雜訊,沒有再深究。
 **整輪 18:57 → 15:34 是實測值,不是推估。**
 
-## 還沒處理的
+## 試過但不做:合併 Spring context
 
-`M1-01` 的 246 秒裡仍有 **86 秒是 14 次 Spring context 啟動**。要再壓只能合併 property 組合,
-但 `KafkaUnavailableTest`(死掉的 broker)、`SearchFallbackTest`(ES 掛掉)這些各有存在理由,
-可併的大概 3~4 個、每個省 5 秒。投入產出比最差,不做。
+`M1-01` 裡有一段時間是 Spring context 啟動(fork=1 下 14 次 / 83.9 秒)。盤點分裂來源:
+
+| 分裂來源 | 可否合併 |
+|---|---|
+| `@AutoConfigureMockMvc`(35 個子類有、21 個沒有 ⇒ base context 有兩個變體) | 看起來像**偶然分歧**,實測後否決(見下) |
+| `@Import(FailingAuditStorage / ExplodingFilterConfig / RecordedSpansConfig)` | **絕不可**——合併等於讓全部測試跑在「稽核會失敗」「filter 會爆炸」的環境 |
+| `@Import(WebhookTestConfig)`(5 個類) | 已經共用同一個 context,無事可做 |
+| `@TestPropertySource`(ingestion allowlist / springdoc) | 併進共用 context 會改變其他測試看到的設定 |
+
+**實測第一項**(把 `@AutoConfigureMockMvc` 上移到 `AbstractPostgresIntegrationTest`,
+36 個檔案),在**可重現的 `forkCount=1`** 下對照:
+
+| | 未合併 | 合併 |
+|---|---|---|
+| 時間 | 310s / 317s | **323s** |
+| context 啟動 | 14 次 | **12 次**(機制如設計) |
+| ctip-app 覆蓋率 | 3769/583(兩次一致) | **3772/580** |
+| 測試數 | 610 | 610 |
+
+**否決,兩個理由**:
+
+1. **更慢**。少建 2 個 context 的收益,不敵「新的共用 context 要為全部 56 個類裝上
+   MockMvc autoconfiguration」的代價。
+2. **不是行為中性**。多覆蓋了 3 行——原本 21 個沒裝 MockMvc 的類現在都裝上了,
+   執行路徑確實改變。這與當初「只是偶然分歧」的假設相反。
+
+> ⚠️ 這一段一開始是在 `forkCount=2` 下量的,得到「慢 27 秒、覆蓋率少 1 行」,
+> 我據此否決;但回退後重量又是第三個數字,證明那兩個訊號都是雜訊。
+> **改用可重現的 `forkCount=1` 重做,結論相同但證據方向不同**(是多 3 行,不是少 1 行)。
+> 教訓:**在單次量測上下結論之前,先確認那個量測是可重現的。**
