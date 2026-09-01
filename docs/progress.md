@@ -2851,3 +2851,73 @@ README 那 255 秒該不該動是**使用者的取捨**,不該由實作者代決
    ADR 0047 修完 `M1-02` 就結束了,而同一個形狀當時還有 63 個。
 
 ---
+
+## 三支 dependabot patch PR 合併 + Dependabot 改月更(2026-09-01)
+
+使用者推送 `06dc70d` 後遠端多了三支 dependabot PR,指示「幫我 merge 確認無誤」與
+「dependabot 可以幫我關掉嗎」。決策記在 [ADR 0054](architecture/decisions/0054-dependabot-monthly-and-three-patch-bumps.md)。
+
+### 兩件事在動手前就必須講清楚
+
+1. **AI 沒有 GitHub 憑證,合併不了。** 實測:`gh auth status` → 未登入(`~/.config/gh/hosts.yml` 不存在);
+   `ssh -T git@github.com` → `Permission denied (publickey)`,`~/.ssh/id_rsa` 無 passphrase 但未被接受,
+   `ssh-add -l` → `The agent has no identities`。**關掉 sandbox 重測結果相同。**
+   → 使用者選擇在 web 合併,AI 做查證與後續。這也正好是 `.github/dependabot.yml` 開頭
+   與 `06 §6.1.2` 要求的順序(**合併一律由人決定**)。
+
+2. **「關掉 dependabot」會撞到強制規格。** `06 §6.1.3 規則 3` 要求「啟用 Dependabot 或 Renovate:
+   patch/minor 自動開 PR」。但 grep 全 `docs/` 與 README 確認**規格沒有規範頻率**
+   (`weekly`/`每週` 唯二命中都是 `AUDIT_CLEANUP_CRON`)。
+   → 使用者在四個選項中選了「只降噪:weekly → monthly」,是唯一不需改強制章節的做法。
+
+### 三支 PR
+
+| PR | 升版 | 版本表 pin | 在 pin 內? |
+|---|---|---|---|
+| #16 | `archunit-junit5` 1.4.1 → 1.4.2 | `1.4.x` | ✅ |
+| #17 | `@testing-library/react` 16.3.2 → 16.3.3 | `16.x` | ✅ |
+| #18 | `@tanstack/react-query` 5.102.7 → 5.102.8 | `5.102.x` | ✅ |
+
+三支都是 patch 且都在既有 pin 內 → **版本表 pin 欄不動**,`06 §6.1.2` 也只要求 major 寫 ADR。
+唯一同步的是 §6.2 查證狀態段的 `TanStack Query 5.102.7` → `5.102.8`
+(`git log -L 61,61` 證實 ADR 0050 動過這行,它是跟著現況維護的)。
+
+**弱點:零。** 除了 ADR 0050 立下的 PR body CVE 掃描(0 命中),本輪再往上游走兩步:
+上游 release notes 掃過(ArchUnit v1.4.2、react-testing-library v16.3.3 皆 0 命中);
+**GitHub Advisory Database 對這三個套件的 advisory 數都是 0**——不分版本,它們沒有 CVE 可修。
+
+> TanStack 的 monorepo 用日期式 release(`release-2026-08-28-2343`),查不到 `v5.102.8` 這個 tag。
+> 遇到這種情況改用 Advisory DB 作結論來源,不要因為「查不到 release note」就跳過查證。
+
+### 驗證(全綠)
+
+| 檢查 | 結果 |
+|---|---|
+| 遠端 main `6e77f40` 的 CI | **14/14 全綠**(GitHub API `check-runs`) |
+| 本機後端 `clean verify -Ptest-integration` | **BUILD SUCCESS**,24+464+33+610 = **1,131 tests**,0 失敗,4 分 28 秒 |
+| 前端 `npm ci`/`lint`/`format:check`/`build` | 全綠 |
+| 前端 `npm run test` | **186 tests / 31 files** 全綠,23.15s |
+| 前端 `npm run api:check` | 無 diff |
+
+本機同步用 HTTPS(`git fetch https://github.com/YSShih/CTIP.git main` + `merge --ff-only`),
+因為 SSH remote 推不動也拉不動 —— **公開 repo 的讀取不需要憑證,這條路留著備用。**
+
+### 依規則 17 回報的三個既有缺口
+
+1. `06 §6.2.3b` 的表格指向 **`13 §13.9`,但那一節不存在**(`13-platform-ops.md` 止於 §13.8;
+   `grep -c "13\.9"` → 0)。`.github/dependabot.yml` 引用的是 §13.8,那個存在,不受影響。
+2. `docs/development/version-audit.md` 第 19 行原記 ArchUnit 實際 pin 是「1.4.2(**Phase 4 引入**)」,
+   但 `git log -S "archunit.version"` 顯示 Phase 4(`daf2a9a`)引入的是 **1.4.1**,從未是 1.4.2。
+   合併 #16 之後這行「碰巧變正確」。**本輪破例改了它** —— 值雖然對了,括號裡的出處是確定為假的陳述。
+3. **Dependabot alerts 仍未開啟**(ADR 0050 於 2026-08-30 實測 403,此後無人回報變更)。
+   本輪**無法複查**:該端點需認證,未持 token 一律回 401,分不出「關閉」與「沒權限」。
+   ⚠️ 這與本輪決定直接相關:接受「patch 修補晚一個月」的理由是「即時訊號由別的機制提供」,
+   而規格指定的那個機制(§6.2.3b 選的 Dependabot alerts)沒開,實際只剩 Trivy fs 掃描。
+   `.github/dependabot.yml` 開頭原本寫「alerts 於 repo 設定啟用」——**那句是錯的,本輪一併更正**。
+
+### 給下一個 session
+
+- **要使用者做的事**:GitHub → Settings → Code security → 開啟 **Dependabot alerts**。
+  AI 改不到 repo 設定,性質同 `15 §15.5` 的 P-07。
+- 本輪的 commit **需要使用者自行 push**(AI 無推送憑證,見上)。
+- `06 §6.2.3b` 指向不存在的 §13.9,尚未修 —— 要修的話是改規格,需要獨立決定。

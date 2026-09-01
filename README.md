@@ -204,7 +204,7 @@ npx playwright install chromium && npx playwright test
 | 規格書 | ✅ v2.0（含二十八輪實作回饋修訂，[00 §0.7–§0.34](docs/spec/00-master.md)） |
 | 實作 | ✅ 23 個 phase 全部交付。後端 **1,131 tests**、前端 **186 tests + 6 E2E**，皆全綠 |
 | 閘門 | ✅ M1 38/38 · ✅ M2 27/27 · ✅ M3 **25/25**（2026-08-31 完整實跑，94 分鐘、零失敗）——三個閘門全數通過 |
-| CI | 11 支 workflow。`security` 的 `dependency-scan`／`secret-scan` 已綠；**`image-scan` 的 10 個 HIGH 已於 2026-08-30 修掉**（`pebble` 不受 apt 管理且本容器用不到 → 刪除；`libcrypto3` 的修補版早在 Alpine repo → `apk upgrade`）。`backend-test` 的測試順序相依亦已修 —— **兩者都待推送後由 CI 實測確認**。見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md)、[0049](docs/architecture/decisions/0049-base-image-vulnerability-remediation.md) |
+| CI | 11 支 workflow。`security` 的 `dependency-scan`／`secret-scan` 已綠；**`image-scan` 的 10 個 HIGH 已於 2026-08-30 修掉**（`pebble` 不受 apt 管理且本容器用不到 → 刪除；`libcrypto3` 的修補版早在 Alpine repo → `apk upgrade`）。`backend-test` 的測試順序相依亦已修 —— **兩者已在 CI 實測確認：2026-09-01 的 main（`6e77f40`）14 個 check 全綠**。見 [ADR 0048](docs/architecture/decisions/0048-ci-green-and-test-isolation.md)、[0049](docs/architecture/decisions/0049-base-image-vulnerability-remediation.md) |
 
 M3 閘門的兩項失敗：**M3-01**（巢狀 gate 回歸）成因是 Phase 22 換 plain log pattern 時掉了 `%thread`，
 判準要找的 `restartedMain` 是執行緒名、永遠對不到 —— 已修。
@@ -227,7 +227,7 @@ M3 閘門的兩項失敗：**M3-01**（巢狀 gate 回歸）成因是 Phase 22 �
 | [`docs/history.md`](docs/history.md) · [`docs/progress.md`](docs/progress.md) | 專案沿革；逐 phase 判準結果與交接事項 |
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | 架構總覽：分層、四個 module、九個聚合、12 個 pipeline stage、讀取路徑 |
 | [`docs/architecture/security.md`](docs/architecture/security.md) | 安全架構：認證、授權、租戶隔離與 TLP、**CSRF 停用的決策**、安全標頭、secret、DB 權限模型 |
-| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR 0001–0045（逐 phase 決策 + 八則跨 phase 架構決策） |
+| [`docs/architecture/decisions/`](docs/architecture/decisions/) | ADR 0001–0054（逐 phase 決策 + 跨 phase 的架構與維運決策） |
 | [`docs/development/getting-started.md`](docs/development/getting-started.md) | 開發環境上手：啟動、改程式、測試、DoD gate、CI/CD、佈署、疑難排解 |
 | [`docs/development/plugin-sdk.md`](docs/development/plugin-sdk.md) | 寫一個 Threat Source Adapter（對應可編譯的範例） |
 | [`docs/development/version-audit.md`](docs/development/version-audit.md) | 版本相容性處置紀錄 |
